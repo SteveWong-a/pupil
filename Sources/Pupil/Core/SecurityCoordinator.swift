@@ -82,6 +82,7 @@ public final class SecurityCoordinator {
     public private(set) var activeTamperSource: TamperSource?
     public private(set) var activeTamperTime: Date?
     public private(set) var activeAlarmTime: Date?
+    public private(set) var isTouchIDActive: Bool = false
 
     public var activeAlertTimestampFormatted: String? {
         guard let date = (state == .alarm ? activeAlarmTime : activeTamperTime) else { return nil }
@@ -313,6 +314,10 @@ public final class SecurityCoordinator {
 
     public func disarmWithTouchID() async -> Bool {
         guard settings.allowTouchIDDisarm else { return false }
+        guard !isTouchIDActive else { return false }
+        isTouchIDActive = true
+        defer { isTouchIDActive = false }
+
         let ok = await KeychainManager.authenticateWithTouchID(reason: "Disarm Pupil laptop security")
         if ok {
             performValidatedDisarm(method: "Touch ID")

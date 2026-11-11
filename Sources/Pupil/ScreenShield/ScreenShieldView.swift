@@ -17,7 +17,6 @@ public struct ScreenShieldView: View {
     @State private var pinInput = ""
     @State private var hasError = false
     @State private var shakeOffset: CGFloat = 0
-    @State private var isTouchIDInFlight = false
     @State private var isRecoveryMode = false
     @State private var recoveryNewPin = ""
     @State private var recoveryError = false
@@ -98,7 +97,9 @@ public struct ScreenShieldView: View {
         }
         .onChange(of: coordinator.state) { _, _ in
             if isPrimary && !isGazePrivacyOnly {
-                openPrompt()
+                if !coordinator.isTouchIDActive && !isPromptPresented {
+                    openPrompt()
+                }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .screenShieldOpenPrompt)) { _ in
@@ -500,21 +501,29 @@ public struct ScreenShieldView: View {
             hasError = false
             isRecoveryMode = false
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            isPinFocused = true
-        }
+
+        guard !coordinator.isTouchIDActive else { return }
+
         let shouldAutoTouchID = !isGazePrivacyOnly &&
             !coordinator.isShieldPreviewActive &&
             (coordinator.isInteractiveUnlockRequested || isTamper || isAlarm) &&
             coordinator.settings.allowTouchIDDisarm &&
-            coordinator.settings.autoPromptTouchID &&
-            !isTouchIDInFlight
+            coordinator.settings.autoPromptTouchID
 
         if shouldAutoTouchID {
-            isTouchIDInFlight = true
             Task {
-                _ = await coordinator.disarmWithTouchID()
-                isTouchIDInFlight = false
+                try? await Task.sleep(nanoseconds: 120_000_000)
+                guard !coordinator.isTouchIDActive else { return }
+                let ok = await coordinator.disarmWithTouchID()
+                if !ok && !isRecoveryMode && isPromptPresented {
+                    await MainActor.run {
+                        isPinFocused = true
+                    }
+                }
+            }
+        } else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                isPinFocused = true
             }
         }
     }

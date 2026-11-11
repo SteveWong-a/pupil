@@ -445,6 +445,34 @@ struct PupilSecurityTests {
         _ = coordinator.disarmWithPin("5678")
     }
 
+    @Test("Touch ID concurrency lock prevents re-entrant focus stealing during tamper and alarm")
+    @MainActor
+    func testTouchIDConcurrencyLock() async throws {
+        let suiteName = "PupilTest-TouchID-\(UUID().uuidString)"
+        guard let isolatedDefaults = UserDefaults(suiteName: suiteName) else {
+            Issue.record("Failed to create isolated UserDefaults")
+            return
+        }
+        defer { isolatedDefaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = PupilSettings(defaults: isolatedDefaults)
+        let coordinator = SecurityCoordinator(settings: settings)
+
+        #expect(coordinator.isTouchIDActive == false)
+        try KeychainManager.enrollPin("1234")
+        coordinator.startArming(immediate: true)
+        #expect(coordinator.state == .armed)
+
+        // When allowTouchIDDisarm is disabled, disarmWithTouchID returns false and keeps isTouchIDActive false
+        settings.allowTouchIDDisarm = false
+        let disabledResult = await coordinator.disarmWithTouchID()
+        #expect(disabledResult == false)
+        #expect(coordinator.isTouchIDActive == false)
+
+        settings.allowTouchIDDisarm = true
+        _ = coordinator.disarmWithPin("1234")
+    }
+
     @Test("Web Push RFC 8291 aes128gcm encryption, VAPID ES256 signing, and one-time QR pairing")
     @MainActor
     func testWebPushEncryptionAndOneTimePairing() throws {

@@ -151,18 +151,17 @@ public struct NotchOverlayView: View {
     }
 
     private var isMinimalWingMode: Bool {
-        displayMode == .compactArming || displayMode == .minimalGaze
+        true
     }
 
     private var currentPanelSize: CGSize {
         let flare = NotchGeometry.flareAllowance(topRadius: currentTopRadius, style: geometry.style)
-        let notchH = cameraIslandHeight
 
         switch displayMode {
         case .hidden:
             return CGSize(width: geometry.closedSize.width + flare, height: geometry.closedSize.height)
 
-        case .compactArming, .minimalGaze:
+        case .compactArming, .minimalGaze, .expandedTamper, .expandedAlarm:
             if geometry.style == .pill {
                 return Self.pillOpenSize
             }
@@ -170,11 +169,6 @@ public struct NotchOverlayView: View {
                 width: geometry.closedSize.width + Self.minimalSideWidth * 2 + flare,
                 height: geometry.closedSize.height + Self.minimalExtraHeight
             )
-
-        case .expandedTamper, .expandedAlarm:
-            let width: CGFloat = max(320, geometry.closedSize.width + 96)
-            let height = notchH + 148
-            return CGSize(width: width + flare, height: height)
         }
     }
 
@@ -182,10 +176,8 @@ public struct NotchOverlayView: View {
         switch displayMode {
         case .hidden:
             return NotchGeometry.closedTopRadius
-        case .compactArming, .minimalGaze:
+        case .compactArming, .minimalGaze, .expandedTamper, .expandedAlarm:
             return geometry.style == .pill ? Self.pillOpenSize.height / 2 : NotchGeometry.closedTopRadius
-        case .expandedTamper, .expandedAlarm:
-            return NotchGeometry.openTopRadius
         }
     }
 
@@ -193,10 +185,8 @@ public struct NotchOverlayView: View {
         switch displayMode {
         case .hidden:
             return NotchGeometry.closedBottomRadius
-        case .compactArming, .minimalGaze:
+        case .compactArming, .minimalGaze, .expandedTamper, .expandedAlarm:
             return geometry.style == .pill ? Self.pillOpenSize.height / 2 : Self.minimalBottomRadius
-        case .expandedTamper, .expandedAlarm:
-            return NotchGeometry.openBottomRadius
         }
     }
 
@@ -211,11 +201,11 @@ public struct NotchOverlayView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .animation(.spring(response: 0.36, dampingFraction: 0.80), value: displayMode)
         .onAppear {
-            let interactive = (displayMode == .compactArming || displayMode == .expandedTamper || displayMode == .expandedAlarm)
+            let interactive = (displayMode == .compactArming)
             onRequestInteractive(interactive, displayMode == .hidden ? .zero : currentPanelSize)
         }
         .onChange(of: displayMode) { _, newMode in
-            let interactive = (newMode == .compactArming || newMode == .expandedTamper || newMode == .expandedAlarm)
+            let interactive = (newMode == .compactArming)
             onRequestInteractive(interactive, newMode == .hidden ? .zero : currentPanelSize)
             if !interactive {
                 enteredPin = ""
@@ -296,6 +286,14 @@ public struct NotchOverlayView: View {
                     }
                     .buttonStyle(.plain)
                     .help("Cancel arming")
+                } else if displayMode == .expandedTamper {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(PupilTheme.warningAmber)
+                } else if displayMode == .expandedAlarm {
+                    Image(systemName: "bell.badge.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(PupilTheme.alarmRed)
                 } else {
                     Image(systemName: "lock.fill")
                         .font(.system(size: 13, weight: .semibold))
@@ -312,6 +310,14 @@ public struct NotchOverlayView: View {
                     Text("\(coordinator.countdownSecondsRemaining)s")
                         .font(.system(size: 12, weight: .semibold, design: .monospaced))
                         .foregroundStyle(PupilTheme.warningAmber)
+                } else if displayMode == .expandedTamper {
+                    Text("\(coordinator.countdownSecondsRemaining)s")
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(PupilTheme.warningAmber)
+                } else if displayMode == .expandedAlarm {
+                    Image(systemName: "speaker.wave.3.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(PupilTheme.alarmRed)
                 } else {
                     PupilEyeVectorView(
                         isOpen: true,

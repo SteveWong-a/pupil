@@ -82,7 +82,7 @@ public final class ScreenShieldController {
         }
 
         guard !isVisible else {
-            activatePrimary()
+            // Shield is already visible and ordered front; do not re-activate or steal focus from in-flight Touch ID
             return
         }
         isVisible = true
@@ -119,6 +119,7 @@ public final class ScreenShieldController {
     }
 
     private func activatePrimary() {
+        guard !(coordinator?.isTouchIDActive ?? false) else { return }
         NSApp.activate(ignoringOtherApps: true)
         if let primary = shieldWindows.first {
             primary.makeKeyAndOrderFront(nil)
