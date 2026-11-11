@@ -80,7 +80,22 @@ public struct ScreenShieldView: View {
                 )
                 .ignoresSafeArea()
 
-                // 4. Click layer: clicking background refocuses the PIN prompt or triggers interactive unlock
+                // 4. Perimeter alert outline for Tamper Countdown (red-amber) and Alarm (crimson)
+                if isTamper || isAlarm {
+                    let outlineColor = isAlarm
+                        ? PupilTheme.alarmRed
+                        : Color(red: 1.0, green: 0.42, blue: 0.05)
+                    Rectangle()
+                        .strokeBorder(
+                            outlineColor.opacity(isAlarm ? 0.95 : 0.85),
+                            lineWidth: isAlarm ? 4.5 : 3.5
+                        )
+                        .shadow(color: outlineColor.opacity(0.65), radius: 14)
+                        .ignoresSafeArea()
+                        .allowsHitTesting(false)
+                }
+
+                // 5. Click layer: clicking background refocuses the PIN prompt or triggers interactive unlock
                 Color.black.opacity(0.001)
                     .ignoresSafeArea()
                     .contentShape(Rectangle())

@@ -534,10 +534,7 @@ struct PupilSecurityTests {
         }
         return ctx.makeImage()
     }
-}
 
-@Suite("Tamper confirmation and alert delivery")
-struct TamperConfirmationTests {
     private func liftSample(_ t: TimeInterval) -> MotionSample {
         MotionSample(timestamp: t, translationMagnitude: 0.12, homographyWarpMagnitude: 0.3)
     }
@@ -602,6 +599,45 @@ struct TamperConfirmationTests {
         let c = try armedCoordinator(pin: "2468")
         c.triggerTamper(source: .chargerUnplugged)
         #expect(c.state == .tamperPending)
+        _ = c.disarmWithPin("2468")
+    }
+
+    @Test("Reconnecting power during grace countdown reverts state back to armed when setting enabled")
+    @MainActor
+    func powerRestoredRevertsToArmed() throws {
+        let c = try armedCoordinator(pin: "2468")
+        c.settings.revertTamperOnPowerRestored = true
+        c.triggerTamper(source: .chargerUnplugged)
+        #expect(c.state == .tamperPending)
+        #expect(c.activeTamperSource == .chargerUnplugged)
+
+        // Simulate charger plugged back in
+        c.powerMonitor.onHardwareEvent?(.chargerPluggedIn)
+        #expect(c.state == .armed)
+        #expect(c.activeTamperSource == nil)
+        #expect(c.events.contains { $0.title == "Tamper Canceled" })
+        _ = c.disarmWithPin("2468")
+    }
+
+    @Test("Reconnecting power does NOT revert if setting is disabled or if alarm already latched")
+    @MainActor
+    func powerRestoredDoesNotRevertWhenDisabledOrAlarmed() throws {
+        let c = try armedCoordinator(pin: "2468")
+        c.settings.revertTamperOnPowerRestored = false
+        c.triggerTamper(source: .chargerUnplugged)
+        #expect(c.state == .tamperPending)
+
+        c.powerMonitor.onHardwareEvent?(.chargerPluggedIn)
+        // Should remain counting down since setting is disabled
+        #expect(c.state == .tamperPending)
+
+        // Now test when in alarm
+        c.settings.revertTamperOnPowerRestored = true
+        c.enterAlarm(source: .chargerUnplugged)
+        #expect(c.state == .alarm)
+        c.powerMonitor.onHardwareEvent?(.chargerPluggedIn)
+        // Must stay in alarm — power restored cannot silence an active siren
+        #expect(c.state == .alarm)
         _ = c.disarmWithPin("2468")
     }
 

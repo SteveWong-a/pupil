@@ -272,7 +272,7 @@ public struct NotchOverlayView: View {
         case .expandedAlarm:
             return Color(red: 1.0, green: 0.27, blue: 0.23)
         case .expandedTamper:
-            return Color(red: 1.0, green: 0.62, blue: 0.04)
+            return Color(red: 1.0, green: 0.42, blue: 0.05)
         case .minimalGaze, .compactArming:
             return Color(white: 0.14)
         default:

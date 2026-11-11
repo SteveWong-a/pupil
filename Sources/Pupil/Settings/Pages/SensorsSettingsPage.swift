@@ -50,6 +50,13 @@ public struct SensorsSettingsPage: View {
                 }
                 SettingsGroupDivider()
                 SettingsRowContent(
+                    title: "Revert on power restored",
+                    subtitle: "Cancels countdown and returns to armed if the charger is reconnected before the siren latches."
+                ) {
+                    PupilToggle(isOn: $settings.revertTamperOnPowerRestored)
+                }
+                SettingsGroupDivider()
+                SettingsRowContent(
                     title: "Spatial Motion / Lift Detection",
                     subtitle: "Detects open-lid grab & walk via Apple Vision upper-background registration when unplugged.",
                     info: "Tracks static upper-background ceiling/wall anchors at 10 FPS and ignores brief < 0.5s desk bumps."

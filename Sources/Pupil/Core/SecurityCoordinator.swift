@@ -473,6 +473,29 @@ public final class SecurityCoordinator {
         }
     }
 
+    /// Reverts an in-progress grace countdown back to armed monitoring without requiring a PIN
+    /// (e.g. when an accidentally disconnected charger is plugged back in).
+    public func revertTamperToArmed(reason: String) {
+        guard state == .tamperPending else { return }
+        countdownTimer?.invalidate()
+        countdownTimer = nil
+        countdownSecondsRemaining = 0
+        activeTamperSource = nil
+        state = .armed
+
+        logEvent("Tamper Canceled", detail: "\(reason) Reverted to armed monitoring.")
+        onStateChanged?(state)
+        onNotchUpdateNeeded?()
+        NotificationCenter.default.post(name: .screenShieldSync, object: nil)
+
+        alertNotifier.send(AlertMessage(
+            title: "Pupil Armed (Tamper Canceled)",
+            body: "\(reason) Grace countdown canceled and system restored to armed state.",
+            severity: "high",
+            tag: "pupil-tamper"
+        ))
+    }
+
     public func enterAlarm(source: TamperSource, simulated: Bool = false) {
         countdownTimer?.invalidate()
         countdownTimer = nil
@@ -715,7 +738,13 @@ public final class SecurityCoordinator {
                 if self.isMonitoring {
                     self.triggerTamper(source: .wakeWhileArmed, immediateAlarm: true)
                 }
-            case .chargerPluggedIn, .lidOpened:
+            case .chargerPluggedIn:
+                if self.state == .tamperPending,
+                   self.activeTamperSource == .chargerUnplugged,
+                   self.settings.revertTamperOnPowerRestored {
+                    self.revertTamperToArmed(reason: "Power adapter reconnected.")
+                }
+            case .lidOpened:
                 break
             }
         }
