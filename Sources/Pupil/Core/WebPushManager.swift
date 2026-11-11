@@ -344,72 +344,94 @@ public final class WebPushManager {
         severity: String = "high",
         tag: String = "pupil-security-alert"
     ) async -> Bool {
+        let outcome = await deliverPush(AlertMessage(title: title, body: body, severity: severity, tag: tag))
+        return outcome == .delivered
+    }
+
+    /// Performs one delivery attempt and classifies the result so a retry queue can decide what to do.
+    public func deliverPush(_ message: AlertMessage) async -> PushOutcome {
         guard settings.relayEnabled, let subscription = settings.pairedPhoneSubscription else {
-            return false
+            return .notConfigured
         }
         guard let endpointURL = URL(string: subscription.endpoint) else {
             statusMessage = "Invalid push endpoint URL."
             lastPushSucceeded = false
-            return false
+            return .permanentFailure("Invalid push endpoint URL.")
         }
 
         isSendingPush = true
         defer { isSendingPush = false }
 
+        let encryptedBody: Data
+        let vapidHeader: String
         do {
             let payloadDict: [String: Any] = [
-                "title": title,
-                "body": body,
-                "severity": severity,
-                "tag": tag,
+                "title": message.title,
+                "body": message.body,
+                "severity": message.severity,
+                "tag": message.tag,
                 "timestamp": Int(Date().timeIntervalSince1970 * 1000)
             ]
             let plaintext = try JSONSerialization.data(withJSONObject: payloadDict)
-            let encryptedBody = try Self.encryptWebPushPayload(
+            encryptedBody = try Self.encryptWebPushPayload(
                 plaintext,
                 p256dhBase64URL: subscription.p256dh,
                 authBase64URL: subscription.auth
             )
-            let vapidHeader = try Self.makeVAPIDAuthorizationHeader(
+            vapidHeader = try Self.makeVAPIDAuthorizationHeader(
                 for: endpointURL,
                 privateKey: vapidPrivateKey
             )
+        } catch {
+            lastPushSucceeded = false
+            statusMessage = "Push error: \(error.localizedDescription)"
+            return .permanentFailure(error.localizedDescription)
+        }
 
-            var request = URLRequest(url: endpointURL)
-            request.httpMethod = "POST"
-            request.timeoutInterval = 8.0
-            request.httpBody = encryptedBody
-            request.setValue(vapidHeader, forHTTPHeaderField: "Authorization")
-            request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
-            request.setValue("aes128gcm", forHTTPHeaderField: "Content-Encoding")
-            request.setValue("\(encryptedBody.count)", forHTTPHeaderField: "Content-Length")
-            request.setValue("300", forHTTPHeaderField: "TTL")
-            request.setValue(severity == "critical" ? "high" : "high", forHTTPHeaderField: "Urgency")
-            request.setValue(tag, forHTTPHeaderField: "Topic")
+        var request = URLRequest(url: endpointURL)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 8.0
+        request.httpBody = encryptedBody
+        request.setValue(vapidHeader, forHTTPHeaderField: "Authorization")
+        request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+        request.setValue("aes128gcm", forHTTPHeaderField: "Content-Encoding")
+        request.setValue("\(encryptedBody.count)", forHTTPHeaderField: "Content-Length")
+        request.setValue("300", forHTTPHeaderField: "TTL")
+        // Web Push's highest urgency is "high"; critical and high alerts both use it.
+        request.setValue("high", forHTTPHeaderField: "Urgency")
+        request.setValue(message.tag, forHTTPHeaderField: "Topic")
 
+        do {
             let (respData, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse else {
                 lastPushSucceeded = false
                 statusMessage = "Push failed: non-HTTP response."
-                return false
+                return .retryableFailure("Non-HTTP response.")
             }
-
             if (200 ... 299).contains(http.statusCode) {
                 lastPushDate = Date()
                 lastPushSucceeded = true
                 statusMessage = "Alert delivered to \(subscription.deviceName)."
-                return true
-            } else {
-                let errText = String(data: respData, encoding: .utf8) ?? "HTTP \(http.statusCode)"
-                lastPushSucceeded = false
-                statusMessage = "Push error (\(http.statusCode)): \(errText.prefix(80))"
-                return false
+                return .delivered
             }
+            let errText = String(data: respData, encoding: .utf8) ?? "HTTP \(http.statusCode)"
+            lastPushSucceeded = false
+            statusMessage = "Push error (\(http.statusCode)): \(errText.prefix(80))"
+            return Self.classify(statusCode: http.statusCode, detail: "HTTP \(http.statusCode)")
         } catch {
             lastPushSucceeded = false
             statusMessage = "Push error: \(error.localizedDescription)"
-            return false
+            return .retryableFailure(error.localizedDescription)
         }
+    }
+
+    /// 429 and 5xx are transient; other 4xx (including 404/410 for an expired subscription) will not
+    /// succeed on retry.
+    public nonisolated static func classify(statusCode: Int, detail: String) -> PushOutcome {
+        if statusCode == 429 || (500 ... 599).contains(statusCode) {
+            return .retryableFailure(detail)
+        }
+        return .permanentFailure(detail)
     }
 
     // MARK: - Pure Swift CryptoKit RFC 8292 (VAPID) & RFC 8291 (aes128gcm)

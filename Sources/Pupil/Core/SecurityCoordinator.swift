@@ -107,12 +107,17 @@ public final class SecurityCoordinator {
     public let lockMonitor: LockMonitor
     public let cameraManager: CameraManager
     public let webPushManager: WebPushManager
+    public let alertNotifier: AlertNotifier
+    /// Injectable clock (epoch seconds) so corroboration windows are testable.
+    public var clock: () -> TimeInterval = { Date().timeIntervalSince1970 }
 
     public var onStateChanged: ((SecurityState) -> Void)?
     public var onNotchUpdateNeeded: (() -> Void)?
 
     private var gazeAggregator = GazeTemporalAggregator()
     private var motionAggregator = MotionTemporalAggregator()
+    private var tamperScorer = TamperScorer()
+    private var lastMotionWarningTime: TimeInterval = 0
     private var countdownTimer: Timer?
     private var gazeWarningDismissWorkItem: DispatchWorkItem?
 
@@ -121,13 +126,21 @@ public final class SecurityCoordinator {
         powerMonitor: PowerAndLidMonitor = PowerAndLidMonitor(),
         lockMonitor: LockMonitor = LockMonitor(),
         cameraManager: CameraManager = CameraManager(),
-        webPushManager: WebPushManager? = nil
+        webPushManager: WebPushManager? = nil,
+        alertNotifier: AlertNotifier? = nil
     ) {
         self.settings = settings
         self.powerMonitor = powerMonitor
         self.lockMonitor = lockMonitor
         self.cameraManager = cameraManager
-        self.webPushManager = webPushManager ?? WebPushManager(settings: settings)
+        let pushManager = webPushManager ?? WebPushManager(settings: settings)
+        self.webPushManager = pushManager
+        self.alertNotifier = alertNotifier ?? AlertNotifier { message in
+            await pushManager.deliverPush(message)
+        }
+        self.alertNotifier.onResult = { [weak self] message, result in
+            self?.logAlertResult(message, result)
+        }
 
         // Ensure a default PIN ("1234") is enrolled on first launch if none exists so the user can test immediately,
         // and clearly surface PIN changes in Settings.
@@ -177,6 +190,7 @@ public final class SecurityCoordinator {
         guard state == .disarmed else { return }
         gazeAggregator.reset()
         motionAggregator.reset()
+        tamperScorer.reset()
         cameraManager.resetMotionAnchor()
         hasMotionAnchor = false
         latestMotionDisplacementScore = 0
@@ -213,6 +227,7 @@ public final class SecurityCoordinator {
         countdownTimer = nil
         countdownSecondsRemaining = 0
         motionAggregator.reset()
+        tamperScorer.reset()
         cameraManager.resetMotionAnchor()
         hasMotionAnchor = false
         latestMotionDisplacementScore = 0
@@ -305,6 +320,7 @@ public final class SecurityCoordinator {
         gazeDwellProgress = 0
         gazeAggregator.reset()
         motionAggregator.reset()
+        tamperScorer.reset()
         cameraManager.resetMotionAnchor()
         hasMotionAnchor = false
         latestMotionDisplacementScore = 0
@@ -412,14 +428,7 @@ public final class SecurityCoordinator {
         onNotchUpdateNeeded?()
         NotificationCenter.default.post(name: .screenShieldSync, object: nil)
         NotificationCenter.default.post(name: .screenShieldOpenPrompt, object: nil)
-        Task { [weak self] in
-            _ = await self?.webPushManager.sendPushNotification(
-                title: "Pupil Screen Locked",
-                body: "Keyboard or trackpad activity detected while your MacBook is armed.",
-                severity: "high",
-                tag: "pupil-input-lock"
-            )
-        }
+        alertNotifier.send(AlertMessage(title: "Pupil Screen Locked", body: "Keyboard or trackpad activity detected while your MacBook is armed.", severity: "high", tag: "pupil-input-lock"))
     }
 
     // MARK: - Tamper & Alarm Escalation
@@ -435,6 +444,8 @@ public final class SecurityCoordinator {
             return
         }
 
+        let now = clock()
+        tamperScorer.record(source, at: now)
         activeTamperSource = source
 
         if immediateAlarm {
@@ -454,14 +465,7 @@ public final class SecurityCoordinator {
         onNotchUpdateNeeded?()
 
         let grace = settings.gracePeriodSeconds
-        Task { [weak self] in
-            _ = await self?.webPushManager.sendPushNotification(
-                title: "Pupil Tamper Countdown (\(grace)s)",
-                body: "\(source.rawValue) detected on your MacBook. Siren sounds in \(grace)s unless disarmed.",
-                severity: "high",
-                tag: "pupil-tamper"
-            )
-        }
+        alertNotifier.send(AlertMessage(title: "Pupil Tamper Countdown (\(grace)s)", body: "\(source.rawValue) detected on your MacBook. Siren sounds in \(grace)s unless disarmed.", severity: "high", tag: "pupil-tamper"))
 
         startCountdownTimer(seconds: settings.gracePeriodSeconds) { [weak self] in
             guard let self else { return }
@@ -487,14 +491,7 @@ public final class SecurityCoordinator {
         onStateChanged?(state)
         onNotchUpdateNeeded?()
 
-        Task { [weak self] in
-            _ = await self?.webPushManager.sendPushNotification(
-                title: "Pupil Siren Alarm Active",
-                body: "\(source.rawValue) — Audible siren and sleep lock engaged on your MacBook!",
-                severity: "critical",
-                tag: "pupil-alarm"
-            )
-        }
+        alertNotifier.send(AlertMessage(title: "Pupil Siren Alarm Active", body: "\(source.rawValue) — Audible siren and sleep lock engaged on your MacBook!", severity: "critical", tag: "pupil-alarm"))
     }
 
     // MARK: - Gaze Processing & Simulation
@@ -535,7 +532,7 @@ public final class SecurityCoordinator {
     }
 
     public func ingestMotionSample(_ sample: MotionSample) {
-        guard state == .armed, settings.isSpatialMotionEnabled else { return }
+        guard state == .armed || state == .tamperPending, settings.isSpatialMotionEnabled else { return }
 
         let snapshot = motionAggregator.ingest(
             sample,
@@ -547,7 +544,48 @@ public final class SecurityCoordinator {
         motionAnchorDepthMeters = snapshot.anchorDepthMeters
 
         if snapshot.isTamperTriggered {
-            triggerTamper(source: .cameraMotionDetected, immediateAlarm: false)
+            handleWeakMotionSignal(snapshot)
+        }
+    }
+
+    /// Camera motion and lens occlusion can be faked by lighting changes, so a lone hit only warns
+    /// until it persists or another signal agrees.
+    private func handleWeakMotionSignal(_ snapshot: MotionEscalationSnapshot) {
+        let now = clock()
+        let isOcclusion = snapshot.isSustainedOcclusionDetected && !snapshot.isSustainedLiftDetected
+        let decision = tamperScorer.decideWeak(
+            .cameraMotionDetected,
+            persistenceSeconds: isOcclusion ? snapshot.continuousOcclusionSeconds : snapshot.continuousDisplacementSeconds,
+            isOcclusion: isOcclusion,
+            alreadyCountingDown: state == .tamperPending,
+            at: now
+        )
+        tamperScorer.record(.cameraMotionDetected, at: now)
+
+        switch decision {
+        case .warn:
+            guard now - lastMotionWarningTime >= TamperScorer.corroborationWindowSeconds else { return }
+            lastMotionWarningTime = now
+            logEvent(
+                isOcclusion ? "Camera Blocked (unconfirmed)" : "Motion Detected (unconfirmed)",
+                detail: "Waiting for persistence or a second signal before starting the countdown."
+            )
+            onNotchUpdateNeeded?()
+        case .countdown:
+            triggerTamper(source: .cameraMotionDetected)
+        case .alarmNow:
+            triggerTamper(source: .cameraMotionDetected, immediateAlarm: true)
+        }
+    }
+
+    private func logAlertResult(_ message: AlertMessage, _ result: AlertResult) {
+        switch result {
+        case .delivered(let attempts):
+            logEvent("Phone Alert Delivered", detail: "\(message.title)" + (attempts > 1 ? " (after \(attempts) attempts)." : "."))
+        case .failed(let attempts, let reason):
+            logEvent("Phone Alert Failed", detail: "\(message.title) — gave up after \(attempts) attempt(s): \(reason)")
+        case .superseded:
+            break
         }
     }
 
@@ -645,7 +683,8 @@ public final class SecurityCoordinator {
         if !settings.gazeDetectionEnabled && isGazeWarningActive {
             dismissGazeWarning()
         }
-        let shouldRunCamera = isCameraPreviewRequested || (isMonitoring && settings.gazeDetectionEnabled)
+        let cameraNeededForMonitoring = isMonitoring && (settings.gazeDetectionEnabled || settings.isSpatialMotionEnabled)
+        let shouldRunCamera = isCameraPreviewRequested || cameraNeededForMonitoring
         if shouldRunCamera {
             cameraManager.startCapture(preferredDeviceID: settings.preferredCameraID)
         } else {

@@ -324,9 +324,18 @@ struct PupilSecurityTests {
         ))
         #expect(coordinator.state == .armed)
 
-        // Sustained lift at t+1.45s (1.35s continuous displacement > 1.2s threshold) -> Tamper Countdown!
+        // Sustained lift at t+1.45s (> 1.2s): a lone camera signal only warns, it does not start the countdown
         coordinator.ingestMotionSample(MotionSample(
             timestamp: t0 + 1.45,
+            translationMagnitude: 0.115,
+            homographyWarpMagnitude: 0.28
+        ))
+        #expect(coordinator.state == .armed)
+        #expect(coordinator.events.contains { $0.title.contains("unconfirmed") })
+
+        // Motion that keeps going past the lone-signal limit (4s) is treated as real -> Tamper Countdown!
+        coordinator.ingestMotionSample(MotionSample(
+            timestamp: t0 + 4.3,
             translationMagnitude: 0.115,
             homographyWarpMagnitude: 0.28
         ))
@@ -524,5 +533,160 @@ struct PupilSecurityTests {
             return nil
         }
         return ctx.makeImage()
+    }
+}
+
+@Suite("Tamper confirmation and alert delivery")
+struct TamperConfirmationTests {
+    private func liftSample(_ t: TimeInterval) -> MotionSample {
+        MotionSample(timestamp: t, translationMagnitude: 0.12, homographyWarpMagnitude: 0.3)
+    }
+
+    @MainActor
+    private func armedCoordinator(pin: String) throws -> SecurityCoordinator {
+        try KeychainManager.enrollPin(pin)
+        let notifier = AlertNotifier(backoffSeconds: [], transport: { _ in .notConfigured })
+        let c = SecurityCoordinator(alertNotifier: notifier)
+        c.settings.isSpatialMotionEnabled = true
+        c.settings.spatialMotionSensitivity = .medium
+        // Keep the camera off: the test host has no NSCameraUsageDescription and would abort on access.
+        c.settings.gazeDetectionEnabled = false
+        c.startArming(immediate: true)
+        return c
+    }
+
+    @Test("Scorer: lone lift warns, persistence or corroboration escalates")
+    func scorerDecisions() {
+        var scorer = TamperScorer()
+        #expect(scorer.decideWeak(.cameraMotionDetected, persistenceSeconds: 1.3, isOcclusion: false, alreadyCountingDown: false, at: 100) == .warn)
+        #expect(scorer.decideWeak(.cameraMotionDetected, persistenceSeconds: 4.1, isOcclusion: false, alreadyCountingDown: false, at: 100) == .countdown)
+        // Lights going out look like occlusion, so it needs longer
+        #expect(scorer.decideWeak(.cameraMotionDetected, persistenceSeconds: 5, isOcclusion: true, alreadyCountingDown: false, at: 100) == .warn)
+        #expect(scorer.decideWeak(.cameraMotionDetected, persistenceSeconds: 8.5, isOcclusion: true, alreadyCountingDown: false, at: 100) == .countdown)
+        scorer.record(.chargerUnplugged, at: 95)
+        // Corroborated with charger unplug: starts countdown immediately without waiting for 4.0s
+        #expect(scorer.decideWeak(.cameraMotionDetected, persistenceSeconds: 1.3, isOcclusion: false, alreadyCountingDown: false, at: 100) == .countdown)
+        // While already counting down, weak motion never escalates to alarmNow (preserves owner's disarm grace period)
+        #expect(scorer.decideWeak(.cameraMotionDetected, persistenceSeconds: 1.3, isOcclusion: false, alreadyCountingDown: true, at: 100) == .warn)
+        // Old corroboration expires
+        #expect(scorer.decideWeak(.cameraMotionDetected, persistenceSeconds: 1.3, isOcclusion: false, alreadyCountingDown: false, at: 120) == .warn)
+        #expect(scorer.hasRecentWeakSignal(at: 100) == false)
+        scorer.record(.cameraMotionDetected, at: 100)
+        #expect(scorer.hasRecentWeakSignal(at: 105) == true)
+    }
+
+    @Test("Motion warning followed by charger unplug grants grace countdown to disarm")
+    @MainActor
+    func motionPlusChargerGrantsGracePeriod() throws {
+        let c = try armedCoordinator(pin: "2468")
+        var now: TimeInterval = 5000
+        c.clock = { now }
+        c.ingestMotionSample(.anchor(at: now))
+        c.ingestMotionSample(liftSample(now + 0.1))
+        c.ingestMotionSample(liftSample(now + 1.6))
+        #expect(c.state == .armed)
+        now += 2
+        c.triggerTamper(source: .chargerUnplugged)
+        // Must start grace countdown (tamperPending), NOT immediate siren alarm
+        #expect(c.state == .tamperPending)
+        // Moving during countdown to type PIN does not cut countdown short
+        c.ingestMotionSample(liftSample(now + 3))
+        #expect(c.state == .tamperPending)
+        _ = c.disarmWithPin("2468")
+        #expect(c.state == .disarmed)
+    }
+
+    @Test("Charger unplug alone still starts the normal countdown")
+    @MainActor
+    func chargerAloneCountsDown() throws {
+        let c = try armedCoordinator(pin: "2468")
+        c.triggerTamper(source: .chargerUnplugged)
+        #expect(c.state == .tamperPending)
+        _ = c.disarmWithPin("2468")
+    }
+
+    @Test("Notifier retries transient failures with backoff and reports success")
+    @MainActor
+    func notifierRetries() async {
+        var calls = 0
+        var sleeps: [Double] = []
+        let notifier = AlertNotifier(
+            backoffSeconds: [1, 3],
+            transport: { _ in calls += 1; return calls < 3 ? .retryableFailure("timeout") : .delivered },
+            sleep: { sleeps.append($0) }
+        )
+        var results: [AlertResult] = []
+        notifier.onResult = { _, r in results.append(r) }
+        notifier.send(AlertMessage(title: "t", body: "b", tag: "x"))
+        await notifier.waitUntilIdle()
+        #expect(calls == 3)
+        #expect(sleeps == [1, 3])
+        #expect(results == [.delivered(attempts: 3)])
+    }
+
+    @Test("Notifier gives up on permanent failures without retrying, and after the retry budget")
+    @MainActor
+    func notifierGivesUp() async {
+        var calls = 0
+        let notifier = AlertNotifier(backoffSeconds: [0, 0], transport: { _ in calls += 1; return .permanentFailure("410") }, sleep: { _ in })
+        var results: [AlertResult] = []
+        notifier.onResult = { _, r in results.append(r) }
+        notifier.send(AlertMessage(title: "t", body: "b", tag: "x"))
+        await notifier.waitUntilIdle()
+        #expect(calls == 1)
+        #expect(results == [.failed(attempts: 1, reason: "410")])
+
+        calls = 0
+        results = []
+        let flaky = AlertNotifier(backoffSeconds: [0, 0], transport: { _ in calls += 1; return .retryableFailure("503") }, sleep: { _ in })
+        flaky.onResult = { _, r in results.append(r) }
+        flaky.send(AlertMessage(title: "t", body: "b", tag: "x"))
+        await flaky.waitUntilIdle()
+        #expect(calls == 3)
+        #expect(results == [.failed(attempts: 3, reason: "503")])
+    }
+
+    @Test("Notifier sends in order and drops a stale countdown push once the alarm push is queued")
+    @MainActor
+    func notifierOrderingAndSupersede() async {
+        var sent: [String] = []
+        let notifier = AlertNotifier(backoffSeconds: [], transport: { m in sent.append(m.tag); return .delivered }, sleep: { _ in })
+        notifier.send(AlertMessage(title: "first", body: "", tag: "pupil-input-lock"))
+        notifier.send(AlertMessage(title: "countdown", body: "", severity: "high", tag: "pupil-tamper"))
+        notifier.send(AlertMessage(title: "alarm", body: "", severity: "critical", tag: "pupil-alarm"))
+        await notifier.waitUntilIdle()
+        #expect(sent == ["pupil-input-lock", "pupil-alarm"])
+    }
+
+    @Test("Notifier preempts in-flight retries of countdown push when critical alarm push arrives")
+    @MainActor
+    func notifierPreemptsInFlightRetries() async {
+        var sent: [String] = []
+        var attempts = 0
+        let notifier = AlertNotifier(
+            backoffSeconds: [0.01, 0.01],
+            transport: { m in
+                sent.append(m.tag)
+                if m.tag == "pupil-tamper" {
+                    attempts += 1
+                    return .retryableFailure("busy")
+                }
+                return .delivered
+            },
+            sleep: { _ in }
+        )
+        notifier.send(AlertMessage(title: "countdown", body: "", severity: "high", tag: "pupil-tamper"))
+        // Send critical alarm immediately to supersede in-flight countdown retry
+        notifier.send(AlertMessage(title: "alarm", body: "", severity: "critical", tag: "pupil-alarm"))
+        await notifier.waitUntilIdle()
+        #expect(sent.contains("pupil-alarm"))
+        #expect(attempts < 3)
+    }
+
+    @Test("HTTP status classification")
+    func classification() {
+        #expect(WebPushManager.classify(statusCode: 503, detail: "") == .retryableFailure(""))
+        #expect(WebPushManager.classify(statusCode: 429, detail: "") == .retryableFailure(""))
+        #expect(WebPushManager.classify(statusCode: 410, detail: "") == .permanentFailure(""))
     }
 }

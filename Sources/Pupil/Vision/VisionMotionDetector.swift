@@ -27,6 +27,12 @@ public struct MotionSample: Sendable, Equatable {
     public let metricDepthZ0: Float?
     /// Whether this frame was captured as the initial Frame 0 anchor.
     public let isAnchorFrame: Bool
+    /// Normalized frame-to-frame translation ||Δt|| versus the previous frame. Unlike the anchor
+    /// comparison this stays meaningful after a large move (e.g. a lift) when the scene no longer
+    /// overlaps the anchor.
+    public let interFrameTranslation: Float
+    /// False when the background had too little texture for image registration to be trusted.
+    public let isRegistrationReliable: Bool
 
     public init(
         timestamp: TimeInterval,
@@ -35,7 +41,9 @@ public struct MotionSample: Sendable, Equatable {
         meanLuminance: Float = 0.45,
         luminanceVariance: Float = 0.04,
         metricDepthZ0: Float? = nil,
-        isAnchorFrame: Bool = false
+        isAnchorFrame: Bool = false,
+        interFrameTranslation: Float = 0,
+        isRegistrationReliable: Bool = true
     ) {
         self.timestamp = timestamp
         self.translationMagnitude = translationMagnitude
@@ -44,6 +52,8 @@ public struct MotionSample: Sendable, Equatable {
         self.luminanceVariance = luminanceVariance
         self.metricDepthZ0 = metricDepthZ0
         self.isAnchorFrame = isAnchorFrame
+        self.interFrameTranslation = interFrameTranslation
+        self.isRegistrationReliable = isRegistrationReliable
     }
 
     public var isFrameOccluded: Bool {
@@ -81,11 +91,15 @@ public struct MotionEscalationSnapshot: Sendable, Equatable {
 public struct MotionTemporalAggregator: Sendable {
     public static let tableBumpSuppressionSeconds: Double = 0.5
     public static let sustainedEscalationSeconds: Double = 1.2
+    /// Sub-threshold dropouts shorter than this do not restart the sustained-motion timer, so a
+    /// noisy score during a real lift cannot keep resetting the 1.2s clock.
+    public static let motionDropoutToleranceSeconds: Double = 0.4
 
     public private(set) var hasCapturedAnchor: Bool = false
     public private(set) var anchorTimestamp: TimeInterval?
     public private(set) var anchorDepthMeters: Float?
     private var continuousMotionStart: TimeInterval?
+    private var lastMotionExceedTime: TimeInterval?
     private var continuousOcclusionStart: TimeInterval?
 
     public init() {}
@@ -95,6 +109,7 @@ public struct MotionTemporalAggregator: Sendable {
         anchorTimestamp = nil
         anchorDepthMeters = nil
         continuousMotionStart = nil
+        lastMotionExceedTime = nil
         continuousOcclusionStart = nil
     }
 
@@ -102,6 +117,7 @@ public struct MotionTemporalAggregator: Sendable {
         _ sample: MotionSample,
         sensitivity: SpatialMotionSensitivity = .medium,
         tableBumpDeadbandSeconds: Double = Self.tableBumpSuppressionSeconds,
+        motionDropoutToleranceSeconds: Double = Self.motionDropoutToleranceSeconds,
         sustainedThresholdSeconds: Double = Self.sustainedEscalationSeconds
     ) -> MotionEscalationSnapshot {
         // Capture Frame 0 anchor when first sample arrives after arming/reset
@@ -112,6 +128,7 @@ public struct MotionTemporalAggregator: Sendable {
                 anchorDepthMeters = z0
             }
             continuousMotionStart = nil
+            lastMotionExceedTime = nil
             continuousOcclusionStart = sample.isFrameOccluded ? sample.timestamp : nil
 
             return MotionEscalationSnapshot(
@@ -139,18 +156,29 @@ public struct MotionTemporalAggregator: Sendable {
             depthScale = 1.0
         }
 
-        let scaledTranslation = sample.translationMagnitude * depthScale
+        // Anchor-based cues are only trusted when the background had enough texture to register.
+        let scaledTranslation = sample.isRegistrationReliable ? sample.translationMagnitude * depthScale : 0
         let translationRatio = scaledTranslation / max(0.001, sensitivity.translationDeadband)
-        let warpRatio = sample.homographyWarpMagnitude / max(0.001, sensitivity.warpDeadband)
-        let effectiveScore = max(translationRatio, warpRatio)
+        let warpRatio = sample.isRegistrationReliable
+            ? sample.homographyWarpMagnitude / max(0.001, sensitivity.warpDeadband)
+            : 0
+        // Frame-to-frame motion keeps working after a big move, when the anchor no longer overlaps.
+        let interFrameRatio = sample.interFrameTranslation / max(0.001, sensitivity.interFrameDeadband)
+        let effectiveScore = max(translationRatio, warpRatio, interFrameRatio)
         let exceedsDeadband = effectiveScore >= 1.0
 
         if exceedsDeadband {
             if continuousMotionStart == nil {
                 continuousMotionStart = sample.timestamp
             }
+            lastMotionExceedTime = sample.timestamp
+        } else if let lastExceed = lastMotionExceedTime,
+                  sample.timestamp - lastExceed <= motionDropoutToleranceSeconds,
+                  continuousMotionStart != nil {
+            // Brief dropout: keep the clock running but do not count this frame as motion.
         } else {
             continuousMotionStart = nil
+            lastMotionExceedTime = nil
         }
 
         if sample.isFrameOccluded {
@@ -162,7 +190,7 @@ public struct MotionTemporalAggregator: Sendable {
         }
 
         let elapsedMotion: Double
-        if let start = continuousMotionStart {
+        if exceedsDeadband, let start = continuousMotionStart {
             elapsedMotion = max(0, sample.timestamp - start)
         } else {
             elapsedMotion = 0
@@ -200,15 +228,23 @@ public struct MotionTemporalAggregator: Sendable {
 /// on the face-masked top 25% ROI against the armed anchor frame.
 public final class VisionMotionDetector: @unchecked Sendable {
     private let lock = NSLock()
-    private var anchorUpperBackgroundImage: CGImage?
+    private var anchorImage: CGImage?
+    private var anchorTextureEnergyValue: Float?
+    private var previousImage: CGImage?
     private var anchorMetricDepthZ0: Float?
+
+    /// Registration runs on a downscaled copy: faster, and averaging smooths sensor noise.
+    public static let analysisWidth = 320
+    public static let analysisHeight = 240
+    /// Mean absolute luminance gradient below which image registration is not trustworthy.
+    public static let minimumTextureEnergy: Float = 0.006
 
     public init() {}
 
     public var hasAnchorFrame: Bool {
         lock.lock()
         defer { lock.unlock() }
-        return anchorUpperBackgroundImage != nil
+        return anchorImage != nil
     }
 
     public var currentAnchorDepthZ0: Float? {
@@ -219,13 +255,16 @@ public final class VisionMotionDetector: @unchecked Sendable {
 
     public func resetAnchor() {
         lock.lock()
-        anchorUpperBackgroundImage = nil
+        anchorImage = nil
+        anchorTextureEnergyValue = nil
+        previousImage = nil
         anchorMetricDepthZ0 = nil
         lock.unlock()
     }
 
-    /// Evaluates a camera frame against the armed Frame 0 anchor using Apple Vision image registration
-    /// on the face-masked upper 25% background ROI, plus full-frame luminance/variance occlusion checks.
+    /// Evaluates a camera frame against the armed Frame 0 anchor and the previous frame using Apple
+    /// Vision image registration on the face-masked, downscaled full frame, plus luminance/variance
+    /// occlusion checks.
     public func analyzeFrame(
         _ image: CGImage,
         faceBoundingBoxes: [CGRect] = [],
@@ -233,7 +272,7 @@ public final class VisionMotionDetector: @unchecked Sendable {
         timestamp: TimeInterval = Date().timeIntervalSince1970
     ) -> MotionSample {
         let (meanLuma, lumaVariance) = Self.computeFrameLuminanceStats(image)
-        guard let upperROIImage = Self.makeFaceMaskedUpperBackgroundCrop(
+        guard let current = Self.makeFaceMaskedBackgroundImage(
             from: image,
             faceBoundingBoxes: faceBoundingBoxes
         ) else {
@@ -249,10 +288,13 @@ public final class VisionMotionDetector: @unchecked Sendable {
         }
 
         lock.lock()
-        let existingAnchor = anchorUpperBackgroundImage
+        let existingAnchor = anchorImage
+        let previous = previousImage
+        previousImage = current
         if existingAnchor == nil {
-            anchorUpperBackgroundImage = upperROIImage
+            anchorImage = current
             anchorMetricDepthZ0 = metricDepthZ0
+            anchorTextureEnergyValue = Self.textureEnergy(of: current)
             lock.unlock()
             return MotionSample(
                 timestamp: timestamp,
@@ -268,16 +310,33 @@ public final class VisionMotionDetector: @unchecked Sendable {
             anchorMetricDepthZ0 = z0
         }
         let anchorZ0 = anchorMetricDepthZ0
+        let cachedAnchorEnergy = anchorTextureEnergyValue
         lock.unlock()
 
-        guard let anchorImage = existingAnchor else {
+        guard let anchor = existingAnchor else {
             return .anchor(at: timestamp, metricDepthZ0: anchorZ0)
         }
 
-        let (translationMag, warpMag) = Self.computeRegistrationDisplacement(
-            anchorImage: anchorImage,
-            currentImage: upperROIImage
-        )
+        let anchorEnergy = cachedAnchorEnergy ?? Self.textureEnergy(of: anchor)
+        let reliable = anchorEnergy >= Self.minimumTextureEnergy
+            && Self.textureEnergy(of: current) >= Self.minimumTextureEnergy
+
+        var translationMag: Float = 0
+        var warpMag: Float = 0
+        var interFrameMag: Float = 0
+        if reliable {
+            (translationMag, warpMag) = Self.computeRegistrationDisplacement(
+                anchorImage: anchor,
+                currentImage: current
+            )
+            if let previous {
+                interFrameMag = Self.computeRegistrationDisplacement(
+                    anchorImage: previous,
+                    currentImage: current,
+                    includeHomography: false
+                ).translationMagnitude
+            }
+        }
 
         return MotionSample(
             timestamp: timestamp,
@@ -286,75 +345,85 @@ public final class VisionMotionDetector: @unchecked Sendable {
             meanLuminance: meanLuma,
             luminanceVariance: lumaVariance,
             metricDepthZ0: anchorZ0,
-            isAnchorFrame: false
+            isAnchorFrame: false,
+            interFrameTranslation: interFrameMag,
+            isRegistrationReliable: reliable
         )
     }
 
-    /// Crops the static upper-background ROI (top 25% of the frame, viewing ceiling/upper walls)
-    /// and masks out any expanded `VNFaceObservation` bounding boxes.
-    public static func makeFaceMaskedUpperBackgroundCrop(
+    /// Downscales the full frame to `analysisWidth x analysisHeight` and masks any expanded
+    /// `VNFaceObservation` bounding boxes (Vision normalized, bottom-left origin) with neutral gray.
+    /// Uses the whole frame, not just the ceiling band, so there is texture to register against.
+    public static func makeFaceMaskedBackgroundImage(
         from image: CGImage,
         faceBoundingBoxes: [CGRect]
     ) -> CGImage? {
-        let fullW = image.width
-        let fullH = image.height
-        guard fullW >= 8, fullH >= 8 else { return nil }
-
-        let roiH = max(4, Int(Double(fullH) * 0.25))
-        let topCropRect = CGRect(x: 0, y: 0, width: fullW, height: roiH)
-        guard let cropped = image.cropping(to: topCropRect) else { return nil }
-
-        // If no faces overlap the top 25% band (in Vision bottom-left coords, y >= 0.75), return crop directly
-        let expandedBoxes = faceBoundingBoxes.map { box -> CGRect in
-            let expandX = box.width * 0.25
-            let expandY = box.height * 0.25
-            return box.insetBy(dx: -expandX, dy: -expandY)
-        }
-        let overlapsUpperBand = expandedBoxes.contains { $0.maxY > 0.75 }
-        guard overlapsUpperBand else { return cropped }
-
-        // Render crop into transient in-memory bitmap context and mask overlapping face boxes
+        guard image.width >= 8, image.height >= 8 else { return nil }
+        let w = analysisWidth
+        let h = analysisHeight
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         guard let ctx = CGContext(
             data: nil,
-            width: fullW,
-            height: roiH,
+            width: w,
+            height: h,
             bitsPerComponent: 8,
-            bytesPerRow: fullW * 4,
+            bytesPerRow: w * 4,
             space: colorSpace,
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else {
-            return cropped
-        }
+        ) else { return nil }
 
-        ctx.draw(cropped, in: CGRect(x: 0, y: 0, width: fullW, height: roiH))
+        ctx.interpolationQuality = .medium
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
         ctx.setFillColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1.0)
-
-        for box in expandedBoxes where box.maxY > 0.75 {
-            let minX = max(0.0, box.minX) * CGFloat(fullW)
-            let maxX = min(1.0, box.maxX) * CGFloat(fullW)
-            // Vision y in [0.75, 1.0] maps to crop y in [0, roiH]
-            let overlapMinY = max(0.75, box.minY)
-            let overlapMaxY = min(1.0, box.maxY)
-            let cropMinY = ((overlapMinY - 0.75) / 0.25) * CGFloat(roiH)
-            let cropMaxY = ((overlapMaxY - 0.75) / 0.25) * CGFloat(roiH)
-            let maskRect = CGRect(
-                x: minX,
-                y: cropMinY,
-                width: max(0, maxX - minX),
-                height: max(0, cropMaxY - cropMinY)
-            )
-            ctx.fill(maskRect)
+        for box in faceBoundingBoxes {
+            let expanded = box.insetBy(dx: -box.width * 0.25, dy: -box.height * 0.25)
+            // CGContext is bottom-left origin, same as Vision's normalized space.
+            ctx.fill(CGRect(
+                x: max(0, expanded.minX) * CGFloat(w),
+                y: max(0, expanded.minY) * CGFloat(h),
+                width: min(1, expanded.maxX) * CGFloat(w) - max(0, expanded.minX) * CGFloat(w),
+                height: min(1, expanded.maxY) * CGFloat(h) - max(0, expanded.minY) * CGFloat(h)
+            ))
         }
+        return ctx.makeImage()
+    }
 
-        return ctx.makeImage() ?? cropped
+    /// Mean absolute horizontal+vertical luminance gradient in [0, 1]; ~0 for flat walls and ceilings.
+    public static func textureEnergy(of image: CGImage) -> Float {
+        let w = 80
+        let h = 60
+        var raw = [UInt8](repeating: 0, count: w * h * 4)
+        guard let ctx = CGContext(
+            data: &raw,
+            width: w,
+            height: h,
+            bitsPerComponent: 8,
+            bytesPerRow: w * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return 0 }
+        ctx.interpolationQuality = .medium
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        func luma(_ x: Int, _ y: Int) -> Float {
+            let o = (y * w + x) * 4
+            return (0.2126 * Float(raw[o]) + 0.7152 * Float(raw[o + 1]) + 0.0722 * Float(raw[o + 2])) / 255
+        }
+        var sum: Float = 0
+        for y in 0..<(h - 1) {
+            for x in 0..<(w - 1) {
+                let l = luma(x, y)
+                sum += abs(luma(x + 1, y) - l) + abs(luma(x, y + 1) - l)
+            }
+        }
+        return sum / Float((w - 1) * (h - 1))
     }
 
     /// Runs `VNTranslationalImageRegistrationRequest` and `VNHomographyImageRegistrationRequest`
     /// between the armed anchor crop and the current upper-background crop.
     public static func computeRegistrationDisplacement(
         anchorImage: CGImage,
-        currentImage: CGImage
+        currentImage: CGImage,
+        includeHomography: Bool = true
     ) -> (translationMagnitude: Float, warpMagnitude: Float) {
         let translationRequest = VNTranslationalImageRegistrationRequest(
             targetedCGImage: anchorImage,
@@ -367,7 +436,7 @@ public final class VisionMotionDetector: @unchecked Sendable {
 
         let handler = VNImageRequestHandler(cgImage: currentImage, options: [:])
         do {
-            try handler.perform([translationRequest, homographyRequest])
+            try handler.perform(includeHomography ? [translationRequest, homographyRequest] : [translationRequest])
         } catch {
             return (0, 0)
         }
@@ -381,7 +450,7 @@ public final class VisionMotionDetector: @unchecked Sendable {
         }
 
         var warpMag: Float = 0
-        if let homoObs = homographyRequest.results?.first as? VNImageHomographicAlignmentObservation {
+        if includeHomography, let homoObs = homographyRequest.results?.first as? VNImageHomographicAlignmentObservation {
             let H = homoObs.warpTransform
             let scale = H[2][2]
             if abs(scale) > 1e-5 {

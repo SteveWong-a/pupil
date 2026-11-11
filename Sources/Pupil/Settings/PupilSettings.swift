@@ -107,12 +107,21 @@ public enum SpatialMotionSensitivity: String, CaseIterable, Identifiable, Codabl
         }
     }
 
+    /// Per-frame (~0.1s) translation deadband versus the previous frame (fraction of frame width).
+    public var interFrameDeadband: Float {
+        switch self {
+        case .low: return 0.030
+        case .medium: return 0.020
+        case .high: return 0.012
+        }
+    }
+
     /// Homography warp Frobenius norm deadband threshold.
     public var warpDeadband: Float {
         switch self {
         case .low: return 0.22
         case .medium: return 0.14
-        case .high: return 0.08
+        case .high: return 0.12
         }
     }
 }

@@ -36,6 +36,16 @@ public final class CameraManager: NSObject {
     @ObservationIgnored private nonisolated(unsafe) var lastProcessedTime: TimeInterval = 0
     @ObservationIgnored private nonisolated(unsafe) var activeROI: CameraROI = .default
     @ObservationIgnored public nonisolated let motionDetector = VisionMotionDetector()
+    /// Allows disabling hardware capture in headless test runners lacking NSCameraUsageDescription.
+    public var isCaptureEnabled: Bool = {
+        if Bundle.main.object(forInfoDictionaryKey: "NSCameraUsageDescription") == nil {
+            let proc = ProcessInfo.processInfo
+            if proc.environment["XCTestConfigurationFilePath"] != nil || proc.processName.contains("swift-testing") || Bundle.main.bundleIdentifier == nil {
+                return false
+            }
+        }
+        return true
+    }()
 
     public override init() {
         super.init()
@@ -84,7 +94,7 @@ public final class CameraManager: NSObject {
     }
 
     public func startCapture(preferredDeviceID: String? = nil) {
-        guard !isRunning else { return }
+        guard isCaptureEnabled, !isRunning else { return }
         let status = AVCaptureDevice.authorizationStatus(for: .video)
         if status == .notDetermined {
             Task {
