@@ -88,10 +88,19 @@ public struct GazeSettingsPage: View {
             VStack(alignment: .leading, spacing: 8) {
                 SettingsSectionTitle(text: "Preview")
                 liveCameraPreviewCard
+
+                SettingsGroup {
+                    liveDisplacementRow
+                    SettingsGroupDivider()
+                    spatialRoomFocusRow
+                    SettingsGroupDivider()
+                    gazeDwellRow
+                }
+
                 if let report = coordinator.liveCalibrationReport {
                     calibrationReportCard(report)
                 }
-                SettingsCaption(text: "Preview is only active while shown. All frames are processed in memory and never saved.")
+                SettingsCaption(text: "Live displacement and spatial focus activate when preview is running. All frames are processed in memory and never saved.")
             }
         }
         .onDisappear {
@@ -150,92 +159,27 @@ public struct GazeSettingsPage: View {
         Int((min(1.0, max(0.0, coordinator.gazeDwellProgress)) * 100).rounded())
     }
 
+    private var isCameraActive: Bool {
+        coordinator.isCameraPreviewRequested && coordinator.cameraManager.isRunning
+    }
+
     private var liveCameraPreviewCard: some View {
         VStack(spacing: 0) {
-            ZStack(alignment: .bottomTrailing) {
-                ZStack {
-                    if coordinator.isCameraPreviewRequested {
-                        CameraPreviewView(session: coordinator.cameraManager.captureSessionReference)
-                            .transition(.opacity)
-                        SpatialFocusOverlayView(coordinator: coordinator)
-                            .transition(.opacity)
-                    } else {
-                        VStack(spacing: 8) {
-                            Image(systemName: "video.slash")
-                                .font(.system(size: 20, weight: .regular))
-                                .foregroundStyle(SettingsMetrics.textTertiary)
-                            Text("Preview is off")
-                                .font(.system(size: 12))
-                                .foregroundStyle(SettingsMetrics.textSecondary)
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 196)
-
+            ZStack {
                 if coordinator.isCameraPreviewRequested {
-                    HStack(spacing: 8) {
-                        // Toggle Focus Reticles
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.15)) {
-                                coordinator.isPreviewFocusOverlayEnabled.toggle()
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: coordinator.isPreviewFocusOverlayEnabled ? "viewfinder.circle.fill" : "viewfinder.circle")
-                                    .font(.system(size: 11))
-                                Text(coordinator.isPreviewFocusOverlayEnabled ? "Focus Overlay" : "Clean View")
-                                    .font(.system(size: 10, weight: .medium))
-                            }
-                            .foregroundStyle(Color.white.opacity(0.85))
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 4)
-                            .background(
-                                Capsule()
-                                    .fill(Color.black.opacity(0.65))
-                                    .overlay(
-                                        Capsule().strokeBorder(Color.white.opacity(0.15), lineWidth: 1)
-                                    )
-                            )
-                        }
-                        .buttonStyle(.plain)
-
-                        Spacer()
-
-                        HStack(spacing: 8) {
-                            Text("Gaze Dwell")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(Color.white.opacity(0.80))
-
-                            GeometryReader { geo in
-                                ZStack(alignment: .leading) {
-                                    Capsule()
-                                        .fill(Color.white.opacity(0.18))
-                                    Capsule()
-                                        .fill(dwellPercentage >= 100 ? PupilTheme.warningAmber : PupilTheme.armedGreen)
-                                        .frame(width: geo.size.width * CGFloat(min(1.0, max(0.0, coordinator.gazeDwellProgress))))
-                                        .animation(.easeOut(duration: 0.12), value: coordinator.gazeDwellProgress)
-                                }
-                            }
-                            .frame(width: 56, height: 6)
-
-                            Text("\(dwellPercentage)%")
-                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                                .foregroundStyle(dwellPercentage >= 100 ? PupilTheme.warningAmber : Color.white)
-                                .frame(width: 34, alignment: .trailing)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(Color.black.opacity(0.68))
-                                .overlay(
-                                    Capsule()
-                                        .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
-                                )
-                        )
+                    CameraPreviewView(session: coordinator.cameraManager.captureSessionReference)
+                        .transition(.opacity)
+                    SpatialFocusOverlayView(coordinator: coordinator)
+                        .transition(.opacity)
+                } else {
+                    VStack(spacing: 8) {
+                        Image(systemName: "video.slash")
+                            .font(.system(size: 20, weight: .regular))
+                            .foregroundStyle(SettingsMetrics.textTertiary)
+                        Text("Preview is off")
+                            .font(.system(size: 12))
+                            .foregroundStyle(SettingsMetrics.textSecondary)
                     }
-                    .padding(10)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -255,27 +199,17 @@ public struct GazeSettingsPage: View {
                 .frame(height: SettingsMetrics.rowBorderWidth)
 
             HStack {
-                if coordinator.isCameraPreviewRequested {
-                    HStack(spacing: 10) {
-                        HStack(spacing: 6) {
-                            Circle()
-                                .fill(coordinator.activeFaceCount > 0 ? PupilTheme.armedGreen : SettingsMetrics.textTertiary)
-                                .frame(width: 6, height: 6)
-                            Text(coordinator.activeFaceCount > 0 ? "Face detected" : "No face detected")
-                                .font(.system(size: 12))
-                                .foregroundStyle(SettingsMetrics.textSecondary)
-                        }
-
-                        Text("•")
-                            .font(.system(size: 11))
-                            .foregroundStyle(SettingsMetrics.textTertiary)
-
-                        Text("Dwell: \(dwellPercentage)%")
-                            .font(.system(size: 12, weight: .medium, design: .monospaced))
-                            .foregroundStyle(dwellPercentage >= 100 ? PupilTheme.warningAmber : SettingsMetrics.textPrimary)
-                    }
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(isCameraActive ? (coordinator.activeFaceCount > 0 ? PupilTheme.armedGreen : PupilTheme.accent) : SettingsMetrics.textTertiary)
+                        .frame(width: 6, height: 6)
+                    Text(isCameraActive ? (coordinator.activeFaceCount > 0 ? "Subject detected" : "Room background ready") : "Preview is off")
+                        .font(.system(size: 12))
+                        .foregroundStyle(SettingsMetrics.textSecondary)
                 }
+
                 Spacer()
+
                 if coordinator.isCameraPreviewRequested {
                     PillActionButton(
                         title: coordinator.isLiveCalibrating ? "Stop Test" : "Test Calibration"
@@ -302,6 +236,179 @@ public struct GazeSettingsPage: View {
                 .strokeBorder(SettingsMetrics.rowBorder, lineWidth: SettingsMetrics.rowBorderWidth)
         )
         .clipShape(RoundedRectangle(cornerRadius: SettingsMetrics.rowRadius))
+    }
+
+    // MARK: - Native Percentage Bar Rows (Matching macOS UI)
+
+    private var liveDisplacementRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Live displacement")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(SettingsMetrics.textPrimary)
+                Spacer()
+                if isCameraActive {
+                    Text(String(format: "%.0f%%", min(100, coordinator.latestMotionDisplacementScore * 100)))
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(motionMeterColor(coordinator.latestMotionDisplacementScore))
+                } else {
+                    Text("N/A")
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(SettingsMetrics.textTertiary)
+                }
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.12))
+                        .frame(height: 6)
+
+                    if isCameraActive {
+                        Capsule()
+                            .fill(motionMeterColor(coordinator.latestMotionDisplacementScore))
+                            .frame(
+                                width: max(4, geo.size.width * CGFloat(min(1.0, coordinator.latestMotionDisplacementScore))),
+                                height: 6
+                            )
+                            .animation(.linear(duration: 0.1), value: coordinator.latestMotionDisplacementScore)
+                    }
+                }
+            }
+            .frame(height: 6)
+
+            HStack {
+                Text(isCameraActive ? "Resting (0%)" : "Camera offline")
+                    .font(.system(size: 10))
+                    .foregroundStyle(SettingsMetrics.textTertiary)
+                Spacer()
+                Text("Tamper threshold (100%)")
+                    .font(.system(size: 10))
+                    .foregroundStyle(SettingsMetrics.textTertiary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var spatialRoomFocusPercentage: Int {
+        guard isCameraActive else { return 0 }
+        if coordinator.latestFaceBoundingBoxes.isEmpty {
+            return 100
+        }
+        let maskedArea = coordinator.latestFaceBoundingBoxes.reduce(0.0) { sum, box in
+            sum + Double(box.width * 1.25 * box.height * 1.25)
+        }
+        return max(40, min(100, Int(((1.0 - min(0.60, maskedArea)) * 100).rounded())))
+    }
+
+    private var spatialRoomFocusRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Spatial room focus")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(SettingsMetrics.textPrimary)
+                Spacer()
+                if isCameraActive {
+                    Text("\(spatialRoomFocusPercentage)%")
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(PupilTheme.armedGreen)
+                } else {
+                    Text("N/A")
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(SettingsMetrics.textTertiary)
+                }
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.12))
+                        .frame(height: 6)
+
+                    if isCameraActive {
+                        Capsule()
+                            .fill(PupilTheme.armedGreen)
+                            .frame(
+                                width: max(4, geo.size.width * CGFloat(spatialRoomFocusPercentage) / 100.0),
+                                height: 6
+                            )
+                            .animation(.linear(duration: 0.1), value: spatialRoomFocusPercentage)
+                    }
+                }
+            }
+            .frame(height: 6)
+
+            HStack {
+                Text(isCameraActive ? (coordinator.latestFaceBoundingBoxes.isEmpty ? "Full room background" : "\(coordinator.latestFaceBoundingBoxes.count) subject masked") : "Tracking inactive")
+                    .font(.system(size: 10))
+                    .foregroundStyle(SettingsMetrics.textTertiary)
+                Spacer()
+                Text(isCameraActive ? (coordinator.isTextureAdequate ? "Texture adequate (\(String(format: "%.3f", coordinator.latestTextureEnergy)))" : "Low texture (< 0.006)") : "No texture data")
+                    .font(.system(size: 10))
+                    .foregroundStyle(isCameraActive && !coordinator.isTextureAdequate ? PupilTheme.warningAmber : SettingsMetrics.textTertiary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var gazeDwellRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Gaze dwell progress")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(SettingsMetrics.textPrimary)
+                Spacer()
+                if isCameraActive {
+                    Text("\(dwellPercentage)%")
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(dwellPercentage >= 100 ? PupilTheme.warningAmber : PupilTheme.armedGreen)
+                } else {
+                    Text("N/A")
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(SettingsMetrics.textTertiary)
+                }
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.12))
+                        .frame(height: 6)
+
+                    if isCameraActive {
+                        Capsule()
+                            .fill(dwellPercentage >= 100 ? PupilTheme.warningAmber : PupilTheme.armedGreen)
+                            .frame(
+                                width: max(4, geo.size.width * CGFloat(min(1.0, coordinator.gazeDwellProgress))),
+                                height: 6
+                            )
+                            .animation(.easeOut(duration: 0.12), value: coordinator.gazeDwellProgress)
+                    }
+                }
+            }
+            .frame(height: 6)
+
+            HStack {
+                Text(isCameraActive ? "0s (Resting)" : "Inference idle")
+                    .font(.system(size: 10))
+                    .foregroundStyle(SettingsMetrics.textTertiary)
+                Spacer()
+                Text("\(String(format: "%.1fs", settings.dwellThresholdSeconds)) (Trigger threshold)")
+                    .font(.system(size: 10))
+                    .foregroundStyle(SettingsMetrics.textTertiary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func motionMeterColor(_ score: Float) -> Color {
+        if score < 0.40 {
+            return PupilTheme.armedGreen
+        } else if score < 0.85 {
+            return PupilTheme.warningAmber
+        } else {
+            return PupilTheme.alarmRed
+        }
     }
 
     private func togglePreview() {
