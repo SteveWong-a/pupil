@@ -1095,7 +1095,8 @@ struct PupilSecurityTests {
         let dB = VisionMotionDetector()
         _ = dB.analyzeFrame(makeWebcamImage(dxPerson: 0, dyPerson: 0), faceBoundingBoxes: [faceBox0])
         let sB1 = dB.analyzeFrame(makeWebcamImage(dxPerson: 6, dyPerson: 2), faceBoundingBoxes: [faceBox1])
-        #expect(sB1.translationMagnitude / 0.040 < 0.50)
+        #expect(sB1.translationMagnitude / 0.040 < 0.15)
+        #expect(sB1.hadFaceInScene == true)
 
         // Subcase C: Frame 0 has face, Frame 1 person sits totally still
         let dC = VisionMotionDetector()
@@ -1106,5 +1107,11 @@ struct PupilSecurityTests {
         // Subcase D: Laptop actually moves / tilts (room moves by 20px)
         let sC2 = dC.analyzeFrame(makeWebcamImage(dxPerson: 0, dyPerson: 0, dxRoom: 20), faceBoundingBoxes: [faceBox0])
         #expect(sC2.translationMagnitude / 0.040 > 0.60)
+
+        // Subcase E: Person moves head back and forth significantly (25px sway)
+        let faceBoxSway = CGRect(x: 0.44, y: 0.42, width: 0.22, height: 0.32)
+        let sC3 = dC.analyzeFrame(makeWebcamImage(dxPerson: 25, dyPerson: 10), faceBoundingBoxes: [faceBoxSway])
+        #expect(sC3.translationMagnitude / 0.040 < 0.15)
+        #expect(sC3.hadFaceInScene == true)
     }
 }

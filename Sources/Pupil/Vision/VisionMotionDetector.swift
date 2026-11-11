@@ -35,6 +35,8 @@ public struct MotionSample: Sendable, Equatable {
     public let isRegistrationReliable: Bool
     /// Mean absolute gradient of the background frame in [0, 1].
     public let textureEnergy: Float
+    /// Whether a foreground human face was present in the anchor or current frame.
+    public let hadFaceInScene: Bool
 
     public init(
         timestamp: TimeInterval,
@@ -46,7 +48,8 @@ public struct MotionSample: Sendable, Equatable {
         isAnchorFrame: Bool = false,
         interFrameTranslation: Float = 0,
         isRegistrationReliable: Bool = true,
-        textureEnergy: Float = 0
+        textureEnergy: Float = 0,
+        hadFaceInScene: Bool = false
     ) {
         self.timestamp = timestamp
         self.translationMagnitude = translationMagnitude
@@ -58,6 +61,7 @@ public struct MotionSample: Sendable, Equatable {
         self.interFrameTranslation = interFrameTranslation
         self.isRegistrationReliable = isRegistrationReliable
         self.textureEnergy = textureEnergy
+        self.hadFaceInScene = hadFaceInScene
     }
 
     public var isFrameOccluded: Bool {
@@ -72,7 +76,8 @@ public struct MotionSample: Sendable, Equatable {
             meanLuminance: 0.45,
             luminanceVariance: 0.04,
             metricDepthZ0: metricDepthZ0,
-            isAnchorFrame: true
+            isAnchorFrame: true,
+            hadFaceInScene: false
         )
     }
 }
@@ -165,7 +170,12 @@ public struct RoomNoiseProfiler: Sendable {
         for s in samples {
             totalLuma += s.meanLuminance
             totalTexture += s.textureEnergy
-            let noise = max(s.translationMagnitude, s.interFrameTranslation, s.homographyWarpMagnitude)
+            let noise: Float
+            if s.hadFaceInScene {
+                noise = max(s.translationMagnitude, s.interFrameTranslation)
+            } else {
+                noise = max(s.translationMagnitude, s.interFrameTranslation, s.homographyWarpMagnitude)
+            }
             if noise > maxNoise {
                 maxNoise = noise
             }
@@ -268,7 +278,7 @@ public struct MotionTemporalAggregator: Sendable {
         // Anchor-based cues are only trusted when the background had enough texture to register.
         let scaledTranslation = sample.isRegistrationReliable ? sample.translationMagnitude * depthScale : 0
         let translationRatio = scaledTranslation / max(0.001, sensitivity.translationDeadband)
-        let warpRatio = sample.isRegistrationReliable
+        let warpRatio = (sample.isRegistrationReliable && !sample.hadFaceInScene)
             ? sample.homographyWarpMagnitude / max(0.001, sensitivity.warpDeadband)
             : 0
         // Frame-to-frame motion keeps working after a big move, when the anchor no longer overlaps.
@@ -337,9 +347,11 @@ public struct MotionTemporalAggregator: Sendable {
 /// on the face-masked top 25% ROI against the armed anchor frame.
 public final class VisionMotionDetector: @unchecked Sendable {
     private let lock = NSLock()
-    private var anchorImage: CGImage?
+    private var anchorRawImage: CGImage?
+    private var anchorFaceBoxes: [CGRect] = []
     private var anchorTextureEnergyValue: Float?
-    private var previousImage: CGImage?
+    private var previousRawImage: CGImage?
+    private var previousFaceBoxes: [CGRect] = []
     private var anchorMetricDepthZ0: Float?
     private var anchorHadFace: Bool = false
     private var lastFaceBoundingBoxes: [CGRect] = []
@@ -356,7 +368,7 @@ public final class VisionMotionDetector: @unchecked Sendable {
     public var hasAnchorFrame: Bool {
         lock.lock()
         defer { lock.unlock() }
-        return anchorImage != nil
+        return anchorRawImage != nil
     }
 
     public var currentAnchorDepthZ0: Float? {
@@ -367,9 +379,11 @@ public final class VisionMotionDetector: @unchecked Sendable {
 
     public func resetAnchor() {
         lock.lock()
-        anchorImage = nil
+        anchorRawImage = nil
+        anchorFaceBoxes = []
         anchorTextureEnergyValue = nil
-        previousImage = nil
+        previousRawImage = nil
+        previousFaceBoxes = []
         anchorMetricDepthZ0 = nil
         anchorHadFace = false
         lastFaceBoundingBoxes = []
@@ -400,21 +414,20 @@ public final class VisionMotionDetector: @unchecked Sendable {
             lastFaceBoundingBoxes = []
         }
 
-        let needsReanchor = allowReanchorOnFaceAcquisition && anchorImage != nil && !anchorHadFace && !effectiveFaceBoxes.isEmpty
+        let needsReanchor = allowReanchorOnFaceAcquisition && anchorRawImage != nil && !anchorHadFace && !effectiveFaceBoxes.isEmpty
         if needsReanchor {
-            anchorImage = nil
+            anchorRawImage = nil
+            anchorFaceBoxes = []
             anchorTextureEnergyValue = nil
-            previousImage = nil
+            previousRawImage = nil
+            previousFaceBoxes = []
             anchorMetricDepthZ0 = nil
             anchorHadFace = false
         }
         lock.unlock()
 
         let (meanLuma, lumaVariance) = Self.computeFrameLuminanceStats(image)
-        guard let current = Self.makeFaceMaskedBackgroundImage(
-            from: image,
-            faceBoundingBoxes: effectiveFaceBoxes
-        ) else {
+        guard let currentRaw = Self.makeAnalysisImage(from: image) else {
             return MotionSample(
                 timestamp: timestamp,
                 translationMagnitude: 0,
@@ -425,20 +438,31 @@ public final class VisionMotionDetector: @unchecked Sendable {
                 isAnchorFrame: false,
                 interFrameTranslation: 0,
                 isRegistrationReliable: false,
-                textureEnergy: 0
+                textureEnergy: 0,
+                hadFaceInScene: !effectiveFaceBoxes.isEmpty
             )
         }
 
-        let currentEnergy = Self.textureEnergy(of: current)
+        let fillLuma = CGFloat(max(0.12, min(0.88, meanLuma)))
+
         lock.lock()
-        let existingAnchor = anchorImage
-        let previous = previousImage
-        previousImage = current
+        let existingAnchor = anchorRawImage
+        let existingAnchorBoxes = anchorFaceBoxes
+        let prevRaw = previousRawImage
+        let prevBoxes = previousFaceBoxes
+
+        previousRawImage = currentRaw
+        previousFaceBoxes = effectiveFaceBoxes
+
         if existingAnchor == nil {
-            anchorImage = current
+            anchorRawImage = currentRaw
+            anchorFaceBoxes = effectiveFaceBoxes
             anchorMetricDepthZ0 = metricDepthZ0
-            anchorTextureEnergyValue = currentEnergy
             anchorHadFace = !effectiveFaceBoxes.isEmpty
+
+            let maskedAnchor = Self.applySubjectMask(to: currentRaw, faceBoundingBoxes: effectiveFaceBoxes, ambientLuma: fillLuma)
+            let currentEnergy = Self.textureEnergy(of: maskedAnchor)
+            anchorTextureEnergyValue = currentEnergy
             lock.unlock()
             return MotionSample(
                 timestamp: timestamp,
@@ -450,7 +474,8 @@ public final class VisionMotionDetector: @unchecked Sendable {
                 isAnchorFrame: true,
                 interFrameTranslation: 0,
                 isRegistrationReliable: currentEnergy >= Self.minimumTextureEnergy,
-                textureEnergy: currentEnergy
+                textureEnergy: currentEnergy,
+                hadFaceInScene: !effectiveFaceBoxes.isEmpty
             )
         }
         if anchorMetricDepthZ0 == nil, let z0 = metricDepthZ0 {
@@ -458,13 +483,23 @@ public final class VisionMotionDetector: @unchecked Sendable {
         }
         let anchorZ0 = anchorMetricDepthZ0
         let cachedAnchorEnergy = anchorTextureEnergyValue
+        let wasAnchorHadFace = anchorHadFace
         lock.unlock()
 
         guard let anchor = existingAnchor else {
             return .anchor(at: timestamp, metricDepthZ0: anchorZ0)
         }
 
-        let anchorEnergy = cachedAnchorEnergy ?? Self.textureEnergy(of: anchor)
+        let hasFaceInScene = wasAnchorHadFace || !effectiveFaceBoxes.isEmpty
+
+        // For anchor comparison: mask BOTH images at the union of anchor and current subject locations
+        // so moving subject silhouettes do not create synthetic translation edges.
+        let unionAnchorBoxes = existingAnchorBoxes + effectiveFaceBoxes
+        let maskedAnchor = Self.applySubjectMask(to: anchor, faceBoundingBoxes: unionAnchorBoxes, ambientLuma: fillLuma)
+        let maskedCurrent = Self.applySubjectMask(to: currentRaw, faceBoundingBoxes: unionAnchorBoxes, ambientLuma: fillLuma)
+
+        let currentEnergy = Self.textureEnergy(of: maskedCurrent)
+        let anchorEnergy = cachedAnchorEnergy ?? Self.textureEnergy(of: maskedAnchor)
         let reliable = anchorEnergy >= Self.minimumTextureEnergy
             && currentEnergy >= Self.minimumTextureEnergy
 
@@ -473,13 +508,17 @@ public final class VisionMotionDetector: @unchecked Sendable {
         var interFrameMag: Float = 0
         if reliable {
             (translationMag, warpMag) = Self.computeRegistrationDisplacement(
-                anchorImage: anchor,
-                currentImage: current
+                anchorImage: maskedAnchor,
+                currentImage: maskedCurrent,
+                includeHomography: !hasFaceInScene
             )
-            if let previous {
+            if let prev = prevRaw {
+                let unionInterBoxes = prevBoxes + effectiveFaceBoxes
+                let maskedPrev = Self.applySubjectMask(to: prev, faceBoundingBoxes: unionInterBoxes, ambientLuma: fillLuma)
+                let maskedCurrForInter = Self.applySubjectMask(to: currentRaw, faceBoundingBoxes: unionInterBoxes, ambientLuma: fillLuma)
                 interFrameMag = Self.computeRegistrationDisplacement(
-                    anchorImage: previous,
-                    currentImage: current,
+                    anchorImage: maskedPrev,
+                    currentImage: maskedCurrForInter,
                     includeHomography: false
                 ).translationMagnitude
             }
@@ -495,18 +534,13 @@ public final class VisionMotionDetector: @unchecked Sendable {
             isAnchorFrame: false,
             interFrameTranslation: interFrameMag,
             isRegistrationReliable: reliable,
-            textureEnergy: currentEnergy
+            textureEnergy: currentEnergy,
+            hadFaceInScene: hasFaceInScene
         )
     }
 
-    /// Downscales the full frame to `analysisWidth x analysisHeight` and masks any detected
-    /// subject silhouettes (face, head, neck, and shoulders all the way to the bottom of the frame)
-    /// with ambient scene luminance so foreground human movements (breathing, posture adjustments)
-    /// do not trigger false room displacement.
-    public static func makeFaceMaskedBackgroundImage(
-        from image: CGImage,
-        faceBoundingBoxes: [CGRect]
-    ) -> CGImage? {
+    /// Downscales the full frame to `analysisWidth x analysisHeight` in memory.
+    public static func makeAnalysisImage(from image: CGImage) -> CGImage? {
         guard image.width >= 8, image.height >= 8 else { return nil }
         let w = analysisWidth
         let h = analysisHeight
@@ -523,34 +557,67 @@ public final class VisionMotionDetector: @unchecked Sendable {
 
         ctx.interpolationQuality = .medium
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
-
-        if !faceBoundingBoxes.isEmpty {
-            // Use ambient frame luminance so the mask blends smoothly into the scene
-            // without creating artificial high-contrast sharp edges that optical flow would track.
-            let (meanLuma, _) = computeFrameLuminanceStats(image)
-            let fillLuma = CGFloat(max(0.12, min(0.88, meanLuma)))
-            ctx.setFillColor(red: fillLuma, green: fillLuma, blue: fillLuma, alpha: 1.0)
-
-            for box in faceBoundingBoxes {
-                // Mask the entire subject silhouette:
-                // - Head and hair: up to box.maxY + 0.35 * height
-                // - Shoulders & torso: span width * 2.4 (minimum 40% of frame width)
-                // - Chest/torso: extends all the way down to y = 0 (bottom of frame in Vision coordinates)
-                let top = min(1.0, box.maxY + box.height * 0.35)
-                let shoulderSpan = max(box.width * 2.4, 0.40)
-                let left = max(0.0, box.midX - shoulderSpan / 2.0)
-                let right = min(1.0, box.midX + shoulderSpan / 2.0)
-
-                let subjectRect = CGRect(
-                    x: left * CGFloat(w),
-                    y: 0.0,
-                    width: (right - left) * CGFloat(w),
-                    height: top * CGFloat(h)
-                )
-                ctx.fill(subjectRect)
-            }
-        }
         return ctx.makeImage()
+    }
+
+    /// Applies neutral ambient-luminance subject silhouettes to an analysis frame for a set of face boxes.
+    public static func applySubjectMask(
+        to image: CGImage,
+        faceBoundingBoxes: [CGRect],
+        ambientLuma: CGFloat = 0.5
+    ) -> CGImage {
+        guard !faceBoundingBoxes.isEmpty else { return image }
+        let w = image.width
+        let h = image.height
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        guard let ctx = CGContext(
+            data: nil,
+            width: w,
+            height: h,
+            bitsPerComponent: 8,
+            bytesPerRow: w * 4,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return image }
+
+        ctx.interpolationQuality = .medium
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        ctx.setFillColor(red: ambientLuma, green: ambientLuma, blue: ambientLuma, alpha: 1.0)
+
+        for box in faceBoundingBoxes {
+            // Mask the entire subject silhouette:
+            // - Head and hair: up to box.maxY + 0.45 * height
+            // - Shoulders & torso: span width * 3.0 (minimum 50% of frame width)
+            // - Chest/torso: extends all the way down to y = 0 (bottom of frame in Vision coordinates)
+            let top = min(1.0, box.maxY + box.height * 0.45)
+            let shoulderSpan = max(box.width * 3.0, 0.50)
+            let left = max(0.0, box.midX - shoulderSpan / 2.0)
+            let right = min(1.0, box.midX + shoulderSpan / 2.0)
+
+            let subjectRect = CGRect(
+                x: left * CGFloat(w),
+                y: 0.0,
+                width: (right - left) * CGFloat(w),
+                height: top * CGFloat(h)
+            )
+            ctx.fill(subjectRect)
+        }
+        return ctx.makeImage() ?? image
+    }
+
+    /// Downscales the full frame to `analysisWidth x analysisHeight` and masks any detected
+    /// subject silhouettes (face, head, neck, and shoulders all the way to the bottom of the frame)
+    /// with ambient scene luminance so foreground human movements (breathing, posture adjustments)
+    /// do not trigger false room displacement.
+    public static func makeFaceMaskedBackgroundImage(
+        from image: CGImage,
+        faceBoundingBoxes: [CGRect]
+    ) -> CGImage? {
+        guard let downscaled = makeAnalysisImage(from: image) else { return nil }
+        guard !faceBoundingBoxes.isEmpty else { return downscaled }
+        let (meanLuma, _) = computeFrameLuminanceStats(image)
+        let fillLuma = CGFloat(max(0.12, min(0.88, meanLuma)))
+        return applySubjectMask(to: downscaled, faceBoundingBoxes: faceBoundingBoxes, ambientLuma: fillLuma)
     }
 
     /// Mean absolute horizontal+vertical luminance gradient in [0, 1]; ~0 for flat walls and ceilings.
