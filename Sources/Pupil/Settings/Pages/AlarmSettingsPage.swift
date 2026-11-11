@@ -103,9 +103,14 @@ public struct AlarmSettingsPage: View {
 
                                 Spacer()
 
-                                Text(event.timestamp.formatted(date: .omitted, time: .shortened))
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(SettingsMetrics.textTertiary)
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    Text(event.timestamp.formatted(date: .omitted, time: .standard))
+                                        .font(.system(size: 11.5, weight: .medium, design: .monospaced))
+                                        .foregroundStyle(SettingsMetrics.textSecondary)
+                                    Text(relativeTimeString(for: event.timestamp))
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(SettingsMetrics.textTertiary)
+                                }
                             }
                             .padding(.horizontal, SettingsMetrics.rowHorizontalInset)
                             .padding(.vertical, 10)
@@ -114,6 +119,18 @@ public struct AlarmSettingsPage: View {
                 }
             }
         }
+    }
+
+    private func relativeTimeString(for date: Date) -> String {
+        let elapsed = max(0, Int(Date().timeIntervalSince(date)))
+        if elapsed < 5 { return "just now" }
+        if elapsed < 60 { return "\(elapsed)s ago" }
+        let mins = elapsed / 60
+        if mins < 60 { return "\(mins)m ago" }
+        let hours = mins / 60
+        if hours < 24 { return "\(hours)h ago" }
+        let days = hours / 24
+        return "\(days)d ago"
     }
 
     private func dotColor(for state: SecurityState) -> Color {

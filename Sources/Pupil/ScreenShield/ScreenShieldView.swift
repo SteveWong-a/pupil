@@ -40,86 +40,53 @@ public struct ScreenShieldView: View {
 
     public var body: some View {
         ZStack {
-            if isGazePrivacyOnly {
-                // MARK: - Case 1: Gaze Detection (75% clean screen blur without gradient or warning notification)
-                ZStack {
-                    ScreenShieldBlurView(material: .fullScreenUI, blendingMode: .behindWindow, state: .active)
-                    Rectangle().fill(.ultraThickMaterial)
-                }
-                .opacity(0.75)
-                .ignoresSafeArea()
+            // 1. Unified frosted glass blur base (consistent intensity across passive blur and PIN prompt)
+            ZStack {
+                ScreenShieldBlurView(material: .fullScreenUI, blendingMode: .behindWindow, state: .active)
+                Rectangle().fill(.ultraThickMaterial)
+            }
+            .opacity(0.80)
+            .ignoresSafeArea()
 
-                // Transparent full-screen click catcher: triggers PIN challenge on click
-                Color.black.opacity(0.001)
-                    .ignoresSafeArea()
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        coordinator.handleArmedUserInput()
-                    }
-            } else {
-                // MARK: - Case 2: PIN Unlock Challenge / Tamper / Alarm
-                // 1. Heavy frosted obsidian privacy base: completely obscures screen content
-                Color(red: 0.06, green: 0.07, blue: 0.09).opacity(0.96)
-                    .ignoresSafeArea()
-
-                // 2. Native macOS ultra-thick material layer for rich glass depth
+            // 2. Perimeter alert outline for Tamper Countdown (red-amber) and Alarm (crimson)
+            if isTamper || isAlarm {
+                let outlineColor = isAlarm
+                    ? PupilTheme.alarmRed
+                    : Color(red: 1.0, green: 0.42, blue: 0.05)
                 Rectangle()
-                    .fill(.ultraThickMaterial)
+                    .strokeBorder(
+                        outlineColor.opacity(isAlarm ? 0.95 : 0.85),
+                        lineWidth: isAlarm ? 4.5 : 3.5
+                    )
+                    .shadow(color: outlineColor.opacity(0.65), radius: 14)
                     .ignoresSafeArea()
-                    .opacity(0.92)
+                    .allowsHitTesting(false)
+            }
 
-                // 3. Deep radial privacy vignette
-                RadialGradient(
-                    colors: [
-                        Color.black.opacity(0.40),
-                        Color.black.opacity(0.85)
-                    ],
-                    center: .center,
-                    startRadius: 160,
-                    endRadius: 950
-                )
+            // 3. Click layer: clicking background refocuses the PIN prompt or triggers interactive unlock
+            Color.black.opacity(0.001)
                 .ignoresSafeArea()
-
-                // 4. Perimeter alert outline for Tamper Countdown (red-amber) and Alarm (crimson)
-                if isTamper || isAlarm {
-                    let outlineColor = isAlarm
-                        ? PupilTheme.alarmRed
-                        : Color(red: 1.0, green: 0.42, blue: 0.05)
-                    Rectangle()
-                        .strokeBorder(
-                            outlineColor.opacity(isAlarm ? 0.95 : 0.85),
-                            lineWidth: isAlarm ? 4.5 : 3.5
-                        )
-                        .shadow(color: outlineColor.opacity(0.65), radius: 14)
-                        .ignoresSafeArea()
-                        .allowsHitTesting(false)
-                }
-
-                // 5. Click layer: clicking background refocuses the PIN prompt or triggers interactive unlock
-                Color.black.opacity(0.001)
-                    .ignoresSafeArea()
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        if coordinator.state == .armed && !coordinator.isInteractiveUnlockRequested {
-                            coordinator.handleArmedUserInput()
-                        } else if isPrimary {
-                            isPinFocused = true
-                        } else {
-                            NotificationCenter.default.post(name: .screenShieldFocusPrimary, object: nil)
-                        }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if coordinator.state == .armed && !coordinator.isInteractiveUnlockRequested {
+                        coordinator.handleArmedUserInput()
+                    } else if isPrimary {
+                        isPinFocused = true
+                    } else {
+                        NotificationCenter.default.post(name: .screenShieldFocusPrimary, object: nil)
                     }
-
-                // 5. Centered modal dialog
-                if isPrimary && isPromptPresented {
-                    macOSPasswordWindow
-                        .transition(
-                            .asymmetric(
-                                insertion: .scale(scale: 0.95).combined(with: .opacity),
-                                removal: .scale(scale: 0.95).combined(with: .opacity)
-                            )
-                        )
-                        .offset(x: shakeOffset)
                 }
+
+            // 4. Centered modal dialog: smoothly rises without changing background blur intensity
+            if isPrimary && isPromptPresented && !isGazePrivacyOnly {
+                macOSPasswordWindow
+                    .transition(
+                        .asymmetric(
+                            insertion: .scale(scale: 0.95).combined(with: .opacity),
+                            removal: .scale(scale: 0.95).combined(with: .opacity)
+                        )
+                    )
+                    .offset(x: shakeOffset)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -324,10 +291,45 @@ public struct ScreenShieldView: View {
     }
 
     private var titleSubtitleView: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 6) {
             Text(windowTitle)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.white)
+
+            if isAlarm || isTamper {
+                if let src = coordinator.activeTamperSource {
+                    HStack(spacing: 5) {
+                        Image(systemName: isAlarm ? "bell.badge.fill" : "exclamationmark.triangle.fill")
+                            .font(.system(size: 10, weight: .semibold))
+                        Text(src.rawValue)
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundStyle(isAlarm ? PupilTheme.alarmRed : PupilTheme.warningAmber)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background((isAlarm ? PupilTheme.alarmRed : PupilTheme.warningAmber).opacity(0.14))
+                    .clipShape(Capsule())
+                }
+
+                if let timeStr = coordinator.activeAlertTimestampFormatted,
+                   let relative = coordinator.activeAlertRelativeTime {
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock.fill")
+                            .font(.system(size: 9))
+                        Text("Triggered at \(timeStr) (\(relative))")
+                            .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                    }
+                    .foregroundStyle(Color.white.opacity(0.68))
+                }
+            } else if coordinator.isInteractiveUnlockRequested {
+                HStack(spacing: 4) {
+                    Image(systemName: "keyboard.fill")
+                        .font(.system(size: 10))
+                    Text("Input detected while armed")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .foregroundStyle(Color.white.opacity(0.65))
+            }
 
             Text(windowSubtitle)
                 .font(.system(size: 12))

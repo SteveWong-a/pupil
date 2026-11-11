@@ -348,9 +348,14 @@ public struct NotchOverlayView: View {
             .padding(.top, 4)
 
             if let src = coordinator.activeTamperSource {
-                Text(src.rawValue)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color.white.opacity(0.60))
+                HStack(spacing: 5) {
+                    Text(src.rawValue)
+                    if let relative = coordinator.activeAlertRelativeTime {
+                        Text("• \(relative)")
+                    }
+                }
+                .font(.system(size: 11))
+                .foregroundStyle(Color.white.opacity(0.68))
             }
 
             HStack(spacing: 8) {

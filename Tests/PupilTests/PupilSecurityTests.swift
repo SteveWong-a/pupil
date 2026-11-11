@@ -641,6 +641,52 @@ struct PupilSecurityTests {
         _ = c.disarmWithPin("2468")
     }
 
+    @Test("Spatial motion settles back down during countdown reverts to armed")
+    @MainActor
+    func spatialMotionSettledRevertsToArmed() throws {
+        let c = try armedCoordinator(pin: "2468")
+        c.settings.isSpatialMotionEnabled = true
+        c.triggerTamper(source: .cameraMotionDetected)
+        #expect(c.state == .tamperPending)
+        #expect(c.activeTamperSource == .cameraMotionDetected)
+        #expect(c.activeAlertTimestampFormatted != nil)
+
+        // Simulate stationary motion samples for 1.3 seconds
+        let t0 = 100.0
+        for i in 0...14 {
+            let sample = MotionSample(
+                timestamp: t0 + Double(i) * 0.1,
+                translationMagnitude: 0.001,
+                homographyWarpMagnitude: 0.01,
+                meanLuminance: 0.5,
+                luminanceVariance: 0.1,
+                interFrameTranslation: 0.001,
+                isRegistrationReliable: true,
+                textureEnergy: 0.05
+            )
+            c.ingestMotionSample(sample)
+        }
+
+        #expect(c.state == .armed)
+        #expect(c.activeTamperSource == nil)
+        #expect(c.events.contains { $0.title == "Tamper Canceled" })
+        _ = c.disarmWithPin("2468")
+    }
+
+    @Test("Reconnecting power reverts to armed even if plugging moved laptop (cameraMotionDetected)")
+    @MainActor
+    func powerRestoredRevertsCameraMotionTamper() throws {
+        let c = try armedCoordinator(pin: "2468")
+        c.settings.revertTamperOnPowerRestored = true
+        c.triggerTamper(source: .cameraMotionDetected)
+        #expect(c.state == .tamperPending)
+
+        c.powerMonitor.onHardwareEvent?(.chargerPluggedIn)
+        #expect(c.state == .armed)
+        #expect(c.activeTamperSource == nil)
+        _ = c.disarmWithPin("2468")
+    }
+
     @Test("Notifier retries transient failures with backoff and reports success")
     @MainActor
     func notifierRetries() async {

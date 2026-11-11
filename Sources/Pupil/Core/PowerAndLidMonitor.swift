@@ -37,6 +37,7 @@ public final class PowerAndLidMonitor {
     private var pollTimer: Timer?
     private var workspaceObservers: [NSObjectProtocol] = []
     private var sleepAssertionID: IOPMAssertionID = IOPMAssertionID(0)
+    private var displaySleepAssertionID: IOPMAssertionID = IOPMAssertionID(0)
 
     public var isFastPolling: Bool = false {
         didSet {
@@ -97,26 +98,40 @@ public final class PowerAndLidMonitor {
         releaseSleepHoldAssertion()
     }
 
-    /// Holds an IOPMAssertion so macOS keeps audio and sensors awake while armed or sounding the siren.
+    /// Holds an IOPMAssertion so macOS keeps audio, display, and sensors awake while armed or sounding the siren.
     public func acquireSleepHoldAssertion(reason: String = "Pupil Armed Security Monitoring") {
         guard !isSleepAssertionActive else { return }
-        var assertionID: IOPMAssertionID = IOPMAssertionID(0)
-        let result = IOPMAssertionCreateWithName(
+        var sysID: IOPMAssertionID = IOPMAssertionID(0)
+        let resSys = IOPMAssertionCreateWithName(
             kIOPMAssertionTypePreventUserIdleSystemSleep as CFString,
             IOPMAssertionLevel(kIOPMAssertionLevelOn),
             reason as CFString,
-            &assertionID
+            &sysID
         )
-        if result == kIOReturnSuccess {
-            sleepAssertionID = assertionID
+        var dispID: IOPMAssertionID = IOPMAssertionID(0)
+        let resDisp = IOPMAssertionCreateWithName(
+            kIOPMAssertionTypePreventUserIdleDisplaySleep as CFString,
+            IOPMAssertionLevel(kIOPMAssertionLevelOn),
+            reason as CFString,
+            &dispID
+        )
+        if resSys == kIOReturnSuccess || resDisp == kIOReturnSuccess {
+            sleepAssertionID = sysID
+            displaySleepAssertionID = dispID
             isSleepAssertionActive = true
         }
     }
 
     public func releaseSleepHoldAssertion() {
         guard isSleepAssertionActive else { return }
-        IOPMAssertionRelease(sleepAssertionID)
-        sleepAssertionID = IOPMAssertionID(0)
+        if sleepAssertionID != 0 {
+            IOPMAssertionRelease(sleepAssertionID)
+            sleepAssertionID = IOPMAssertionID(0)
+        }
+        if displaySleepAssertionID != 0 {
+            IOPMAssertionRelease(displaySleepAssertionID)
+            displaySleepAssertionID = IOPMAssertionID(0)
+        }
         isSleepAssertionActive = false
     }
 

@@ -80,6 +80,26 @@ public final class SecurityCoordinator {
     public private(set) var state: SecurityState = .disarmed
     public private(set) var countdownSecondsRemaining: Int = 0
     public private(set) var activeTamperSource: TamperSource?
+    public private(set) var activeTamperTime: Date?
+    public private(set) var activeAlarmTime: Date?
+
+    public var activeAlertTimestampFormatted: String? {
+        guard let date = (state == .alarm ? activeAlarmTime : activeTamperTime) else { return nil }
+        let formatter = DateFormatter()
+        formatter.timeStyle = .medium
+        return formatter.string(from: date)
+    }
+
+    public var activeAlertRelativeTime: String? {
+        guard let date = (state == .alarm ? activeAlarmTime : activeTamperTime) else { return nil }
+        let elapsed = max(0, Int(Date().timeIntervalSince(date)))
+        if elapsed < 5 { return "just now" }
+        if elapsed < 60 { return "\(elapsed)s ago" }
+        let mins = elapsed / 60
+        if mins < 60 { return "\(mins)m ago" }
+        let hours = mins / 60
+        return "\(hours)h ago"
+    }
     public private(set) var isGazeWarningActive: Bool = false
     public private(set) var gazeDwellProgress: Double = 0
     public private(set) var latestGazeScore: Float = 0
@@ -108,6 +128,8 @@ public final class SecurityCoordinator {
     private var armedSettleWorkItem: DispatchWorkItem?
     private var armedInputMonitoringActive = false
     private var armedMonitoringStartTime: TimeInterval = 0
+    private var motionSettledStartTime: TimeInterval?
+    private var previewRestingStartTime: TimeInterval?
 
     public let settings: PupilSettings
     public let powerMonitor: PowerAndLidMonitor
@@ -212,6 +234,8 @@ public final class SecurityCoordinator {
         isGazeWarningActive = false
         gazeDwellProgress = 0
         activeTamperSource = nil
+        activeTamperTime = nil
+        activeAlarmTime = nil
 
         if settings.holdSleepOnLidClose {
             powerMonitor.acquireSleepHoldAssertion()
@@ -340,6 +364,8 @@ public final class SecurityCoordinator {
 
         state = .disarmed
         activeTamperSource = nil
+        activeTamperTime = nil
+        activeAlarmTime = nil
         isGazeWarningActive = false
         isShieldPreviewActive = false
         isInteractiveUnlockRequested = false
@@ -485,6 +511,7 @@ public final class SecurityCoordinator {
         let now = clock()
         tamperScorer.record(source, at: now)
         activeTamperSource = source
+        activeTamperTime = Date()
 
         if immediateAlarm {
             enterAlarm(source: source, simulated: simulated)
@@ -519,8 +546,15 @@ public final class SecurityCoordinator {
         countdownTimer = nil
         countdownSecondsRemaining = 0
         activeTamperSource = nil
+        activeTamperTime = nil
         state = .armed
         cameraManager.shouldReanchorOnFaceAcquisition = false
+        motionAggregator.reset()
+        tamperScorer.reset()
+        cameraManager.resetMotionAnchor()
+        hasMotionAnchor = false
+        latestMotionDisplacementScore = 0
+        motionSettledStartTime = nil
 
         logEvent("Tamper Canceled", detail: "\(reason) Reverted to armed monitoring.")
         onStateChanged?(state)
@@ -540,6 +574,7 @@ public final class SecurityCoordinator {
         countdownTimer = nil
         countdownSecondsRemaining = 0
         activeTamperSource = source
+        activeAlarmTime = Date()
         state = .alarm
 
         alarmStartTime = clock()
@@ -636,10 +671,44 @@ public final class SecurityCoordinator {
                 ? sample.translationMagnitude / max(0.001, settings.spatialMotionSensitivity.translationDeadband)
                 : 0
             latestMotionDisplacementScore = min(1.0, translationRatio)
+
+            // Auto-re-tare surroundings in preview mode: if laptop was moved to a new resting spot
+            // and has been completely stationary for 2.5 seconds, auto-zero the baseline!
+            let interFrameRatio = sample.interFrameTranslation / max(0.001, settings.spatialMotionSensitivity.interFrameDeadband)
+            if translationRatio >= 0.50 && interFrameRatio < 0.40 {
+                if previewRestingStartTime == nil {
+                    previewRestingStartTime = sample.timestamp
+                } else if let start = previewRestingStartTime, (sample.timestamp - start) >= 2.5 {
+                    previewRestingStartTime = nil
+                    cameraManager.resetMotionAnchor()
+                }
+            } else {
+                previewRestingStartTime = nil
+            }
             return
         }
 
         guard state == .armed || state == .tamperPending else { return }
+
+        // If currently in tamper countdown from spatial motion, auto-revert once movement has ceased/settled
+        if state == .tamperPending && activeTamperSource == .cameraMotionDetected {
+            let interFrameRatio = sample.interFrameTranslation / max(0.001, settings.spatialMotionSensitivity.interFrameDeadband)
+            let isStill = interFrameRatio < 0.60 && !sample.isFrameOccluded
+            if isStill {
+                if motionSettledStartTime == nil {
+                    motionSettledStartTime = sample.timestamp
+                } else if let start = motionSettledStartTime, (sample.timestamp - start) >= 1.2 {
+                    // Movement has settled down continuously for 1.2s: auto-revert to armed state!
+                    motionSettledStartTime = nil
+                    revertTamperToArmed(reason: "Movement settled. Laptop stationary.")
+                    return
+                }
+            } else {
+                motionSettledStartTime = nil
+            }
+        } else {
+            motionSettledStartTime = nil
+        }
 
         let snapshot = motionAggregator.ingest(
             sample,
@@ -857,6 +926,16 @@ public final class SecurityCoordinator {
         syncCameraLifecycle()
     }
 
+    /// Re-zeros the baseline against current room surroundings and resets displacement to 0%.
+    public func resetSurroundingsBaseline() {
+        cameraManager.resetMotionAnchor()
+        hasMotionAnchor = false
+        latestMotionDisplacementScore = 0
+        motionSettledStartTime = nil
+        previewRestingStartTime = nil
+        logEvent("Surroundings Re-anchored", detail: "Spatial anchor zeroed to current room position.")
+    }
+
     public func syncCameraLifecycle() {
         cameraManager.updateActiveROI(settings.activeCameraROI)
         if !settings.gazeDetectionEnabled && isGazeWarningActive {
@@ -885,10 +964,20 @@ public final class SecurityCoordinator {
                 if self.settings.hardwareTriggers.contains(.chargerUnplug) {
                     self.triggerTamper(source: .chargerUnplugged, immediateAlarm: false)
                 }
-            case .lidClosed, .systemWillSleep:
+            case .lidClosed:
                 if self.settings.hardwareTriggers.contains(.lidClose) {
-                    // Lid close triggers immediate siren before macOS cuts audio on sleep
+                    // Physical clamshell closed: trigger immediate siren before macOS cuts audio
                     self.triggerTamper(source: .lidClosed, immediateAlarm: true)
+                }
+            case .systemWillSleep:
+                // System sleep: only treat as lid close if the physical clamshell is ACTUALLY closed
+                if PowerAndLidMonitor.readClamshellClosedState() {
+                    if self.settings.hardwareTriggers.contains(.lidClose) {
+                        self.triggerTamper(source: .lidClosed, immediateAlarm: true)
+                    }
+                } else if self.isMonitoring {
+                    // Laptop is still physically open; reassert awake hold so monitoring continues
+                    self.powerMonitor.acquireSleepHoldAssertion(reason: "Pupil Armed Monitoring")
                 }
             case .systemDidWake:
                 if self.isMonitoring {
@@ -896,7 +985,7 @@ public final class SecurityCoordinator {
                 }
             case .chargerPluggedIn:
                 if self.state == .tamperPending,
-                   self.activeTamperSource == .chargerUnplugged,
+                   (self.activeTamperSource == .chargerUnplugged || self.activeTamperSource == .cameraMotionDetected),
                    self.settings.revertTamperOnPowerRestored {
                     self.revertTamperToArmed(reason: "Power adapter reconnected.")
                 }
@@ -913,8 +1002,10 @@ public final class SecurityCoordinator {
                     self.triggerTamper(source: .screenLocked, immediateAlarm: false)
                 }
             case .willSleep:
-                if self.settings.hardwareTriggers.contains(.lidClose) {
-                    self.triggerTamper(source: .lidClosed, immediateAlarm: true)
+                if PowerAndLidMonitor.readClamshellClosedState() {
+                    if self.settings.hardwareTriggers.contains(.lidClose) {
+                        self.triggerTamper(source: .lidClosed, immediateAlarm: true)
+                    }
                 }
             case .wake:
                 if self.isMonitoring && self.state == .alarm {

@@ -253,17 +253,22 @@ public struct GazeSettingsPage: View {
                 Spacer()
                 if isDisplacementReady {
                     Button {
-                        coordinator.cameraManager.resetMotionAnchor()
+                        coordinator.resetSurroundingsBaseline()
                     } label: {
-                        Text("Zero")
-                            .font(.system(size: 10, weight: .medium))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.white.opacity(0.10))
-                            .clipShape(Capsule())
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.counterclockwise")
+                                .font(.system(size: 8.5, weight: .semibold))
+                            Text("Reset")
+                                .font(.system(size: 10, weight: .medium))
+                        }
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2.5)
+                        .background(Color.white.opacity(0.10))
+                        .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(SettingsMetrics.textSecondary)
+                    .help("Re-zeros anchor against current room surroundings")
 
                     Text(String(format: "%.0f%%", min(100, coordinator.latestMotionDisplacementScore * 100)))
                         .font(.system(size: 12, weight: .semibold, design: .monospaced))
