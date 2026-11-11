@@ -221,6 +221,10 @@ public final class PupilSettings {
         didSet { defaults.set(revertTamperOnPowerRestored, forKey: Keys.revertTamperOnPowerRestored) }
     }
 
+    public var countdownChimeEnabled: Bool {
+        didSet { defaults.set(countdownChimeEnabled, forKey: Keys.countdownChimeEnabled) }
+    }
+
     public var isSpatialMotionEnabled: Bool {
         didSet {
             defaults.set(isSpatialMotionEnabled, forKey: Keys.isSpatialMotionEnabled)
@@ -392,6 +396,7 @@ public final class PupilSettings {
         }
         self.holdSleepOnLidClose = defaults.object(forKey: Keys.holdSleepOnLidClose) as? Bool ?? true
         self.revertTamperOnPowerRestored = defaults.object(forKey: Keys.revertTamperOnPowerRestored) as? Bool ?? true
+        self.countdownChimeEnabled = defaults.object(forKey: Keys.countdownChimeEnabled) as? Bool ?? true
         self.isSpatialMotionEnabled = defaults.object(forKey: Keys.isSpatialMotionEnabled) as? Bool ?? false
         if let rawMotionSens = defaults.string(forKey: Keys.spatialMotionSensitivity),
            let motionSens = SpatialMotionSensitivity(rawValue: rawMotionSens) {
@@ -442,6 +447,7 @@ public final class PupilSettings {
         static let hardwareTriggers = "pupil.hardwareTriggers"
         static let holdSleepOnLidClose = "pupil.holdSleepOnLidClose"
         static let revertTamperOnPowerRestored = "pupil.revertTamperOnPowerRestored"
+        static let countdownChimeEnabled = "pupil.countdownChimeEnabled"
         static let isSpatialMotionEnabled = "pupil.spatialMotionLiftEnabled"
         static let spatialMotionSensitivity = "pupil.spatialMotionSensitivity"
         static let blurBackgroundWhenArmed = "pupil.blurBackgroundWhenArmed"

@@ -77,6 +77,8 @@ public struct SensorsSettingsPage: View {
                         index: $settings.spatialMotionSensitivityIndex,
                         stopCount: SpatialMotionSensitivity.allCases.count
                     )
+                    SettingsGroupDivider()
+                    liveMotionMeterRow
                 }
             }
 
@@ -113,6 +115,13 @@ public struct SensorsSettingsPage: View {
                         value: settings.isSpatialMotionEnabled
                             ? (coordinator.state == .armed ? "Armed (\(settings.spatialMotionSensitivity.title))" : "Ready (\(settings.spatialMotionSensitivity.title))")
                             : "Off"
+                    )
+                    SettingsGroupDivider()
+                    sensorReadoutRow(
+                        title: "Room calibration",
+                        icon: "camera.filters",
+                        tint: coordinator.activeRoomProfile != nil ? PupilTheme.armedGreen : PupilTheme.accent,
+                        value: coordinator.activeRoomProfile?.noiseLevelDescription ?? "Calibrates during arming exit delay"
                     )
                 }
             }
@@ -246,12 +255,70 @@ public struct SensorsSettingsPage: View {
             }
         }
         .onAppear {
+            if settings.isSpatialMotionEnabled && coordinator.state == .disarmed {
+                coordinator.setCameraPreviewRequested(true)
+            }
             if !coordinator.webPushManager.isPaired {
                 coordinator.webPushManager.startPairingListener()
             }
         }
         .onDisappear {
+            if coordinator.state == .disarmed {
+                coordinator.setCameraPreviewRequested(false)
+            }
             coordinator.webPushManager.stopPairingListener()
+        }
+    }
+
+    private var liveMotionMeterRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Live displacement")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(SettingsMetrics.textPrimary)
+                Spacer()
+                Text(String(format: "%.0f%%", min(100, coordinator.latestMotionDisplacementScore * 100)))
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(motionMeterColor(coordinator.latestMotionDisplacementScore))
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.12))
+                        .frame(height: 6)
+
+                    Capsule()
+                        .fill(motionMeterColor(coordinator.latestMotionDisplacementScore))
+                        .frame(
+                            width: max(4, geo.size.width * CGFloat(min(1.0, coordinator.latestMotionDisplacementScore))),
+                            height: 6
+                        )
+                        .animation(.linear(duration: 0.1), value: coordinator.latestMotionDisplacementScore)
+                }
+            }
+            .frame(height: 6)
+
+            HStack {
+                Text("Resting (0%)")
+                    .font(.system(size: 10))
+                    .foregroundStyle(SettingsMetrics.textTertiary)
+                Spacer()
+                Text("Tamper threshold (100%)")
+                    .font(.system(size: 10))
+                    .foregroundStyle(SettingsMetrics.textTertiary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func motionMeterColor(_ score: Float) -> Color {
+        if score < 0.40 {
+            return PupilTheme.armedGreen
+        } else if score < 0.85 {
+            return PupilTheme.warningAmber
+        } else {
+            return PupilTheme.alarmRed
         }
     }
 

@@ -73,6 +73,74 @@ public struct MotionSample: Sendable, Equatable {
     }
 }
 
+/// Profile measured automatically during the ARMING exit countdown.
+public struct RoomCalibrationProfile: Sendable, Equatable, Codable {
+    public let sampleCount: Int
+    public let averageLuminance: Float
+    public let noiseFloorScore: Float
+    public let timestamp: Date
+
+    public init(
+        sampleCount: Int,
+        averageLuminance: Float,
+        noiseFloorScore: Float,
+        timestamp: Date = Date()
+    ) {
+        self.sampleCount = sampleCount
+        self.averageLuminance = averageLuminance
+        self.noiseFloorScore = noiseFloorScore
+        self.timestamp = timestamp
+    }
+
+    public var noiseLevelDescription: String {
+        if noiseFloorScore < 0.20 {
+            return "Clean (Low Jitter)"
+        } else if noiseFloorScore < 0.45 {
+            return "Moderate Ambient Jitter"
+        } else {
+            return "Elevated Sensor Grain"
+        }
+    }
+}
+
+/// Accumulates camera frames during the arming exit countdown to profile baseline room jitter and lighting.
+public struct RoomNoiseProfiler: Sendable {
+    private var samples: [MotionSample] = []
+
+    public init() {}
+
+    public mutating func reset() {
+        samples.removeAll()
+    }
+
+    public mutating func ingest(_ sample: MotionSample) {
+        // Skip the initial anchor frame itself
+        guard !sample.isAnchorFrame else { return }
+        samples.append(sample)
+    }
+
+    public func finalizeCalibration() -> RoomCalibrationProfile? {
+        guard !samples.isEmpty else { return nil }
+        let count = samples.count
+        var totalLuma: Float = 0
+        var maxNoise: Float = 0
+        for s in samples {
+            totalLuma += s.meanLuminance
+            let noise = max(s.translationMagnitude, s.interFrameTranslation, s.homographyWarpMagnitude)
+            if noise > maxNoise {
+                maxNoise = noise
+            }
+        }
+        let avgLuma = totalLuma / Float(count)
+        return RoomCalibrationProfile(
+            sampleCount: count,
+            averageLuminance: avgLuma,
+            noiseFloorScore: maxNoise,
+            timestamp: Date()
+        )
+    }
+}
+
 public struct MotionEscalationSnapshot: Sendable, Equatable {
     public let isTamperTriggered: Bool
     public let isSustainedLiftDetected: Bool

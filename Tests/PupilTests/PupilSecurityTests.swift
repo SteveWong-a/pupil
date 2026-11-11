@@ -725,4 +725,52 @@ struct PupilSecurityTests {
         #expect(WebPushManager.classify(statusCode: 429, detail: "") == .retryableFailure(""))
         #expect(WebPushManager.classify(statusCode: 410, detail: "") == .permanentFailure(""))
     }
+
+    @Test("Automatic room noise floor calibration during arming exit countdown")
+    @MainActor
+    func armingExitDelayProfilesRoomNoise() throws {
+        let c = try armedCoordinator(pin: "2468")
+        _ = c.disarmWithPin("2468")
+        c.settings.exitDelaySeconds = 10
+        c.settings.isSpatialMotionEnabled = true
+        c.startArming(immediate: false)
+        #expect(c.state == .arming)
+        #expect(c.activeRoomProfile == nil)
+
+        // Feed motion samples during exit delay
+        c.ingestMotionSample(MotionSample(timestamp: 100, translationMagnitude: 0.05, meanLuminance: 0.50))
+        c.ingestMotionSample(MotionSample(timestamp: 101, translationMagnitude: 0.08, meanLuminance: 0.48))
+        c.ingestMotionSample(MotionSample(timestamp: 102, translationMagnitude: 0.06, meanLuminance: 0.52))
+
+        c.completeArming()
+        #expect(c.state == .armed)
+        let profile = try #require(c.activeRoomProfile)
+        #expect(profile.sampleCount == 3)
+        #expect(profile.noiseFloorScore >= 0.08)
+        #expect(c.events.contains { $0.title == "Room Calibrated" })
+        _ = c.disarmWithPin("2468")
+    }
+
+    @Test("Alarm state disarm sends resolving notification")
+    @MainActor
+    func alarmDisarmSendsResolvingPush() async throws {
+        var sentMessages: [AlertMessage] = []
+        let notifier = AlertNotifier(backoffSeconds: [], transport: { msg in
+            sentMessages.append(msg)
+            return .delivered
+        }, sleep: { _ in })
+        try KeychainManager.enrollPin("2468")
+        let c = SecurityCoordinator(alertNotifier: notifier)
+        c.settings.gazeDetectionEnabled = false
+        c.startArming(immediate: true)
+        c.enterAlarm(source: .chargerUnplugged)
+        #expect(c.state == .alarm)
+        await notifier.waitUntilIdle()
+        #expect(sentMessages.contains { $0.title == "Pupil Siren Alarm Active" })
+
+        _ = c.disarmWithPin("2468")
+        #expect(c.state == .disarmed)
+        await notifier.waitUntilIdle()
+        #expect(sentMessages.contains { $0.title == "Pupil Disarmed" })
+    }
 }

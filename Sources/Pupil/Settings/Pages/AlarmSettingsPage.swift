@@ -37,6 +37,13 @@ public struct AlarmSettingsPage: View {
                 }
                 SettingsGroupDivider()
                 SettingsRowContent(
+                    title: "Countdown warning ticks",
+                    subtitle: "Plays a subtle acoustic click every second during the grace period."
+                ) {
+                    PupilToggle(isOn: $settings.countdownChimeEnabled)
+                }
+                SettingsGroupDivider()
+                SettingsRowContent(
                     title: "Simulate tamper",
                     subtitle: "Starts a test countdown in the notch."
                 ) {

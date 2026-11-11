@@ -114,11 +114,15 @@ public final class SecurityCoordinator {
     public var onStateChanged: ((SecurityState) -> Void)?
     public var onNotchUpdateNeeded: (() -> Void)?
 
+    public private(set) var activeRoomProfile: RoomCalibrationProfile?
+    private var roomProfiler = RoomNoiseProfiler()
     private var gazeAggregator = GazeTemporalAggregator()
     private var motionAggregator = MotionTemporalAggregator()
     private var tamperScorer = TamperScorer()
     private var lastMotionWarningTime: TimeInterval = 0
     private var countdownTimer: Timer?
+    private var alarmReminderTimer: Timer?
+    private var alarmStartTime: TimeInterval?
     private var gazeWarningDismissWorkItem: DispatchWorkItem?
 
     public init(
@@ -204,6 +208,9 @@ public final class SecurityCoordinator {
             powerMonitor.acquireSleepHoldAssertion()
         }
 
+        roomProfiler.reset()
+        activeRoomProfile = nil
+
         if immediate || settings.exitDelaySeconds <= 0 {
             completeArming()
             return
@@ -234,6 +241,13 @@ public final class SecurityCoordinator {
         continuousMotionSeconds = 0
         motionAnchorDepthMeters = nil
         state = .armed
+        if let profile = roomProfiler.finalizeCalibration() {
+            activeRoomProfile = profile
+            logEvent(
+                "Room Calibrated",
+                detail: "Baseline noise floor \(String(format: "%.3f", profile.noiseFloorScore)) (\(profile.noiseLevelDescription)). Environment locked."
+            )
+        }
         isInteractiveUnlockRequested = false
         startArmedInputMonitoring()
         let acNote: String
@@ -303,10 +317,14 @@ public final class SecurityCoordinator {
     }
 
     private func performValidatedDisarm(method: String) {
+        let wasAlarm = (state == .alarm)
         KeychainManager.cancelPendingAuthentication()
         countdownTimer?.invalidate()
         countdownTimer = nil
         countdownSecondsRemaining = 0
+        alarmReminderTimer?.invalidate()
+        alarmReminderTimer = nil
+        alarmStartTime = nil
         SirenSynthesizer.shared.stop()
         powerMonitor.releaseSleepHoldAssertion()
 
@@ -331,6 +349,15 @@ public final class SecurityCoordinator {
         logEvent("Disarmed", detail: "Session disarmed via \(method).")
         onStateChanged?(state)
         onNotchUpdateNeeded?()
+
+        if wasAlarm {
+            alertNotifier.send(AlertMessage(
+                title: "Pupil Disarmed",
+                body: "Alarm silenced and laptop disarmed via \(method).",
+                severity: "high",
+                tag: "pupil-alarm"
+            ))
+        }
     }
 
     // MARK: - Armed User Input Monitoring
@@ -503,6 +530,21 @@ public final class SecurityCoordinator {
         activeTamperSource = source
         state = .alarm
 
+        alarmStartTime = clock()
+        alarmReminderTimer?.invalidate()
+        alarmReminderTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.state == .alarm else { return }
+                let elapsedMins = max(1, Int((self.clock() - (self.alarmStartTime ?? self.clock())) / 60))
+                self.alertNotifier.send(AlertMessage(
+                    title: "Pupil Theft Alarm Active (\(elapsedMins)m)",
+                    body: "Audible siren and sleep lock still active on your MacBook. Disarm required.",
+                    severity: "critical",
+                    tag: "pupil-alarm"
+                ))
+            }
+        }
+
         powerMonitor.acquireSleepHoldAssertion(reason: "Pupil Active Theft Siren")
         SirenSynthesizer.shared.start(baseFrequencyHz: Double(settings.sirenFrequencyHz))
 
@@ -555,7 +597,22 @@ public final class SecurityCoordinator {
     }
 
     public func ingestMotionSample(_ sample: MotionSample) {
-        guard state == .armed || state == .tamperPending, settings.isSpatialMotionEnabled else { return }
+        guard settings.isSpatialMotionEnabled || isCameraPreviewRequested else { return }
+
+        if state == .arming {
+            roomProfiler.ingest(sample)
+            let translationRatio = sample.translationMagnitude / max(0.001, settings.spatialMotionSensitivity.translationDeadband)
+            latestMotionDisplacementScore = translationRatio
+            return
+        }
+
+        if state == .disarmed && isCameraPreviewRequested {
+            let translationRatio = sample.translationMagnitude / max(0.001, settings.spatialMotionSensitivity.translationDeadband)
+            latestMotionDisplacementScore = translationRatio
+            return
+        }
+
+        guard state == .armed || state == .tamperPending else { return }
 
         let snapshot = motionAggregator.ingest(
             sample,
@@ -786,6 +843,9 @@ public final class SecurityCoordinator {
                 guard let self else { return }
                 if self.countdownSecondsRemaining > 1 {
                     self.countdownSecondsRemaining -= 1
+                    if self.state == .tamperPending && self.settings.countdownChimeEnabled {
+                        SirenSynthesizer.shared.playCountdownTick()
+                    }
                     self.onNotchUpdateNeeded?()
                 } else {
                     self.countdownTimer?.invalidate()

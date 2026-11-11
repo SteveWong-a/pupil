@@ -6,6 +6,7 @@
 //  Zero external audio assets required; renders directly to the system output device.
 //
 
+import AudioToolbox
 import AVFoundation
 import Foundation
 
@@ -101,5 +102,10 @@ public final class SirenSynthesizer: @unchecked Sendable {
         DispatchQueue.global().asyncAfter(deadline: .now() + 1.2) { [weak self] in
             self?.stop()
         }
+    }
+
+    /// Plays a subtle, non-intrusive acoustic tick for countdown warning feedback.
+    public func playCountdownTick() {
+        AudioServicesPlaySystemSound(1057)
     }
 }
