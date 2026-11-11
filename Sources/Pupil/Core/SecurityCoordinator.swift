@@ -250,6 +250,7 @@ public final class SecurityCoordinator {
         continuousMotionSeconds = 0
         motionAnchorDepthMeters = nil
         state = .armed
+        cameraManager.shouldReanchorOnFaceAcquisition = false
         if let profile = roomProfiler.finalizeCalibration() {
             activeRoomProfile = profile
             logEvent(
@@ -348,6 +349,7 @@ public final class SecurityCoordinator {
         gazeAggregator.reset()
         motionAggregator.reset()
         tamperScorer.reset()
+        cameraManager.shouldReanchorOnFaceAcquisition = true
         cameraManager.resetMotionAnchor()
         hasMotionAnchor = false
         latestMotionDisplacementScore = 0
@@ -518,6 +520,7 @@ public final class SecurityCoordinator {
         countdownSecondsRemaining = 0
         activeTamperSource = nil
         state = .armed
+        cameraManager.shouldReanchorOnFaceAcquisition = false
 
         logEvent("Tamper Canceled", detail: "\(reason) Reverted to armed monitoring.")
         onStateChanged?(state)
@@ -619,14 +622,20 @@ public final class SecurityCoordinator {
 
         if state == .arming {
             roomProfiler.ingest(sample)
-            let translationRatio = sample.translationMagnitude / max(0.001, settings.spatialMotionSensitivity.translationDeadband)
-            latestMotionDisplacementScore = translationRatio
+            hasMotionAnchor = sample.isAnchorFrame || hasMotionAnchor
+            let translationRatio = sample.isRegistrationReliable
+                ? sample.translationMagnitude / max(0.001, settings.spatialMotionSensitivity.translationDeadband)
+                : 0
+            latestMotionDisplacementScore = min(1.0, translationRatio)
             return
         }
 
         if state == .disarmed && isCameraPreviewRequested {
-            let translationRatio = sample.translationMagnitude / max(0.001, settings.spatialMotionSensitivity.translationDeadband)
-            latestMotionDisplacementScore = translationRatio
+            hasMotionAnchor = sample.isAnchorFrame || hasMotionAnchor
+            let translationRatio = sample.isRegistrationReliable
+                ? sample.translationMagnitude / max(0.001, settings.spatialMotionSensitivity.translationDeadband)
+                : 0
+            latestMotionDisplacementScore = min(1.0, translationRatio)
             return
         }
 
@@ -834,8 +843,16 @@ public final class SecurityCoordinator {
             activeFaceCount = 0
             latestFaceBoundingBoxes = []
             latestTextureEnergy = 0
+            hasMotionAnchor = false
+            latestMotionDisplacementScore = 0
             cancelLiveCalibrationTest()
             gazeAggregator.reset()
+            cameraManager.resetMotionAnchor()
+        } else if requested {
+            hasMotionAnchor = false
+            latestMotionDisplacementScore = 0
+            cameraManager.shouldReanchorOnFaceAcquisition = true
+            cameraManager.resetMotionAnchor()
         }
         syncCameraLifecycle()
     }

@@ -341,6 +341,9 @@ public final class VisionMotionDetector: @unchecked Sendable {
     private var anchorTextureEnergyValue: Float?
     private var previousImage: CGImage?
     private var anchorMetricDepthZ0: Float?
+    private var anchorHadFace: Bool = false
+    private var lastFaceBoundingBoxes: [CGRect] = []
+    private var lastFaceDetectionTime: TimeInterval = 0
 
     /// Registration runs on a downscaled copy: faster, and averaging smooths sensor noise.
     public static let analysisWidth = 320
@@ -368,6 +371,9 @@ public final class VisionMotionDetector: @unchecked Sendable {
         anchorTextureEnergyValue = nil
         previousImage = nil
         anchorMetricDepthZ0 = nil
+        anchorHadFace = false
+        lastFaceBoundingBoxes = []
+        lastFaceDetectionTime = 0
         lock.unlock()
     }
 
@@ -378,12 +384,36 @@ public final class VisionMotionDetector: @unchecked Sendable {
         _ image: CGImage,
         faceBoundingBoxes: [CGRect] = [],
         metricDepthZ0: Float? = nil,
-        timestamp: TimeInterval = Date().timeIntervalSince1970
+        timestamp: TimeInterval = Date().timeIntervalSince1970,
+        allowReanchorOnFaceAcquisition: Bool = false
     ) -> MotionSample {
+        lock.lock()
+        let effectiveFaceBoxes: [CGRect]
+        if !faceBoundingBoxes.isEmpty {
+            effectiveFaceBoxes = faceBoundingBoxes
+            lastFaceBoundingBoxes = faceBoundingBoxes
+            lastFaceDetectionTime = timestamp
+        } else if timestamp - lastFaceDetectionTime < 0.6 {
+            effectiveFaceBoxes = lastFaceBoundingBoxes
+        } else {
+            effectiveFaceBoxes = []
+            lastFaceBoundingBoxes = []
+        }
+
+        let needsReanchor = allowReanchorOnFaceAcquisition && anchorImage != nil && !anchorHadFace && !effectiveFaceBoxes.isEmpty
+        if needsReanchor {
+            anchorImage = nil
+            anchorTextureEnergyValue = nil
+            previousImage = nil
+            anchorMetricDepthZ0 = nil
+            anchorHadFace = false
+        }
+        lock.unlock()
+
         let (meanLuma, lumaVariance) = Self.computeFrameLuminanceStats(image)
         guard let current = Self.makeFaceMaskedBackgroundImage(
             from: image,
-            faceBoundingBoxes: faceBoundingBoxes
+            faceBoundingBoxes: effectiveFaceBoxes
         ) else {
             return MotionSample(
                 timestamp: timestamp,
@@ -392,7 +422,10 @@ public final class VisionMotionDetector: @unchecked Sendable {
                 meanLuminance: meanLuma,
                 luminanceVariance: lumaVariance,
                 metricDepthZ0: metricDepthZ0,
-                isAnchorFrame: false
+                isAnchorFrame: false,
+                interFrameTranslation: 0,
+                isRegistrationReliable: false,
+                textureEnergy: 0
             )
         }
 
@@ -405,6 +438,7 @@ public final class VisionMotionDetector: @unchecked Sendable {
             anchorImage = current
             anchorMetricDepthZ0 = metricDepthZ0
             anchorTextureEnergyValue = currentEnergy
+            anchorHadFace = !effectiveFaceBoxes.isEmpty
             lock.unlock()
             return MotionSample(
                 timestamp: timestamp,
@@ -414,6 +448,8 @@ public final class VisionMotionDetector: @unchecked Sendable {
                 luminanceVariance: lumaVariance,
                 metricDepthZ0: metricDepthZ0,
                 isAnchorFrame: true,
+                interFrameTranslation: 0,
+                isRegistrationReliable: currentEnergy >= Self.minimumTextureEnergy,
                 textureEnergy: currentEnergy
             )
         }
@@ -463,9 +499,10 @@ public final class VisionMotionDetector: @unchecked Sendable {
         )
     }
 
-    /// Downscales the full frame to `analysisWidth x analysisHeight` and masks any expanded
-    /// `VNFaceObservation` bounding boxes (Vision normalized, bottom-left origin) with neutral gray.
-    /// Uses the whole frame, not just the ceiling band, so there is texture to register against.
+    /// Downscales the full frame to `analysisWidth x analysisHeight` and masks any detected
+    /// subject silhouettes (face, head, neck, and shoulders all the way to the bottom of the frame)
+    /// with ambient scene luminance so foreground human movements (breathing, posture adjustments)
+    /// do not trigger false room displacement.
     public static func makeFaceMaskedBackgroundImage(
         from image: CGImage,
         faceBoundingBoxes: [CGRect]
@@ -486,16 +523,32 @@ public final class VisionMotionDetector: @unchecked Sendable {
 
         ctx.interpolationQuality = .medium
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
-        ctx.setFillColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1.0)
-        for box in faceBoundingBoxes {
-            let expanded = box.insetBy(dx: -box.width * 0.25, dy: -box.height * 0.25)
-            // CGContext is bottom-left origin, same as Vision's normalized space.
-            ctx.fill(CGRect(
-                x: max(0, expanded.minX) * CGFloat(w),
-                y: max(0, expanded.minY) * CGFloat(h),
-                width: min(1, expanded.maxX) * CGFloat(w) - max(0, expanded.minX) * CGFloat(w),
-                height: min(1, expanded.maxY) * CGFloat(h) - max(0, expanded.minY) * CGFloat(h)
-            ))
+
+        if !faceBoundingBoxes.isEmpty {
+            // Use ambient frame luminance so the mask blends smoothly into the scene
+            // without creating artificial high-contrast sharp edges that optical flow would track.
+            let (meanLuma, _) = computeFrameLuminanceStats(image)
+            let fillLuma = CGFloat(max(0.12, min(0.88, meanLuma)))
+            ctx.setFillColor(red: fillLuma, green: fillLuma, blue: fillLuma, alpha: 1.0)
+
+            for box in faceBoundingBoxes {
+                // Mask the entire subject silhouette:
+                // - Head and hair: up to box.maxY + 0.35 * height
+                // - Shoulders & torso: span width * 2.4 (minimum 40% of frame width)
+                // - Chest/torso: extends all the way down to y = 0 (bottom of frame in Vision coordinates)
+                let top = min(1.0, box.maxY + box.height * 0.35)
+                let shoulderSpan = max(box.width * 2.4, 0.40)
+                let left = max(0.0, box.midX - shoulderSpan / 2.0)
+                let right = min(1.0, box.midX + shoulderSpan / 2.0)
+
+                let subjectRect = CGRect(
+                    x: left * CGFloat(w),
+                    y: 0.0,
+                    width: (right - left) * CGFloat(w),
+                    height: top * CGFloat(h)
+                )
+                ctx.fill(subjectRect)
+            }
         }
         return ctx.makeImage()
     }
@@ -556,9 +609,16 @@ public final class VisionMotionDetector: @unchecked Sendable {
         var translationMag: Float = 0
         if let transObs = translationRequest.results?.first as? VNImageTranslationAlignmentObservation {
             let transform = transObs.alignmentTransform
-            let dx = Float(transform.tx) / Float(max(1, currentImage.width))
-            let dy = Float(transform.ty) / Float(max(1, currentImage.height))
-            translationMag = sqrtf(dx * dx + dy * dy)
+            let rawDx = Float(transform.tx)
+            let rawDy = Float(transform.ty)
+            let maxDimension = Float(max(currentImage.width, currentImage.height))
+
+            // Ignore diverged optical flow registration results (> 40% of frame dimension)
+            if abs(rawDx) < maxDimension * 0.40 && abs(rawDy) < maxDimension * 0.40 {
+                let dx = rawDx / Float(max(1, currentImage.width))
+                let dy = rawDy / Float(max(1, currentImage.height))
+                translationMag = sqrtf(dx * dx + dy * dy)
+            }
         }
 
         var warpMag: Float = 0

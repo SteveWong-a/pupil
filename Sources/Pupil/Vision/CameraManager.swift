@@ -35,6 +35,8 @@ public final class CameraManager: NSObject {
     @ObservationIgnored private nonisolated(unsafe) let ciContext = CIContext(options: [.useSoftwareRenderer: false])
     @ObservationIgnored private nonisolated(unsafe) var lastProcessedTime: TimeInterval = 0
     @ObservationIgnored private nonisolated(unsafe) var activeROI: CameraROI = .default
+    @ObservationIgnored private nonisolated(unsafe) var warmupFramesRemaining: Int = 3
+    @ObservationIgnored public nonisolated(unsafe) var shouldReanchorOnFaceAcquisition: Bool = true
     @ObservationIgnored public nonisolated let motionDetector = VisionMotionDetector()
     /// Allows disabling hardware capture in headless test runners lacking NSCameraUsageDescription.
     public var isCaptureEnabled: Bool = {
@@ -109,6 +111,8 @@ public final class CameraManager: NSObject {
 
         let targetID = preferredDeviceID ?? PupilSettings.shared.preferredCameraID
         isRunning = true
+        warmupFramesRemaining = 3
+        motionDetector.resetAnchor()
 
         sessionQueue.async { [weak self] in
             guard let self else { return }
@@ -117,6 +121,7 @@ public final class CameraManager: NSObject {
     }
 
     public nonisolated func resetMotionAnchor() {
+        warmupFramesRemaining = 2
         motionDetector.resetAnchor()
     }
 
@@ -192,11 +197,24 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
         }
 
         let sample = (try? VisionGazeDetector.analyzeFrame(cgImage, roi: activeROI, timestamp: now)) ?? .empty(at: now)
+
+        if warmupFramesRemaining > 0 {
+            warmupFramesRemaining -= 1
+            motionDetector.resetAnchor()
+            Task { @MainActor [weak self] in
+                guard let self, self.isRunning else { return }
+                self.lastFrameImage = cgImage
+                self.onGazeSample?(sample)
+            }
+            return
+        }
+
         let motionSample = motionDetector.analyzeFrame(
             cgImage,
             faceBoundingBoxes: sample.faceBoundingBoxes,
             metricDepthZ0: sample.estimatedMetricDepthMeters,
-            timestamp: now
+            timestamp: now,
+            allowReanchorOnFaceAcquisition: shouldReanchorOnFaceAcquisition
         )
 
         Task { @MainActor [weak self] in

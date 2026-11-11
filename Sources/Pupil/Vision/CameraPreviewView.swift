@@ -104,7 +104,7 @@ public struct SpatialFocusOverlayView: View {
                 HStack(spacing: 8) {
                     ProgressView()
                         .controlSize(.small)
-                        .tint(PupilTheme.armedGreen)
+                        .tint(Color.white)
                     Text("PROFILING ROOM NOISE FLOOR: \(calibrationSecondsRemaining)s")
                         .font(.system(size: 11, weight: .bold, design: .monospaced))
                         .foregroundStyle(Color.white)
@@ -120,7 +120,7 @@ public struct SpatialFocusOverlayView: View {
                     .fill(Color.black.opacity(0.85))
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
-                            .strokeBorder(PupilTheme.armedGreen.opacity(0.5), lineWidth: 1)
+                            .strokeBorder(Color.white.opacity(0.15), lineWidth: 1)
                     )
             )
         }

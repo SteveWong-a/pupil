@@ -971,4 +971,66 @@ struct PupilSecurityTests {
         c.setCameraPreviewRequested(false)
         #expect(c.latestFaceBoundingBoxes.isEmpty)
     }
+
+    @Test("Displacement diagnostics: stationary laptop with person in front")
+    func testDisplacementDiagnostics() {
+        // Create a realistic webcam scene:
+        // Room background (walls, picture) + person (shoulders + head)
+        func makeWebcamImage(dxPerson: Double, dyPerson: Double, dxRoom: Double = 0) -> CGImage {
+            let w = 640, h = 480
+            let cs = CGColorSpaceCreateDeviceRGB()
+            let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4, space: cs, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+            
+            // Stationary room background
+            ctx.setFillColor(red: 0.85, green: 0.85, blue: 0.82, alpha: 1)
+            ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
+            // Wall picture & textured bookshelf in background
+            for i in 0..<12 {
+                let x = Double(20 + i * 48) + dxRoom
+                let colorVal = Double((i * 37) % 100) / 100.0
+                ctx.setFillColor(red: colorVal, green: 0.3, blue: 0.7 - colorVal * 0.5, alpha: 1)
+                ctx.fill(CGRect(x: x, y: 280, width: 38, height: 140))
+            }
+            
+            // Person: shoulders + torso in bottom half
+            let px = 320.0 + dxPerson
+            let py = 120.0 + dyPerson
+            ctx.setFillColor(red: 0.15, green: 0.2, blue: 0.4, alpha: 1) // dark shirt
+            ctx.fill(CGRect(x: px - 160, y: 0, width: 320, height: py + 80))
+            // Head/face (Vision coords: y around 200..340)
+            ctx.setFillColor(red: 0.9, green: 0.7, blue: 0.6, alpha: 1)
+            ctx.fillEllipse(in: CGRect(x: px - 60, y: py + 80, width: 120, height: 140))
+            
+            return ctx.makeImage()!
+        }
+
+        let faceBox0 = CGRect(x: 0.40, y: 0.40, width: 0.20, height: 0.30)
+        let faceBox1 = CGRect(x: 0.41, y: 0.40, width: 0.20, height: 0.30) // slight 1% micro-movement
+
+        // Subcase A: Frame 0 had NO face detected (startup), Frame 1 acquires face with allowReanchorOnFaceAcquisition
+        let dA = VisionMotionDetector()
+        _ = dA.analyzeFrame(makeWebcamImage(dxPerson: 0, dyPerson: 0), faceBoundingBoxes: [], allowReanchorOnFaceAcquisition: true)
+        let sA1 = dA.analyzeFrame(makeWebcamImage(dxPerson: 0, dyPerson: 0), faceBoundingBoxes: [faceBox0], allowReanchorOnFaceAcquisition: true)
+        #expect(sA1.isAnchorFrame)
+        #expect(sA1.translationMagnitude == 0)
+
+        let sA2 = dA.analyzeFrame(makeWebcamImage(dxPerson: 0, dyPerson: 0), faceBoundingBoxes: [faceBox0], allowReanchorOnFaceAcquisition: true)
+        #expect(sA2.translationMagnitude / 0.040 < 0.10)
+
+        // Subcase B: Frame 0 has face, Frame 1 has face with person swaying 6px (micro-motion)
+        let dB = VisionMotionDetector()
+        _ = dB.analyzeFrame(makeWebcamImage(dxPerson: 0, dyPerson: 0), faceBoundingBoxes: [faceBox0])
+        let sB1 = dB.analyzeFrame(makeWebcamImage(dxPerson: 6, dyPerson: 2), faceBoundingBoxes: [faceBox1])
+        #expect(sB1.translationMagnitude / 0.040 < 0.50)
+
+        // Subcase C: Frame 0 has face, Frame 1 person sits totally still
+        let dC = VisionMotionDetector()
+        _ = dC.analyzeFrame(makeWebcamImage(dxPerson: 0, dyPerson: 0), faceBoundingBoxes: [faceBox0])
+        let sC1 = dC.analyzeFrame(makeWebcamImage(dxPerson: 0, dyPerson: 0), faceBoundingBoxes: [faceBox0])
+        #expect(sC1.translationMagnitude / 0.040 < 0.05)
+
+        // Subcase D: Laptop actually moves / tilts (room moves by 20px)
+        let sC2 = dC.analyzeFrame(makeWebcamImage(dxPerson: 0, dyPerson: 0, dxRoom: 20), faceBoundingBoxes: [faceBox0])
+        #expect(sC2.translationMagnitude / 0.040 > 0.60)
+    }
 }

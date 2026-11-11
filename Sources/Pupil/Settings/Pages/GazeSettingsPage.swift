@@ -201,7 +201,7 @@ public struct GazeSettingsPage: View {
             HStack {
                 HStack(spacing: 8) {
                     Circle()
-                        .fill(isCameraActive ? (coordinator.activeFaceCount > 0 ? PupilTheme.armedGreen : PupilTheme.accent) : SettingsMetrics.textTertiary)
+                        .fill(isCameraActive ? (coordinator.activeFaceCount > 0 ? PupilTheme.accent : SettingsMetrics.textSecondary) : SettingsMetrics.textTertiary)
                         .frame(width: 6, height: 6)
                     Text(isCameraActive ? (coordinator.activeFaceCount > 0 ? "Subject detected" : "Room background ready") : "Preview is off")
                         .font(.system(size: 12))
@@ -240,6 +240,10 @@ public struct GazeSettingsPage: View {
 
     // MARK: - Native Percentage Bar Rows (Matching macOS UI)
 
+    private var isDisplacementReady: Bool {
+        isCameraActive && coordinator.hasMotionAnchor
+    }
+
     private var liveDisplacementRow: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
@@ -247,7 +251,20 @@ public struct GazeSettingsPage: View {
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(SettingsMetrics.textPrimary)
                 Spacer()
-                if isCameraActive {
+                if isDisplacementReady {
+                    Button {
+                        coordinator.cameraManager.resetMotionAnchor()
+                    } label: {
+                        Text("Zero")
+                            .font(.system(size: 10, weight: .medium))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.white.opacity(0.10))
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(SettingsMetrics.textSecondary)
+
                     Text(String(format: "%.0f%%", min(100, coordinator.latestMotionDisplacementScore * 100)))
                         .font(.system(size: 12, weight: .semibold, design: .monospaced))
                         .foregroundStyle(motionMeterColor(coordinator.latestMotionDisplacementScore))
@@ -264,9 +281,9 @@ public struct GazeSettingsPage: View {
                         .fill(Color.white.opacity(0.12))
                         .frame(height: 6)
 
-                    if isCameraActive {
+                    if isDisplacementReady {
                         Capsule()
-                            .fill(motionMeterColor(coordinator.latestMotionDisplacementScore))
+                            .fill(coordinator.latestMotionDisplacementScore >= 0.85 ? PupilTheme.alarmRed : (coordinator.latestMotionDisplacementScore >= 0.40 ? PupilTheme.warningAmber : PupilTheme.accent))
                             .frame(
                                 width: max(4, geo.size.width * CGFloat(min(1.0, coordinator.latestMotionDisplacementScore))),
                                 height: 6
@@ -278,7 +295,7 @@ public struct GazeSettingsPage: View {
             .frame(height: 6)
 
             HStack {
-                Text(isCameraActive ? "Resting (0%)" : "Camera offline")
+                Text(!isCameraActive ? "Camera offline" : (!coordinator.hasMotionAnchor ? "Acquiring anchor..." : "Resting (0%)"))
                     .font(.system(size: 10))
                     .foregroundStyle(SettingsMetrics.textTertiary)
                 Spacer()
@@ -311,7 +328,7 @@ public struct GazeSettingsPage: View {
                 if isCameraActive {
                     Text("\(spatialRoomFocusPercentage)%")
                         .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(PupilTheme.armedGreen)
+                        .foregroundStyle(SettingsMetrics.textPrimary)
                 } else {
                     Text("N/A")
                         .font(.system(size: 12, weight: .semibold, design: .monospaced))
@@ -327,7 +344,7 @@ public struct GazeSettingsPage: View {
 
                     if isCameraActive {
                         Capsule()
-                            .fill(PupilTheme.armedGreen)
+                            .fill(PupilTheme.accent)
                             .frame(
                                 width: max(4, geo.size.width * CGFloat(spatialRoomFocusPercentage) / 100.0),
                                 height: 6
@@ -361,7 +378,7 @@ public struct GazeSettingsPage: View {
                 if isCameraActive {
                     Text("\(dwellPercentage)%")
                         .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(dwellPercentage >= 100 ? PupilTheme.warningAmber : PupilTheme.armedGreen)
+                        .foregroundStyle(dwellPercentage >= 100 ? PupilTheme.warningAmber : SettingsMetrics.textPrimary)
                 } else {
                     Text("N/A")
                         .font(.system(size: 12, weight: .semibold, design: .monospaced))
@@ -377,7 +394,7 @@ public struct GazeSettingsPage: View {
 
                     if isCameraActive {
                         Capsule()
-                            .fill(dwellPercentage >= 100 ? PupilTheme.warningAmber : PupilTheme.armedGreen)
+                            .fill(dwellPercentage >= 100 ? PupilTheme.warningAmber : PupilTheme.accent)
                             .frame(
                                 width: max(4, geo.size.width * CGFloat(min(1.0, coordinator.gazeDwellProgress))),
                                 height: 6
@@ -403,7 +420,7 @@ public struct GazeSettingsPage: View {
 
     private func motionMeterColor(_ score: Float) -> Color {
         if score < 0.40 {
-            return PupilTheme.armedGreen
+            return SettingsMetrics.textPrimary
         } else if score < 0.85 {
             return PupilTheme.warningAmber
         } else {
@@ -432,9 +449,9 @@ public struct GazeSettingsPage: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 HStack(spacing: 6) {
-                    Image(systemName: "checkmark.seal.fill")
+                    Image(systemName: "waveform.badge.magnifyingglass")
                         .font(.system(size: 13))
-                        .foregroundStyle(PupilTheme.armedGreen)
+                        .foregroundStyle(SettingsMetrics.textSecondary)
                     Text("Room Noise & Focus Profile")
                         .font(.system(size: 12.5, weight: .semibold))
                         .foregroundStyle(SettingsMetrics.textPrimary)
@@ -442,40 +459,36 @@ public struct GazeSettingsPage: View {
                 Spacer()
                 Text("Active Baseline")
                     .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(PupilTheme.armedGreen)
+                    .foregroundStyle(SettingsMetrics.textSecondary)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(PupilTheme.armedGreen.opacity(0.12))
+                    .background(Color.white.opacity(0.08))
                     .clipShape(Capsule())
             }
 
-            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
+            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {
                 GridRow {
                     reportCell(
                         label: "Noise Floor",
                         value: String(format: "%.3f", report.noiseFloorScore),
-                        detail: report.noiseLevelDescription,
-                        tint: report.noiseFloorScore < 0.20 ? PupilTheme.armedGreen : PupilTheme.warningAmber
+                        detail: report.noiseLevelDescription
                     )
                     reportCell(
                         label: "Texture Energy",
                         value: String(format: "%.3f", report.averageTextureEnergy),
-                        detail: report.textureHealthDescription,
-                        tint: report.averageTextureEnergy >= VisionMotionDetector.minimumTextureEnergy ? PupilTheme.armedGreen : PupilTheme.warningAmber
+                        detail: report.textureHealthDescription
                     )
                 }
                 GridRow {
                     reportCell(
                         label: "Ambient Light",
                         value: String(format: "%.0f%%", report.averageLuminance * 100),
-                        detail: report.luminanceDescription,
-                        tint: SettingsMetrics.textSecondary
+                        detail: report.luminanceDescription
                     )
                     reportCell(
                         label: "Recommended Sentry",
                         value: report.recommendedSensitivity.title,
-                        detail: "Optimal for this noise floor",
-                        tint: PupilTheme.accent
+                        detail: "Optimal for noise floor"
                     )
                 }
             }
@@ -484,29 +497,26 @@ public struct GazeSettingsPage: View {
         .background(SettingsMetrics.rowColor)
         .overlay(
             RoundedRectangle(cornerRadius: SettingsMetrics.rowRadius)
-                .strokeBorder(PupilTheme.armedGreen.opacity(0.35), lineWidth: 1)
+                .strokeBorder(SettingsMetrics.rowBorder, lineWidth: SettingsMetrics.rowBorderWidth)
         )
         .clipShape(RoundedRectangle(cornerRadius: SettingsMetrics.rowRadius))
         .transition(.opacity.combined(with: .move(edge: .top)))
     }
 
-    private func reportCell(label: String, value: String, detail: String, tint: Color) -> some View {
+    private func reportCell(label: String, value: String, detail: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label.uppercased())
-                .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
                 .foregroundStyle(SettingsMetrics.textTertiary)
-            HStack(spacing: 4) {
-                Text(value)
-                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(tint)
-                Text("•")
-                    .font(.system(size: 10))
-                    .foregroundStyle(SettingsMetrics.textTertiary)
-                Text(detail)
-                    .font(.system(size: 11))
-                    .foregroundStyle(SettingsMetrics.textSecondary)
-                    .lineLimit(1)
-            }
+            Text(value)
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .foregroundStyle(SettingsMetrics.textPrimary)
+            Text(detail)
+                .font(.system(size: 11))
+                .foregroundStyle(SettingsMetrics.textSecondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
