@@ -88,6 +88,9 @@ public struct GazeSettingsPage: View {
             VStack(alignment: .leading, spacing: 8) {
                 SettingsSectionTitle(text: "Preview")
                 liveCameraPreviewCard
+                if let report = coordinator.liveCalibrationReport {
+                    calibrationReportCard(report)
+                }
                 SettingsCaption(text: "Preview is only active while shown. All frames are processed in memory and never saved.")
             }
         }
@@ -154,6 +157,8 @@ public struct GazeSettingsPage: View {
                     if coordinator.isCameraPreviewRequested {
                         CameraPreviewView(session: coordinator.cameraManager.captureSessionReference)
                             .transition(.opacity)
+                        SpatialFocusOverlayView(coordinator: coordinator)
+                            .transition(.opacity)
                     } else {
                         VStack(spacing: 8) {
                             Image(systemName: "video.slash")
@@ -170,43 +175,72 @@ public struct GazeSettingsPage: View {
 
                 if coordinator.isCameraPreviewRequested {
                     HStack(spacing: 8) {
-                        Text("Gaze Dwell")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(Color.white.opacity(0.80))
-
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                Capsule()
-                                    .fill(Color.white.opacity(0.18))
-                                Capsule()
-                                    .fill(dwellPercentage >= 100 ? PupilTheme.warningAmber : PupilTheme.armedGreen)
-                                    .frame(width: geo.size.width * CGFloat(min(1.0, max(0.0, coordinator.gazeDwellProgress))))
-                                    .animation(.easeOut(duration: 0.12), value: coordinator.gazeDwellProgress)
+                        // Toggle Focus Reticles
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.15)) {
+                                coordinator.isPreviewFocusOverlayEnabled.toggle()
                             }
-                        }
-                        .frame(width: 56, height: 6)
-
-                        Text("\(dwellPercentage)%")
-                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(dwellPercentage >= 100 ? PupilTheme.warningAmber : Color.white)
-                            .frame(width: 34, alignment: .trailing)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(
-                        Capsule()
-                            .fill(Color.black.opacity(0.68))
-                            .overlay(
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: coordinator.isPreviewFocusOverlayEnabled ? "viewfinder.circle.fill" : "viewfinder.circle")
+                                    .font(.system(size: 11))
+                                Text(coordinator.isPreviewFocusOverlayEnabled ? "Focus Overlay" : "Clean View")
+                                    .font(.system(size: 10, weight: .medium))
+                            }
+                            .foregroundStyle(Color.white.opacity(0.85))
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 4)
+                            .background(
                                 Capsule()
-                                    .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
+                                    .fill(Color.black.opacity(0.65))
+                                    .overlay(
+                                        Capsule().strokeBorder(Color.white.opacity(0.15), lineWidth: 1)
+                                    )
                             )
-                    )
+                        }
+                        .buttonStyle(.plain)
+
+                        Spacer()
+
+                        HStack(spacing: 8) {
+                            Text("Gaze Dwell")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(Color.white.opacity(0.80))
+
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    Capsule()
+                                        .fill(Color.white.opacity(0.18))
+                                    Capsule()
+                                        .fill(dwellPercentage >= 100 ? PupilTheme.warningAmber : PupilTheme.armedGreen)
+                                        .frame(width: geo.size.width * CGFloat(min(1.0, max(0.0, coordinator.gazeDwellProgress))))
+                                        .animation(.easeOut(duration: 0.12), value: coordinator.gazeDwellProgress)
+                                }
+                            }
+                            .frame(width: 56, height: 6)
+
+                            Text("\(dwellPercentage)%")
+                                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(dwellPercentage >= 100 ? PupilTheme.warningAmber : Color.white)
+                                .frame(width: 34, alignment: .trailing)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(Color.black.opacity(0.68))
+                                .overlay(
+                                    Capsule()
+                                        .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
+                                )
+                        )
+                    }
                     .padding(10)
                 }
             }
             .frame(maxWidth: .infinity)
             .frame(height: 196)
-            .background(Color.black.opacity(0.18))
+            .background(Color(white: 0, opacity: 0.18))
             .clipShape(
                 UnevenRoundedRectangle(
                     topLeadingRadius: SettingsMetrics.rowRadius,
@@ -242,6 +276,17 @@ public struct GazeSettingsPage: View {
                     }
                 }
                 Spacer()
+                if coordinator.isCameraPreviewRequested {
+                    PillActionButton(
+                        title: coordinator.isLiveCalibrating ? "Stop Test" : "Test Calibration"
+                    ) {
+                        if coordinator.isLiveCalibrating {
+                            coordinator.cancelLiveCalibrationTest()
+                        } else {
+                            coordinator.startLiveCalibrationTest(durationSeconds: 3.0)
+                        }
+                    }
+                }
                 PillActionButton(
                     title: coordinator.isCameraPreviewRequested ? "Hide preview" : "Show preview"
                 ) {
@@ -272,6 +317,88 @@ public struct GazeSettingsPage: View {
                         coordinator.setCameraPreviewRequested(true)
                     }
                 }
+            }
+        }
+    }
+
+    private func calibrationReportCard(_ report: RoomCalibrationProfile) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(PupilTheme.armedGreen)
+                    Text("Room Noise & Focus Profile")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(SettingsMetrics.textPrimary)
+                }
+                Spacer()
+                Text("Active Baseline")
+                    .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(PupilTheme.armedGreen)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(PupilTheme.armedGreen.opacity(0.12))
+                    .clipShape(Capsule())
+            }
+
+            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
+                GridRow {
+                    reportCell(
+                        label: "Noise Floor",
+                        value: String(format: "%.3f", report.noiseFloorScore),
+                        detail: report.noiseLevelDescription,
+                        tint: report.noiseFloorScore < 0.20 ? PupilTheme.armedGreen : PupilTheme.warningAmber
+                    )
+                    reportCell(
+                        label: "Texture Energy",
+                        value: String(format: "%.3f", report.averageTextureEnergy),
+                        detail: report.textureHealthDescription,
+                        tint: report.averageTextureEnergy >= VisionMotionDetector.minimumTextureEnergy ? PupilTheme.armedGreen : PupilTheme.warningAmber
+                    )
+                }
+                GridRow {
+                    reportCell(
+                        label: "Ambient Light",
+                        value: String(format: "%.0f%%", report.averageLuminance * 100),
+                        detail: report.luminanceDescription,
+                        tint: SettingsMetrics.textSecondary
+                    )
+                    reportCell(
+                        label: "Recommended Sentry",
+                        value: report.recommendedSensitivity.title,
+                        detail: "Optimal for this noise floor",
+                        tint: PupilTheme.accent
+                    )
+                }
+            }
+        }
+        .padding(12)
+        .background(SettingsMetrics.rowColor)
+        .overlay(
+            RoundedRectangle(cornerRadius: SettingsMetrics.rowRadius)
+                .strokeBorder(PupilTheme.armedGreen.opacity(0.35), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: SettingsMetrics.rowRadius))
+        .transition(.opacity.combined(with: .move(edge: .top)))
+    }
+
+    private func reportCell(label: String, value: String, detail: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label.uppercased())
+                .font(.system(size: 9.5, weight: .bold, design: .monospaced))
+                .foregroundStyle(SettingsMetrics.textTertiary)
+            HStack(spacing: 4) {
+                Text(value)
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(tint)
+                Text("•")
+                    .font(.system(size: 10))
+                    .foregroundStyle(SettingsMetrics.textTertiary)
+                Text(detail)
+                    .font(.system(size: 11))
+                    .foregroundStyle(SettingsMetrics.textSecondary)
+                    .lineLimit(1)
             }
         }
     }

@@ -773,4 +773,202 @@ struct PupilSecurityTests {
         await notifier.waitUntilIdle()
         #expect(sentMessages.contains { $0.title == "Pupil Disarmed" })
     }
+
+    @Test("On-demand live calibration test profiles room noise and publishes active profile")
+    @MainActor
+    func liveCalibrationTestLifecycle() throws {
+        let c = try armedCoordinator(pin: "2468")
+        _ = c.disarmWithPin("2468")
+
+        #expect(c.isLiveCalibrating == false)
+        #expect(c.liveCalibrationReport == nil)
+
+        c.startLiveCalibrationTest(durationSeconds: 3.0)
+        #expect(c.isLiveCalibrating == true)
+        #expect(c.liveCalibrationSecondsRemaining == 3)
+        #expect(c.isCameraPreviewRequested == true)
+
+        // Feed motion samples during live test
+        c.ingestMotionSample(MotionSample(timestamp: 200, translationMagnitude: 0.04, meanLuminance: 0.45, textureEnergy: 0.025))
+        c.ingestMotionSample(MotionSample(timestamp: 201, translationMagnitude: 0.07, meanLuminance: 0.46, textureEnergy: 0.022))
+        c.ingestMotionSample(MotionSample(timestamp: 202, translationMagnitude: 0.05, meanLuminance: 0.44, textureEnergy: 0.024))
+
+        c.completeLiveCalibrationTest()
+        #expect(c.isLiveCalibrating == false)
+        let report = try #require(c.liveCalibrationReport)
+        #expect(report.sampleCount == 3)
+        #expect(report.noiseFloorScore == 0.07)
+        #expect(report.averageTextureEnergy >= 0.020)
+        #expect(report.textureHealthDescription == "Rich Texture (Optimal)")
+        #expect(report.noiseLevelDescription == "Clean (Low Jitter)")
+        #expect(c.activeRoomProfile == report)
+        #expect(c.events.contains { $0.title == "Calibration Test Complete" })
+    }
+
+    @Test("Face bounding boxes and background texture energy are published for spatial focus inspection")
+    @MainActor
+    func previewSpatialFocusTelemetry() throws {
+        let c = try armedCoordinator(pin: "2468")
+        _ = c.disarmWithPin("2468")
+        c.setCameraPreviewRequested(true)
+
+        let testBox = CGRect(x: 0.25, y: 0.30, width: 0.50, height: 0.40)
+        let gazeSample = GazeSample(
+            timestamp: 300,
+            faceCount: 1,
+            faceInsideROI: true,
+            faceCentroid: CGPoint(x: 0.5, y: 0.5),
+            towardScreenScore: 0.85,
+            yawRadians: 0,
+            pitchRadians: 0,
+            irisHorizontalRatio: 0.5,
+            trackingConfidence: 0.95,
+            faceBoundingBoxes: [testBox]
+        )
+        c.ingestGazeSample(gazeSample)
+        #expect(c.latestFaceBoundingBoxes.count == 1)
+        #expect(c.latestFaceBoundingBoxes.first == testBox)
+
+        let motionSample = MotionSample(
+            timestamp: 300,
+            translationMagnitude: 0.02,
+            isRegistrationReliable: true,
+            textureEnergy: 0.028
+        )
+        c.ingestMotionSample(motionSample)
+        #expect(c.latestTextureEnergy == 0.028)
+        #expect(c.isTextureAdequate == true)
+
+        c.setCameraPreviewRequested(false)
+        #expect(c.latestFaceBoundingBoxes.isEmpty)
+        #expect(c.latestTextureEnergy == 0)
+    }
+
+    @Test("RoomNoiseProfiler calculates jitter noise floor, texture energy, and recommended sensitivity")
+    func testRoomNoiseProfilerMetrics() {
+        var profiler = RoomNoiseProfiler()
+        #expect(profiler.finalizeCalibration() == nil)
+
+        // Anchor frame is ignored during profiling
+        profiler.ingest(.anchor(at: 100))
+        #expect(profiler.finalizeCalibration() == nil)
+
+        profiler.ingest(MotionSample(
+            timestamp: 101,
+            translationMagnitude: 0.04,
+            homographyWarpMagnitude: 0.02,
+            meanLuminance: 0.45,
+            interFrameTranslation: 0.03,
+            textureEnergy: 0.025
+        ))
+        profiler.ingest(MotionSample(
+            timestamp: 102,
+            translationMagnitude: 0.07,
+            homographyWarpMagnitude: 0.05,
+            meanLuminance: 0.49,
+            interFrameTranslation: 0.06,
+            textureEnergy: 0.027
+        ))
+
+        let profile = try! #require(profiler.finalizeCalibration())
+        #expect(profile.sampleCount == 2)
+        #expect(profile.noiseFloorScore == 0.07)
+        #expect(profile.averageTextureEnergy > 0.02)
+        #expect(profile.noiseLevelDescription == "Clean (Low Jitter)")
+        #expect(profile.textureHealthDescription == "Rich Texture (Optimal)")
+        #expect(profile.luminanceDescription == "Good Lighting")
+        #expect(profile.recommendedSensitivity == .high)
+    }
+
+    @Test("On-demand live calibration test runs in preview, captures room profile, and applies baseline")
+    @MainActor
+    func testLiveCalibrationOnDemand() throws {
+        let c = try armedCoordinator(pin: "2468")
+        _ = c.disarmWithPin("2468")
+        #expect(c.state == .disarmed)
+        #expect(c.isLiveCalibrating == false)
+        #expect(c.liveCalibrationReport == nil)
+
+        c.startLiveCalibrationTest(durationSeconds: 3.0)
+        #expect(c.isLiveCalibrating == true)
+        #expect(c.isCameraPreviewRequested == true)
+        #expect(c.liveCalibrationSecondsRemaining == 3)
+
+        // Ingest motion samples during live test
+        c.ingestMotionSample(MotionSample(
+            timestamp: 200,
+            translationMagnitude: 0.03,
+            homographyWarpMagnitude: 0.01,
+            meanLuminance: 0.50,
+            textureEnergy: 0.024
+        ))
+        c.ingestMotionSample(MotionSample(
+            timestamp: 201,
+            translationMagnitude: 0.05,
+            homographyWarpMagnitude: 0.02,
+            meanLuminance: 0.52,
+            textureEnergy: 0.026
+        ))
+
+        c.completeLiveCalibrationTest()
+        #expect(c.isLiveCalibrating == false)
+        #expect(c.liveCalibrationSecondsRemaining == 0)
+
+        let report = try #require(c.liveCalibrationReport)
+        #expect(report.sampleCount == 2)
+        #expect(report.noiseFloorScore == 0.05)
+        #expect(c.activeRoomProfile == report)
+        #expect(c.events.contains { $0.title == "Calibration Test Complete" })
+
+        // Apply baseline explicitly
+        c.applyLiveCalibrationAsBaseline()
+        #expect(c.events.contains { $0.title == "Room Baseline Applied" })
+
+        // Cancellation test
+        c.startLiveCalibrationTest(durationSeconds: 3.0)
+        #expect(c.isLiveCalibrating == true)
+        c.cancelLiveCalibrationTest()
+        #expect(c.isLiveCalibrating == false)
+    }
+
+    @Test("Spatial focus publishes face bounding boxes and texture energy for overlay inspection")
+    @MainActor
+    func testSpatialFocusPublication() throws {
+        let c = try armedCoordinator(pin: "2468")
+        _ = c.disarmWithPin("2468")
+        c.setCameraPreviewRequested(true)
+        #expect(c.latestFaceBoundingBoxes.isEmpty)
+
+        // Gaze sample with detected face
+        let faceBox = CGRect(x: 0.35, y: 0.40, width: 0.30, height: 0.40)
+        let gaze = GazeSample(
+            timestamp: 300,
+            faceCount: 1,
+            faceInsideROI: true,
+            faceCentroid: CGPoint(x: 0.5, y: 0.6),
+            towardScreenScore: 0.8,
+            yawRadians: 0,
+            pitchRadians: 0,
+            irisHorizontalRatio: 0.5,
+            trackingConfidence: 0.9,
+            faceBoundingBoxes: [faceBox]
+        )
+        c.ingestGazeSample(gaze)
+        #expect(c.latestFaceBoundingBoxes == [faceBox])
+        #expect(c.activeFaceCount == 1)
+
+        // Motion sample with high texture energy
+        let motion = MotionSample(
+            timestamp: 301,
+            translationMagnitude: 0.01,
+            textureEnergy: 0.035
+        )
+        c.ingestMotionSample(motion)
+        #expect(c.latestTextureEnergy == 0.035)
+        #expect(c.isTextureAdequate == true)
+
+        // Turning preview off clears face bounding boxes and resets live calibration
+        c.setCameraPreviewRequested(false)
+        #expect(c.latestFaceBoundingBoxes.isEmpty)
+    }
 }

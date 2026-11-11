@@ -33,6 +33,8 @@ public struct MotionSample: Sendable, Equatable {
     public let interFrameTranslation: Float
     /// False when the background had too little texture for image registration to be trusted.
     public let isRegistrationReliable: Bool
+    /// Mean absolute gradient of the background frame in [0, 1].
+    public let textureEnergy: Float
 
     public init(
         timestamp: TimeInterval,
@@ -43,7 +45,8 @@ public struct MotionSample: Sendable, Equatable {
         metricDepthZ0: Float? = nil,
         isAnchorFrame: Bool = false,
         interFrameTranslation: Float = 0,
-        isRegistrationReliable: Bool = true
+        isRegistrationReliable: Bool = true,
+        textureEnergy: Float = 0
     ) {
         self.timestamp = timestamp
         self.translationMagnitude = translationMagnitude
@@ -54,6 +57,7 @@ public struct MotionSample: Sendable, Equatable {
         self.isAnchorFrame = isAnchorFrame
         self.interFrameTranslation = interFrameTranslation
         self.isRegistrationReliable = isRegistrationReliable
+        self.textureEnergy = textureEnergy
     }
 
     public var isFrameOccluded: Bool {
@@ -73,22 +77,25 @@ public struct MotionSample: Sendable, Equatable {
     }
 }
 
-/// Profile measured automatically during the ARMING exit countdown.
+/// Profile measured automatically during the ARMING exit countdown or on-demand calibration test.
 public struct RoomCalibrationProfile: Sendable, Equatable, Codable {
     public let sampleCount: Int
     public let averageLuminance: Float
     public let noiseFloorScore: Float
+    public let averageTextureEnergy: Float
     public let timestamp: Date
 
     public init(
         sampleCount: Int,
         averageLuminance: Float,
         noiseFloorScore: Float,
+        averageTextureEnergy: Float = 0,
         timestamp: Date = Date()
     ) {
         self.sampleCount = sampleCount
         self.averageLuminance = averageLuminance
         self.noiseFloorScore = noiseFloorScore
+        self.averageTextureEnergy = averageTextureEnergy
         self.timestamp = timestamp
     }
 
@@ -101,9 +108,39 @@ public struct RoomCalibrationProfile: Sendable, Equatable, Codable {
             return "Elevated Sensor Grain"
         }
     }
+
+    public var textureHealthDescription: String {
+        if averageTextureEnergy >= 0.015 {
+            return "Rich Texture (Optimal)"
+        } else if averageTextureEnergy >= VisionMotionDetector.minimumTextureEnergy {
+            return "Adequate Texture"
+        } else {
+            return "Low Texture (Point at structured objects)"
+        }
+    }
+
+    public var luminanceDescription: String {
+        if averageLuminance < 0.12 {
+            return "Low Light"
+        } else if averageLuminance < 0.70 {
+            return "Good Lighting"
+        } else {
+            return "Bright / Glare"
+        }
+    }
+
+    public var recommendedSensitivity: SpatialMotionSensitivity {
+        if noiseFloorScore < 0.15 {
+            return .high
+        } else if noiseFloorScore < 0.35 {
+            return .medium
+        } else {
+            return .low
+        }
+    }
 }
 
-/// Accumulates camera frames during the arming exit countdown to profile baseline room jitter and lighting.
+/// Accumulates camera frames during the arming exit countdown or live preview test to profile baseline room jitter and lighting.
 public struct RoomNoiseProfiler: Sendable {
     private var samples: [MotionSample] = []
 
@@ -123,19 +160,23 @@ public struct RoomNoiseProfiler: Sendable {
         guard !samples.isEmpty else { return nil }
         let count = samples.count
         var totalLuma: Float = 0
+        var totalTexture: Float = 0
         var maxNoise: Float = 0
         for s in samples {
             totalLuma += s.meanLuminance
+            totalTexture += s.textureEnergy
             let noise = max(s.translationMagnitude, s.interFrameTranslation, s.homographyWarpMagnitude)
             if noise > maxNoise {
                 maxNoise = noise
             }
         }
         let avgLuma = totalLuma / Float(count)
+        let avgTexture = totalTexture / Float(count)
         return RoomCalibrationProfile(
             sampleCount: count,
             averageLuminance: avgLuma,
             noiseFloorScore: maxNoise,
+            averageTextureEnergy: avgTexture,
             timestamp: Date()
         )
     }
@@ -355,6 +396,7 @@ public final class VisionMotionDetector: @unchecked Sendable {
             )
         }
 
+        let currentEnergy = Self.textureEnergy(of: current)
         lock.lock()
         let existingAnchor = anchorImage
         let previous = previousImage
@@ -362,7 +404,7 @@ public final class VisionMotionDetector: @unchecked Sendable {
         if existingAnchor == nil {
             anchorImage = current
             anchorMetricDepthZ0 = metricDepthZ0
-            anchorTextureEnergyValue = Self.textureEnergy(of: current)
+            anchorTextureEnergyValue = currentEnergy
             lock.unlock()
             return MotionSample(
                 timestamp: timestamp,
@@ -371,7 +413,8 @@ public final class VisionMotionDetector: @unchecked Sendable {
                 meanLuminance: meanLuma,
                 luminanceVariance: lumaVariance,
                 metricDepthZ0: metricDepthZ0,
-                isAnchorFrame: true
+                isAnchorFrame: true,
+                textureEnergy: currentEnergy
             )
         }
         if anchorMetricDepthZ0 == nil, let z0 = metricDepthZ0 {
@@ -387,7 +430,7 @@ public final class VisionMotionDetector: @unchecked Sendable {
 
         let anchorEnergy = cachedAnchorEnergy ?? Self.textureEnergy(of: anchor)
         let reliable = anchorEnergy >= Self.minimumTextureEnergy
-            && Self.textureEnergy(of: current) >= Self.minimumTextureEnergy
+            && currentEnergy >= Self.minimumTextureEnergy
 
         var translationMag: Float = 0
         var warpMag: Float = 0
@@ -415,7 +458,8 @@ public final class VisionMotionDetector: @unchecked Sendable {
             metricDepthZ0: anchorZ0,
             isAnchorFrame: false,
             interFrameTranslation: interFrameMag,
-            isRegistrationReliable: reliable
+            isRegistrationReliable: reliable,
+            textureEnergy: currentEnergy
         )
     }
 

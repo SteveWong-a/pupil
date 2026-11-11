@@ -85,6 +85,9 @@ public final class SecurityCoordinator {
     public private(set) var latestGazeScore: Float = 0
     public private(set) var eyeLookOffset: CGPoint = .zero
     public private(set) var activeFaceCount: Int = 0
+    public private(set) var latestFaceBoundingBoxes: [CGRect] = []
+    public private(set) var latestTextureEnergy: Float = 0
+    public private(set) var isTextureAdequate: Bool = true
     public private(set) var hasMotionAnchor: Bool = false
     public private(set) var latestMotionDisplacementScore: Float = 0
     public private(set) var continuousMotionSeconds: Double = 0
@@ -94,6 +97,10 @@ public final class SecurityCoordinator {
     public private(set) var isCameraPreviewRequested: Bool = false
     public private(set) var isShieldPreviewActive: Bool = false
     public private(set) var isInteractiveUnlockRequested: Bool = false
+    public private(set) var isLiveCalibrating: Bool = false
+    public private(set) var liveCalibrationSecondsRemaining: Int = 0
+    public private(set) var liveCalibrationReport: RoomCalibrationProfile?
+    public var isPreviewFocusOverlayEnabled: Bool = true
 
     private var armedGlobalInputMonitor: Any?
     private var armedLocalInputMonitor: Any?
@@ -124,6 +131,8 @@ public final class SecurityCoordinator {
     private var alarmReminderTimer: Timer?
     private var alarmStartTime: TimeInterval?
     private var gazeWarningDismissWorkItem: DispatchWorkItem?
+    private var liveCalibrationProfiler = RoomNoiseProfiler()
+    private var liveCalibrationTimer: Timer?
 
     public init(
         settings: PupilSettings = .shared,
@@ -563,11 +572,13 @@ public final class SecurityCoordinator {
 
     public func ingestGazeSample(_ sample: GazeSample) {
         guard settings.gazeDetectionEnabled || isCameraPreviewRequested else {
+            latestFaceBoundingBoxes = []
             if isGazeWarningActive {
                 dismissGazeWarning()
             }
             return
         }
+        latestFaceBoundingBoxes = sample.faceBoundingBoxes
         let snapshot = gazeAggregator.ingest(
             sample,
             scoreThreshold: settings.gazeSensitivity.scoreThreshold,
@@ -597,7 +608,14 @@ public final class SecurityCoordinator {
     }
 
     public func ingestMotionSample(_ sample: MotionSample) {
-        guard settings.isSpatialMotionEnabled || isCameraPreviewRequested else { return }
+        guard settings.isSpatialMotionEnabled || isCameraPreviewRequested || isLiveCalibrating else { return }
+
+        latestTextureEnergy = sample.textureEnergy
+        isTextureAdequate = sample.isRegistrationReliable || sample.textureEnergy >= VisionMotionDetector.minimumTextureEnergy
+
+        if isLiveCalibrating {
+            liveCalibrationProfiler.ingest(sample)
+        }
 
         if state == .arming {
             roomProfiler.ingest(sample)
@@ -745,7 +763,68 @@ public final class SecurityCoordinator {
         DispatchQueue.main.asyncAfter(deadline: .now() + delaySeconds, execute: item)
     }
 
-    // MARK: - Camera Lifecycle
+    // MARK: - Camera Lifecycle & Calibration Testing
+
+    public func startLiveCalibrationTest(durationSeconds: Double = 3.0) {
+        liveCalibrationTimer?.invalidate()
+        liveCalibrationProfiler.reset()
+        isLiveCalibrating = true
+        liveCalibrationSecondsRemaining = max(1, Int(ceil(durationSeconds)))
+        liveCalibrationReport = nil
+
+        setCameraPreviewRequested(true)
+        cameraManager.resetMotionAnchor()
+
+        logEvent("Live Calibration Started", detail: "\(liveCalibrationSecondsRemaining)s spatial room noise profiling test in progress.", simulated: true)
+
+        liveCalibrationTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if self.liveCalibrationSecondsRemaining > 1 {
+                    self.liveCalibrationSecondsRemaining -= 1
+                } else {
+                    self.completeLiveCalibrationTest()
+                }
+            }
+        }
+    }
+
+    public func cancelLiveCalibrationTest() {
+        liveCalibrationTimer?.invalidate()
+        liveCalibrationTimer = nil
+        isLiveCalibrating = false
+        liveCalibrationSecondsRemaining = 0
+    }
+
+    public func completeLiveCalibrationTest() {
+        liveCalibrationTimer?.invalidate()
+        liveCalibrationTimer = nil
+        isLiveCalibrating = false
+        liveCalibrationSecondsRemaining = 0
+
+        if let profile = liveCalibrationProfiler.finalizeCalibration() {
+            liveCalibrationReport = profile
+            activeRoomProfile = profile
+            logEvent(
+                "Calibration Test Complete",
+                detail: "Profile: \(profile.noiseLevelDescription), Noise floor: \(String(format: "%.3f", profile.noiseFloorScore)), Texture: \(profile.textureHealthDescription)",
+                simulated: true
+            )
+            onStateChanged?(state)
+            onNotchUpdateNeeded?()
+        }
+    }
+
+    public func applyLiveCalibrationAsBaseline() {
+        guard let profile = liveCalibrationReport else { return }
+        activeRoomProfile = profile
+        logEvent(
+            "Room Baseline Applied",
+            detail: "Profile: \(profile.noiseLevelDescription), Noise floor: \(String(format: "%.3f", profile.noiseFloorScore)), Texture: \(profile.textureHealthDescription)"
+        )
+        onStateChanged?(state)
+        onNotchUpdateNeeded?()
+    }
 
     public func setCameraPreviewRequested(_ requested: Bool) {
         isCameraPreviewRequested = requested
@@ -753,6 +832,9 @@ public final class SecurityCoordinator {
             gazeDwellProgress = 0
             latestGazeScore = 0
             activeFaceCount = 0
+            latestFaceBoundingBoxes = []
+            latestTextureEnergy = 0
+            cancelLiveCalibrationTest()
             gazeAggregator.reset()
         }
         syncCameraLifecycle()
