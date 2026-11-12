@@ -175,8 +175,10 @@ public struct GazeSettingsPage: View {
                 if coordinator.isCameraPreviewRequested {
                     CameraPreviewView(session: coordinator.cameraManager.captureSessionReference)
                         .transition(.opacity)
-                    SpatialFocusOverlayView(coordinator: coordinator)
-                        .transition(.opacity)
+                    if settings.isSpatialMotionEnabled {
+                        SpatialFocusOverlayView(coordinator: coordinator)
+                            .transition(.opacity)
+                    }
                 } else {
                     VStack(spacing: 8) {
                         Image(systemName: "video.slash")
@@ -209,14 +211,14 @@ public struct GazeSettingsPage: View {
                     Circle()
                         .fill(isCameraActive ? (coordinator.activeFaceCount > 0 ? PupilTheme.accent : SettingsMetrics.textSecondary) : SettingsMetrics.textTertiary)
                         .frame(width: 6, height: 6)
-                    Text(isCameraActive ? (coordinator.activeFaceCount > 0 ? "Subject detected" : "Room background ready") : "Preview is off")
+                    Text(cameraStatusText)
                         .font(.system(size: 12))
                         .foregroundStyle(SettingsMetrics.textSecondary)
                 }
 
                 Spacer()
 
-                if coordinator.isCameraPreviewRequested {
+                if settings.isSpatialMotionEnabled && coordinator.isCameraPreviewRequested {
                     PillActionButton(
                         title: coordinator.isLiveCalibrating ? "Stop Test" : "Test Calibration"
                     ) {
@@ -242,6 +244,14 @@ public struct GazeSettingsPage: View {
                 .strokeBorder(SettingsMetrics.rowBorder, lineWidth: SettingsMetrics.rowBorderWidth)
         )
         .clipShape(RoundedRectangle(cornerRadius: SettingsMetrics.rowRadius))
+    }
+
+    private var cameraStatusText: String {
+        guard isCameraActive else { return "Preview is off" }
+        if coordinator.activeFaceCount > 0 {
+            return "Subject detected"
+        }
+        return settings.isSpatialMotionEnabled ? "Room background ready" : "Monitoring active"
     }
 
     // MARK: - Native Percentage Bar Rows (Matching macOS UI)

@@ -397,6 +397,10 @@ public final class PupilSettings {
         self.holdSleepOnLidClose = defaults.object(forKey: Keys.holdSleepOnLidClose) as? Bool ?? true
         self.revertTamperOnPowerRestored = defaults.object(forKey: Keys.revertTamperOnPowerRestored) as? Bool ?? true
         self.countdownChimeEnabled = defaults.object(forKey: Keys.countdownChimeEnabled) as? Bool ?? true
+        // Clean up legacy key if present so it doesn't accidentally enable experimental motion
+        if defaults.object(forKey: "pupil.spatialMotionLiftEnabled") != nil {
+            defaults.removeObject(forKey: "pupil.spatialMotionLiftEnabled")
+        }
         self.isSpatialMotionEnabled = defaults.object(forKey: Keys.isSpatialMotionEnabled) as? Bool ?? false
         if let rawMotionSens = defaults.string(forKey: Keys.spatialMotionSensitivity),
            let motionSens = SpatialMotionSensitivity(rawValue: rawMotionSens) {
@@ -448,7 +452,7 @@ public final class PupilSettings {
         static let holdSleepOnLidClose = "pupil.holdSleepOnLidClose"
         static let revertTamperOnPowerRestored = "pupil.revertTamperOnPowerRestored"
         static let countdownChimeEnabled = "pupil.countdownChimeEnabled"
-        static let isSpatialMotionEnabled = "pupil.spatialMotionLiftEnabled"
+        static let isSpatialMotionEnabled = "pupil.experimentalSpatialMotionEnabled"
         static let spatialMotionSensitivity = "pupil.spatialMotionSensitivity"
         static let blurBackgroundWhenArmed = "pupil.blurBackgroundWhenArmed"
         static let blurScreenOnGaze = "pupil.blurScreenOnGaze"
