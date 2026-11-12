@@ -288,17 +288,11 @@ public struct SensorsSettingsPage: View {
             }
         }
         .onAppear {
-            if settings.isSpatialMotionEnabled && coordinator.state == .disarmed {
-                coordinator.setCameraPreviewRequested(true)
-            }
             if !coordinator.webPushManager.isPaired {
                 coordinator.webPushManager.startPairingListener()
             }
         }
         .onDisappear {
-            if coordinator.state == .disarmed {
-                coordinator.setCameraPreviewRequested(false)
-            }
             coordinator.webPushManager.stopPairingListener()
         }
     }
