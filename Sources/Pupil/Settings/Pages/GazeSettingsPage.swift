@@ -325,7 +325,8 @@ public struct GazeSettingsPage: View {
                     .foregroundStyle(SettingsMetrics.textTertiary)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, SettingsMetrics.rowHorizontalInset)
+        .padding(.vertical, 10)
     }
 
     private var spatialRoomFocusPercentage: Int {
@@ -386,7 +387,8 @@ public struct GazeSettingsPage: View {
                     .foregroundStyle(isCameraActive && !coordinator.isTextureAdequate ? PupilTheme.warningAmber : SettingsMetrics.textTertiary)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, SettingsMetrics.rowHorizontalInset)
+        .padding(.vertical, 10)
     }
 
     private var gazeDwellRow: some View {
@@ -436,7 +438,8 @@ public struct GazeSettingsPage: View {
                     .foregroundStyle(SettingsMetrics.textTertiary)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, SettingsMetrics.rowHorizontalInset)
+        .padding(.vertical, 10)
     }
 
     private func motionMeterColor(_ score: Float) -> Color {
