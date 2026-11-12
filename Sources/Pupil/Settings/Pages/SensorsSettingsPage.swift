@@ -55,29 +55,6 @@ public struct SensorsSettingsPage: View {
                 ) {
                     PupilToggle(isOn: $settings.revertTamperOnPowerRestored)
                 }
-                SettingsGroupDivider()
-                SettingsRowContent(
-                    title: "Spatial Motion / Lift Detection",
-                    subtitle: "Detects open-lid grab & walk via Apple Vision upper-background registration when unplugged.",
-                    info: "Tracks static upper-background ceiling/wall anchors at 10 FPS and ignores brief < 0.5s desk bumps."
-                ) {
-                    PupilToggle(isOn: Binding(
-                        get: { settings.isSpatialMotionEnabled },
-                        set: { enabled in
-                            settings.isSpatialMotionEnabled = enabled
-                            coordinator.syncCameraLifecycle()
-                        }
-                    ))
-                }
-                if settings.isSpatialMotionEnabled {
-                    SettingsGroupDivider()
-                    SettingsOptionSliderRowContent(
-                        title: "Motion sensitivity",
-                        stepLabels: SpatialMotionSensitivity.allCases.map(\.title),
-                        index: $settings.spatialMotionSensitivityIndex,
-                        stopCount: SpatialMotionSensitivity.allCases.count
-                    )
-                }
             }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -103,60 +80,85 @@ public struct SensorsSettingsPage: View {
                         tint: coordinator.powerMonitor.isSleepAssertionActive ? PupilTheme.accent : SettingsMetrics.textSecondary,
                         value: coordinator.powerMonitor.isSleepAssertionActive ? "Active" : "Idle"
                     )
-                    SettingsGroupDivider()
-                    sensorReadoutRow(
-                        title: "Spatial lift sentry",
-                        icon: settings.isSpatialMotionEnabled ? "gyroscope" : "xmark.circle",
-                        tint: settings.isSpatialMotionEnabled
-                            ? (coordinator.state == .armed ? PupilTheme.armedGreen : PupilTheme.accent)
-                            : SettingsMetrics.textSecondary,
-                        value: settings.isSpatialMotionEnabled
-                            ? (coordinator.state == .armed ? "Armed (\(settings.spatialMotionSensitivity.title))" : "Ready (\(settings.spatialMotionSensitivity.title))")
-                            : "Off"
-                    )
-                    SettingsGroupDivider()
-                    SettingsRowContent(
-                        title: "Room calibration",
-                        subtitle: coordinator.activeRoomProfile != nil
-                            ? "Jitter \(String(format: "%.3f", coordinator.activeRoomProfile!.noiseFloorScore)) • \(coordinator.activeRoomProfile!.textureHealthDescription)"
-                            : "Profiles ambient jitter and texture automatically during arming exit delay."
-                    ) {
-                        HStack(spacing: 8) {
-                            if coordinator.isLiveCalibrating {
-                                HStack(spacing: 5) {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                    Text("\(coordinator.liveCalibrationSecondsRemaining)s")
-                                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                                        .foregroundStyle(PupilTheme.accent)
-                                }
-                            } else if let profile = coordinator.activeRoomProfile {
-                                HStack(spacing: 5) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(PupilTheme.armedGreen)
-                                        .font(.system(size: 12))
-                                    Text(profile.noiseLevelDescription)
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(SettingsMetrics.textSecondary)
-                                }
-                            } else {
-                                Text("Uncalibrated")
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(SettingsMetrics.textTertiary)
-                            }
+                }
+            }
 
-                            PillActionButton(
-                                title: coordinator.isLiveCalibrating ? "Stop" : "Test"
-                            ) {
+            VStack(alignment: .leading, spacing: 8) {
+                SettingsSectionTitle(text: "Experimental")
+                SettingsGroup {
+                    SettingsRowContent(
+                        title: "Spatial Motion / Lift Detection",
+                        subtitle: "Detects open-lid grab & walk via Apple Vision upper-background optical flow when unplugged.",
+                        info: "Monitors camera frames in memory to detect physical movement or lid lifting. Disabled by default because lighting changes or crowded areas may produce false alarms."
+                    ) {
+                        PupilToggle(isOn: Binding(
+                            get: { settings.isSpatialMotionEnabled },
+                            set: { enabled in
+                                settings.isSpatialMotionEnabled = enabled
+                                coordinator.syncCameraLifecycle()
+                            }
+                        ))
+                    }
+                    if settings.isSpatialMotionEnabled {
+                        SettingsGroupDivider()
+                        SettingsOptionSliderRowContent(
+                            title: "Motion sensitivity",
+                            stepLabels: SpatialMotionSensitivity.allCases.map(\.title),
+                            index: $settings.spatialMotionSensitivityIndex,
+                            stopCount: SpatialMotionSensitivity.allCases.count
+                        )
+                        SettingsGroupDivider()
+                        sensorReadoutRow(
+                            title: "Spatial lift sentry",
+                            icon: "gyroscope",
+                            tint: coordinator.state == .armed ? PupilTheme.armedGreen : PupilTheme.accent,
+                            value: coordinator.state == .armed ? "Armed (\(settings.spatialMotionSensitivity.title))" : "Ready (\(settings.spatialMotionSensitivity.title))"
+                        )
+                        SettingsGroupDivider()
+                        SettingsRowContent(
+                            title: "Room calibration",
+                            subtitle: coordinator.activeRoomProfile != nil
+                                ? "Jitter \(String(format: "%.3f", coordinator.activeRoomProfile!.noiseFloorScore)) • \(coordinator.activeRoomProfile!.textureHealthDescription)"
+                                : "Profiles ambient jitter and texture automatically during arming exit delay."
+                        ) {
+                            HStack(spacing: 8) {
                                 if coordinator.isLiveCalibrating {
-                                    coordinator.cancelLiveCalibrationTest()
+                                    HStack(spacing: 5) {
+                                        ProgressView()
+                                            .controlSize(.small)
+                                        Text("\(coordinator.liveCalibrationSecondsRemaining)s")
+                                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                                            .foregroundStyle(PupilTheme.accent)
+                                    }
+                                } else if let profile = coordinator.activeRoomProfile {
+                                    HStack(spacing: 5) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(PupilTheme.armedGreen)
+                                            .font(.system(size: 12))
+                                        Text(profile.noiseLevelDescription)
+                                            .font(.system(size: 12))
+                                            .foregroundStyle(SettingsMetrics.textSecondary)
+                                    }
                                 } else {
-                                    coordinator.startLiveCalibrationTest(durationSeconds: 3.0)
+                                    Text("Uncalibrated")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(SettingsMetrics.textTertiary)
+                                }
+
+                                PillActionButton(
+                                    title: coordinator.isLiveCalibrating ? "Stop" : "Test"
+                                ) {
+                                    if coordinator.isLiveCalibrating {
+                                        coordinator.cancelLiveCalibrationTest()
+                                    } else {
+                                        coordinator.startLiveCalibrationTest(durationSeconds: 3.0)
+                                    }
                                 }
                             }
                         }
                     }
                 }
+                SettingsCaption(text: "Experimental features are disabled by default. Hardware sensors (power disconnection, lid angle, and lock events) provide primary zero-false-positive protection.")
             }
 
             VStack(alignment: .leading, spacing: 8) {

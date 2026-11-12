@@ -473,6 +473,48 @@ struct PupilSecurityTests {
         _ = coordinator.disarmWithPin("1234")
     }
 
+    @Test("Spatial motion is disabled by default in experimental section, gating displacement in preview")
+    @MainActor
+    func testSpatialMotionDisabledByDefault() throws {
+        let suiteName = "PupilTest-SpatialExp-\(UUID().uuidString)"
+        guard let isolatedDefaults = UserDefaults(suiteName: suiteName) else {
+            Issue.record("Failed to create isolated UserDefaults")
+            return
+        }
+        defer { isolatedDefaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = PupilSettings(defaults: isolatedDefaults)
+        let coordinator = SecurityCoordinator(settings: settings)
+
+        // 1. Verify isSpatialMotionEnabled defaults to false
+        #expect(settings.isSpatialMotionEnabled == false)
+
+        // 2. In disarmed preview, when disabled, motion samples do not register an anchor or displacement
+        coordinator.setCameraPreviewRequested(true)
+        #expect(coordinator.isCameraPreviewRequested == true)
+
+        let anchor = MotionSample.anchor(at: 99)
+        let sample = MotionSample(
+            timestamp: 100,
+            translationMagnitude: 0.08,
+            isRegistrationReliable: true,
+            textureEnergy: 0.02
+        )
+        coordinator.ingestMotionSample(anchor)
+        coordinator.ingestMotionSample(sample)
+        #expect(coordinator.hasMotionAnchor == false)
+        #expect(coordinator.latestMotionDisplacementScore == 0)
+
+        // 3. Enabling spatial motion activates preview displacement
+        settings.isSpatialMotionEnabled = true
+        coordinator.ingestMotionSample(anchor)
+        coordinator.ingestMotionSample(sample)
+        #expect(coordinator.hasMotionAnchor == true)
+        #expect(coordinator.latestMotionDisplacementScore > 0)
+
+        coordinator.setCameraPreviewRequested(false)
+    }
+
     @Test("Web Push RFC 8291 aes128gcm encryption, VAPID ES256 signing, and one-time QR pairing")
     @MainActor
     func testWebPushEncryptionAndOneTimePairing() throws {

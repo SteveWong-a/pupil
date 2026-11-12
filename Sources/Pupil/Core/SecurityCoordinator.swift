@@ -671,6 +671,11 @@ public final class SecurityCoordinator {
         }
 
         if state == .disarmed && isCameraPreviewRequested {
+            guard settings.isSpatialMotionEnabled else {
+                hasMotionAnchor = false
+                latestMotionDisplacementScore = 0
+                return
+            }
             hasMotionAnchor = sample.isAnchorFrame || hasMotionAnchor
             let translationRatio = sample.isRegistrationReliable
                 ? sample.translationMagnitude / max(0.001, settings.spatialMotionSensitivity.translationDeadband)

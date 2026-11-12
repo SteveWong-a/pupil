@@ -90,17 +90,23 @@ public struct GazeSettingsPage: View {
                 liveCameraPreviewCard
 
                 SettingsGroup {
-                    liveDisplacementRow
-                    SettingsGroupDivider()
-                    spatialRoomFocusRow
-                    SettingsGroupDivider()
+                    if settings.isSpatialMotionEnabled {
+                        liveDisplacementRow
+                        SettingsGroupDivider()
+                        spatialRoomFocusRow
+                        SettingsGroupDivider()
+                    }
                     gazeDwellRow
                 }
 
-                if let report = coordinator.liveCalibrationReport {
+                if settings.isSpatialMotionEnabled, let report = coordinator.liveCalibrationReport {
                     calibrationReportCard(report)
                 }
-                SettingsCaption(text: "Live displacement and spatial focus activate when preview is running. All frames are processed in memory and never saved.")
+                SettingsCaption(
+                    text: settings.isSpatialMotionEnabled
+                        ? "Live displacement, spatial focus, and gaze dwell activate when preview is running. All frames are processed in memory and never saved."
+                        : "Gaze dwell tracking activates when preview is running. All frames are processed in memory and never saved."
+                )
             }
         }
         .onDisappear {
