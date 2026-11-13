@@ -138,6 +138,38 @@ public final class CameraManager: NSObject {
         }
     }
 
+    /// Temporarily starts the camera (if already authorized and not currently running) to grab a single
+    /// in-memory frame for mobile verification snapshots, then stops capture immediately.
+    public func captureOneShotFrame(preferredDeviceID: String? = nil, timeoutSeconds: TimeInterval = 2.0) async -> CGImage? {
+        if let existing = lastFrameImage {
+            return existing
+        }
+        guard isCaptureEnabled else { return nil }
+        let status = AVCaptureDevice.authorizationStatus(for: .video)
+        guard status == .authorized else { return nil }
+
+        let startedHere = !isRunning
+        if startedHere {
+            startCapture(preferredDeviceID: preferredDeviceID)
+        }
+
+        defer {
+            if startedHere {
+                stopCapture()
+            }
+        }
+
+        let deadline = Date().addingTimeInterval(max(0.3, timeoutSeconds))
+        // Wait for at least 1 frame (or brief auto-exposure settle) up to timeout
+        while Date() < deadline {
+            if let frame = lastFrameImage {
+                return frame
+            }
+            try? await Task.sleep(for: .milliseconds(80))
+        }
+        return lastFrameImage
+    }
+
     private nonisolated func configureAndStartSession(preferredID: String?) {
         captureSession.beginConfiguration()
         captureSession.sessionPreset = .vga640x480

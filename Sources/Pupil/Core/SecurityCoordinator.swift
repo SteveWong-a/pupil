@@ -561,13 +561,12 @@ public final class SecurityCoordinator {
         onNotchUpdateNeeded?()
 
         let grace = settings.gracePeriodSeconds
-        alertNotifier.send(AlertMessage(
+        dispatchMobileAlertWithOneShotSnapshotFallback(
             title: "Pupil Tamper Countdown (\(grace)s)",
             body: "\(source.rawValue) detected on your MacBook. Siren sounds in \(grace)s unless disarmed.",
             severity: "high",
-            tag: "pupil-tamper",
-            snapshotBase64: captureVerificationSnapshotBase64()
-        ))
+            tag: "pupil-tamper"
+        )
 
         startCountdownTimer(seconds: settings.gracePeriodSeconds) { [weak self] in
             guard let self else { return }
@@ -640,17 +639,64 @@ public final class SecurityCoordinator {
         onStateChanged?(state)
         onNotchUpdateNeeded?()
 
-        alertNotifier.send(AlertMessage(
+        dispatchMobileAlertWithOneShotSnapshotFallback(
             title: "Pupil Siren Alarm Active",
             body: "\(source.rawValue) — Audible siren and sleep lock engaged on your MacBook!",
             severity: "critical",
-            tag: "pupil-alarm",
-            snapshotBase64: captureVerificationSnapshotBase64()
+            tag: "pupil-alarm"
+        )
+    }
+
+    private func dispatchMobileAlertWithOneShotSnapshotFallback(
+        title: String,
+        body: String,
+        severity: String,
+        tag: String
+    ) {
+        let immediateSnapshot = captureVerificationSnapshotBase64()
+        alertNotifier.send(AlertMessage(
+            title: title,
+            body: body,
+            severity: severity,
+            tag: tag,
+            snapshotBase64: immediateSnapshot
         ))
+
+        guard immediateSnapshot == nil,
+              settings.relayEnabled,
+              settings.pairedPhoneSubscription != nil else {
+            return
+        }
+
+        Task { [weak self] in
+            guard let self else { return }
+            guard let frame = await self.cameraManager.captureOneShotFrame(
+                preferredDeviceID: self.settings.preferredCameraID,
+                timeoutSeconds: 2.0
+            ) else {
+                return
+            }
+            self.syncCameraLifecycle()
+            guard self.state == .tamperPending || self.state == .alarm,
+                  let fallbackSnapshot = self.encodeVerificationSnapshotBase64(frame) else {
+                return
+            }
+            await self.webPushManager.postAlertSnapshotEnvelope(
+                title: title,
+                body: body,
+                severity: severity,
+                tag: tag,
+                snapshotBase64: fallbackSnapshot
+            )
+        }
     }
 
     private func captureVerificationSnapshotBase64() -> String? {
         guard let cgImage = cameraManager.lastFrameImage else { return nil }
+        return encodeVerificationSnapshotBase64(cgImage)
+    }
+
+    private func encodeVerificationSnapshotBase64(_ cgImage: CGImage) -> String? {
         let width = cgImage.width
         let height = cgImage.height
         guard width > 0, height > 0 else { return nil }
