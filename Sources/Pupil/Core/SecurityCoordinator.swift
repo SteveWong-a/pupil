@@ -1108,7 +1108,13 @@ public final class SecurityCoordinator {
                     SirenSynthesizer.shared.start(baseFrequencyHz: Double(self.settings.sirenFrequencyHz))
                 }
             case .screenUnlocked:
-                break
+                if self.settings.autoArmOnScreenLock {
+                    if self.state == .arming {
+                        self.cancelArmingDuringExitDelay()
+                    } else if self.state == .armed || self.state == .tamperPending || self.state == .alarm {
+                        self.performValidatedDisarm(method: "macOS Screen Unlock")
+                    }
+                }
             }
         }
 

@@ -54,6 +54,24 @@ struct MacSentryFeaturesTests {
         coordinator.lockMonitor.onLockEvent?(.screenLocked)
         #expect(coordinator.state == .tamperPending)
         #expect(coordinator.activeTamperSource == .screenLocked)
+
+        // Unlocking screen while autoArmOnScreenLock is disabled does NOT disarm
+        settings.autoArmOnScreenLock = false
+        coordinator.lockMonitor.onLockEvent?(.screenUnlocked)
+        #expect(coordinator.state == .tamperPending)
+
+        // Unlocking screen while autoArmOnScreenLock is enabled disarms from tamperPending/armed/arming
+        settings.autoArmOnScreenLock = true
+        coordinator.lockMonitor.onLockEvent?(.screenUnlocked)
+        #expect(coordinator.state == .disarmed)
+        #expect(coordinator.activeTamperSource == nil)
+
+        // Also test unlock during exit delay (arming)
+        settings.exitDelaySeconds = 10
+        coordinator.lockMonitor.onLockEvent?(.screenLocked)
+        #expect(coordinator.state == .arming)
+        coordinator.lockMonitor.onLockEvent?(.screenUnlocked)
+        #expect(coordinator.state == .disarmed)
     }
 
     @Test("Feature 2: Global shortcut (Ctrl+Opt+Cmd+L) matching and arm/disarm toggle")

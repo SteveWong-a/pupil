@@ -50,7 +50,7 @@ public struct GeneralSettingsPage: View {
                 SettingsGroupDivider()
                 SettingsRowContent(
                     title: "Auto-arm on screen lock",
-                    info: "Automatically arms Pupil whenever you lock your Mac screen."
+                    info: "Automatically arms Pupil whenever you lock your Mac screen, and disarms when you unlock it."
                 ) {
                     PupilToggle(isOn: $settings.autoArmOnScreenLock)
                 }
