@@ -41,6 +41,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
     private var globalHotkeyMonitor: GlobalHotkeyMonitor?
 
     private var statusItem: NSStatusItem?
+    private var trayPopover: NSPopover?
+    private var trayMenu: NSMenu?
     private var statusHeaderItem: NSMenuItem?
     private var toggleArmItem: NSMenuItem?
     private var powerInfoItem: NSMenuItem?
@@ -210,9 +212,51 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
         quitItem.image = NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: nil)
         menu.addItem(quitItem)
 
-        item.menu = menu
+        self.trayMenu = menu
         self.statusItem = item
+
+        if let button = item.button {
+            button.target = self
+            button.action = #selector(handleStatusItemClick(_:))
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        }
+
+        let popover = NSPopover()
+        popover.behavior = .transient
+        popover.animates = true
+        popover.contentViewController = NSHostingController(
+            rootView: MenuBarPopoverView(
+                coordinator: coordinator,
+                onOpenSettings: { [weak self] in self?.revealSettingsWindow() },
+                onQuit: { NSApp.terminate(nil) },
+                onClosePopover: { [weak self] in self?.trayPopover?.performClose(nil) }
+            )
+        )
+        self.trayPopover = popover
+
         refreshStatusItemIconAndMenu()
+    }
+
+    @objc private func handleStatusItemClick(_ sender: NSStatusBarButton) {
+        let event = NSApp.currentEvent
+        if event?.type == .rightMouseUp {
+            trayPopover?.performClose(nil)
+            if let menu = trayMenu, let item = statusItem {
+                item.menu = menu
+                item.button?.performClick(nil)
+                item.menu = nil
+            }
+            return
+        }
+
+        guard let popover = trayPopover, let button = statusItem?.button else { return }
+        if popover.isShown {
+            popover.performClose(sender)
+        } else {
+            refreshStatusItemIconAndMenu()
+            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            NSApp.activate(ignoringOtherApps: true)
+        }
     }
 
     public func menuNeedsUpdate(_ menu: NSMenu) {

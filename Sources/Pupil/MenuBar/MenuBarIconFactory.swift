@@ -18,77 +18,8 @@ public enum MenuBarIconFactory {
             let center = CGPoint(x: rect.midX, y: rect.midY)
 
             switch state {
-            case .disarmed:
-                // Minimalist precision aperture with resting horizontal pupil slit
-                let outerRadius: CGFloat = 6.5
-                let circlePath = CGPath(
-                    ellipseIn: CGRect(x: center.x - outerRadius, y: center.y - outerRadius, width: outerRadius * 2, height: outerRadius * 2),
-                    transform: nil
-                )
-                context.addPath(circlePath)
-                context.setLineWidth(1.4)
-                context.setStrokeColor(NSColor.black.cgColor)
-                context.strokePath()
-
-                // Subtle resting horizontal slit (eye resting / standby)
-                let slitWidth: CGFloat = 6.0
-                let slitRect = CGRect(x: center.x - (slitWidth / 2), y: center.y - 0.7, width: slitWidth, height: 1.4)
-                let slitPath = CGPath(roundedRect: slitRect, cornerWidth: 0.7, cornerHeight: 0.7, transform: nil)
-                context.addPath(slitPath)
-                context.setFillColor(NSColor.black.cgColor)
-                context.fillPath()
-
-            case .arming:
-                // Sleek timer / quadrant arc
-                let outerRadius: CGFloat = 6.5
-                let arcPath = CGMutablePath()
-                arcPath.addArc(center: center, radius: outerRadius, startAngle: -.pi / 2, endAngle: .pi, clockwise: false)
-                context.addPath(arcPath)
-                context.setLineWidth(1.4)
-                context.setLineCap(.round)
-                context.setStrokeColor(NSColor.black.cgColor)
-                context.strokePath()
-
-                // Center hand
-                context.move(to: center)
-                context.addLine(to: CGPoint(x: center.x, y: center.y + 4.5))
-                context.move(to: center)
-                context.addLine(to: CGPoint(x: center.x + 3.0, y: center.y))
-                context.strokePath()
-
-            case .armed:
-                if isGazeActive {
-                    // Active surveillance: double precision rings + solid pupil dot
-                    let outerRadius: CGFloat = 7.0
-                    let innerRadius: CGFloat = 4.2
-                    let pupilRadius: CGFloat = 2.2
-
-                    context.addEllipse(in: CGRect(x: center.x - outerRadius, y: center.y - outerRadius, width: outerRadius * 2, height: outerRadius * 2))
-                    context.setLineWidth(1.2)
-                    context.setStrokeColor(NSColor.black.cgColor)
-                    context.strokePath()
-
-                    context.addEllipse(in: CGRect(x: center.x - innerRadius, y: center.y - innerRadius, width: innerRadius * 2, height: innerRadius * 2))
-                    context.setLineWidth(1.0)
-                    context.strokePath()
-
-                    context.addEllipse(in: CGRect(x: center.x - pupilRadius, y: center.y - pupilRadius, width: pupilRadius * 2, height: pupilRadius * 2))
-                    context.setFillColor(NSColor.black.cgColor)
-                    context.fillPath()
-                } else {
-                    // Armed sentinel: clean solid outer circle with precise centered aperture
-                    let outerRadius: CGFloat = 6.5
-                    let pupilRadius: CGFloat = 2.5
-
-                    context.addEllipse(in: CGRect(x: center.x - outerRadius, y: center.y - outerRadius, width: outerRadius * 2, height: outerRadius * 2))
-                    context.setLineWidth(1.4)
-                    context.setStrokeColor(NSColor.black.cgColor)
-                    context.strokePath()
-
-                    context.addEllipse(in: CGRect(x: center.x - pupilRadius, y: center.y - pupilRadius, width: pupilRadius * 2, height: pupilRadius * 2))
-                    context.setFillColor(NSColor.black.cgColor)
-                    context.fillPath()
-                }
+            case .disarmed, .arming, .armed:
+                drawAlternatingApertureIcon(in: context, center: center, showCenterPupil: state == .armed && isGazeActive)
 
             case .tamperPending, .alarm:
                 // Sleek warning shield with alert mark
@@ -120,5 +51,72 @@ public enum MenuBarIconFactory {
 
         image.isTemplate = true
         return image
+    }
+
+    /// Draws the AppIcon-inspired eccentric 3-circle aperture alternating:
+    /// outer (opaque/white) -> middle (clear cutout) -> inner (opaque/white).
+    private static func drawAlternatingApertureIcon(
+        in context: CGContext,
+        center: CGPoint,
+        showCenterPupil: Bool
+    ) {
+        // 1. Outer circle (white in template dark mode) with lower-right wedge cutout
+        let outerCenter = CGPoint(x: center.x - 0.4, y: center.y - 0.2)
+        let outerRadius: CGFloat = 7.3
+        let outerPath = CGMutablePath()
+        outerPath.move(to: outerCenter)
+        outerPath.addArc(
+            center: outerCenter,
+            radius: outerRadius,
+            startAngle: 0.0,
+            endAngle: -.pi * 0.28,
+            clockwise: false
+        )
+        outerPath.closeSubpath()
+        context.setBlendMode(.normal)
+        context.setFillColor(NSColor.black.cgColor)
+        context.addPath(outerPath)
+        context.fillPath()
+
+        // 2. Middle circle (clear cutout) shifted slightly upper-right
+        let midCenter = CGPoint(x: center.x + 0.9, y: center.y + 0.8)
+        let midRadius: CGFloat = 4.9
+        let midRect = CGRect(
+            x: midCenter.x - midRadius,
+            y: midCenter.y - midRadius,
+            width: midRadius * 2,
+            height: midRadius * 2
+        )
+        context.setBlendMode(.clear)
+        context.fillEllipse(in: midRect)
+
+        // 3. Inner circle (white in template dark mode) shifted further upper-right with upper-right wedge cutout
+        let innerCenter = CGPoint(x: center.x + 1.7, y: center.y + 1.4)
+        let innerRadius: CGFloat = 3.0
+        let innerPath = CGMutablePath()
+        innerPath.move(to: innerCenter)
+        innerPath.addArc(
+            center: innerCenter,
+            radius: innerRadius,
+            startAngle: .pi * 0.28,
+            endAngle: .pi * 0.02,
+            clockwise: false
+        )
+        innerPath.closeSubpath()
+        context.setBlendMode(.normal)
+        context.setFillColor(NSColor.black.cgColor)
+        context.addPath(innerPath)
+        context.fillPath()
+
+        if showCenterPupil {
+            let dotRadius: CGFloat = 0.85
+            context.setBlendMode(.clear)
+            context.fillEllipse(in: CGRect(
+                x: innerCenter.x - dotRadius,
+                y: innerCenter.y - dotRadius,
+                width: dotRadius * 2,
+                height: dotRadius * 2
+            ))
+        }
     }
 }
