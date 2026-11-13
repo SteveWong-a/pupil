@@ -53,7 +53,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
     }
 
     public func applicationWillFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.regular)
+        NSApp.setActivationPolicy(.accessory)
     }
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
@@ -111,13 +111,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
             }
         }
 
-        // Reveal the Settings window immediately on launch unless launched silently
-        if !CommandLine.arguments.contains("--silent") {
+        // Only reveal settings window on launch if explicitly requested via command line flag
+        if CommandLine.arguments.contains("--settings") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
                 self?.revealSettingsWindow()
             }
-        } else {
-            NSApp.setActivationPolicy(.accessory)
         }
     }
 
@@ -255,7 +253,6 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
         } else {
             refreshStatusItemIconAndMenu()
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-            NSApp.activate(ignoringOtherApps: true)
         }
     }
 
