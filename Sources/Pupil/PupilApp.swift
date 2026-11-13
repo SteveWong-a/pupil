@@ -41,11 +41,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
     private var globalHotkeyMonitor: GlobalHotkeyMonitor?
 
     private var statusItem: NSStatusItem?
-    private var trayPopover: NSPopover?
     private var trayMenu: NSMenu?
     private var statusHeaderItem: NSMenuItem?
     private var toggleArmItem: NSMenuItem?
-    private var powerInfoItem: NSMenuItem?
+    private var gazeMenuItem: NSMenuItem?
+    private var blurMenuItem: NSMenuItem?
+    private var autoArmMenuItem: NSMenuItem?
+    private var lockInputMenuItem: NSMenuItem?
     private var openSettingsWindowAction: (() -> Void)?
 
     public func bindOpenWindowAction(_ action: @escaping () -> Void) {
@@ -155,41 +157,50 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
         let menu = NSMenu()
         menu.delegate = self
 
-        let header = NSMenuItem(title: "Pupil — Disarmed", action: nil, keyEquivalent: "")
+        // 1. Status Header (e.g. ● Pupil is disarmed    Battery)
+        let header = NSMenuItem()
         header.isEnabled = false
         menu.addItem(header)
         self.statusHeaderItem = header
 
-        let powerRow = NSMenuItem(title: "Power: Checking…", action: nil, keyEquivalent: "")
-        powerRow.isEnabled = false
-        menu.addItem(powerRow)
-        self.powerInfoItem = powerRow
-
         menu.addItem(.separator())
 
+        // 2. Primary Arm/Disarm Action
         let armItem = NSMenuItem(title: "Arm Pupil", action: #selector(toggleArmState), keyEquivalent: "a")
         armItem.target = self
         menu.addItem(armItem)
         self.toggleArmItem = armItem
 
-        let previewEyeItem = NSMenuItem(
-            title: "Preview Notch Gaze Deterrent",
-            action: #selector(triggerNotchPreview),
-            keyEquivalent: "e"
-        )
-        previewEyeItem.target = self
-        previewEyeItem.image = NSImage(systemSymbolName: "eye.fill", accessibilityDescription: nil)
-        menu.addItem(previewEyeItem)
+        menu.addItem(.separator())
 
-        let previewShieldItem = NSMenuItem(
-            title: "Preview Screen Shield Blur",
-            action: #selector(triggerShieldPreview),
-            keyEquivalent: "b"
-        )
-        previewShieldItem.target = self
-        previewShieldItem.image = NSImage(systemSymbolName: "macwindow.on.rectangle", accessibilityDescription: nil)
-        menu.addItem(previewShieldItem)
+        // 3. Quick Feature Toggles (Native macOS Menu Checkmark/State toggles)
+        let gazeItem = NSMenuItem(title: "Gaze Deterrence", action: #selector(toggleGazeDeterrence), keyEquivalent: "")
+        gazeItem.target = self
+        gazeItem.image = NSImage(systemSymbolName: "eye.fill", accessibilityDescription: nil)
+        menu.addItem(gazeItem)
+        self.gazeMenuItem = gazeItem
 
+        let blurItem = NSMenuItem(title: "Blur Screen on Gaze", action: #selector(toggleBlurScreen), keyEquivalent: "")
+        blurItem.target = self
+        blurItem.image = NSImage(systemSymbolName: "macwindow.on.rectangle", accessibilityDescription: nil)
+        menu.addItem(blurItem)
+        self.blurMenuItem = blurItem
+
+        let autoArmItem = NSMenuItem(title: "Auto-Arm on Lock", action: #selector(toggleAutoArm), keyEquivalent: "")
+        autoArmItem.target = self
+        autoArmItem.image = NSImage(systemSymbolName: "lock.fill", accessibilityDescription: nil)
+        menu.addItem(autoArmItem)
+        self.autoArmMenuItem = autoArmItem
+
+        let lockInputItem = NSMenuItem(title: "Lock on Input", action: #selector(toggleLockOnInput), keyEquivalent: "")
+        lockInputItem.target = self
+        lockInputItem.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: nil)
+        menu.addItem(lockInputItem)
+        self.lockInputMenuItem = lockInputItem
+
+        menu.addItem(.separator())
+
+        // 4. Utility & Previews
         let simTamperItem = NSMenuItem(
             title: "Simulate Tamper Countdown",
             action: #selector(triggerSimulatedTamper),
@@ -199,61 +210,43 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
         simTamperItem.image = NSImage(systemSymbolName: "bolt.trianglebadge.exclamationmark.fill", accessibilityDescription: nil)
         menu.addItem(simTamperItem)
 
+        let previewEyeItem = NSMenuItem(
+            title: "Preview Notch Deterrent",
+            action: #selector(triggerNotchPreview),
+            keyEquivalent: ""
+        )
+        previewEyeItem.target = self
+        previewEyeItem.image = NSImage(systemSymbolName: "eye", accessibilityDescription: nil)
+        menu.addItem(previewEyeItem)
+
+        let previewShieldItem = NSMenuItem(
+            title: "Preview Screen Shield",
+            action: #selector(triggerShieldPreview),
+            keyEquivalent: ""
+        )
+        previewShieldItem.target = self
+        previewShieldItem.image = NSImage(systemSymbolName: "macwindow.badge.plus", accessibilityDescription: nil)
+        menu.addItem(previewShieldItem)
+
         menu.addItem(.separator())
 
+        // 5. Settings & Quit
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettingsWindow), keyEquivalent: ",")
         settingsItem.target = self
-        settingsItem.image = NSImage(systemSymbolName: "gearshape.fill", accessibilityDescription: nil)
+        settingsItem.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil)
         menu.addItem(settingsItem)
 
         let quitItem = NSMenuItem(title: "Quit Pupil", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        quitItem.image = NSImage(systemSymbolName: "xmark.circle.fill", accessibilityDescription: nil)
+        quitItem.image = NSImage(systemSymbolName: "power", accessibilityDescription: nil)
         menu.addItem(quitItem)
 
         self.trayMenu = menu
         self.statusItem = item
 
-        if let button = item.button {
-            button.target = self
-            button.action = #selector(handleStatusItemClick(_:))
-            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        }
-
-        let popover = NSPopover()
-        popover.behavior = .transient
-        popover.animates = true
-        popover.contentViewController = NSHostingController(
-            rootView: MenuBarPopoverView(
-                coordinator: coordinator,
-                onOpenSettings: { [weak self] in self?.revealSettingsWindow() },
-                onQuit: { NSApp.terminate(nil) },
-                onClosePopover: { [weak self] in self?.trayPopover?.performClose(nil) }
-            )
-        )
-        self.trayPopover = popover
+        // Attach menu directly to statusItem for standard macOS menu bar behavior
+        item.menu = menu
 
         refreshStatusItemIconAndMenu()
-    }
-
-    @objc private func handleStatusItemClick(_ sender: NSStatusBarButton) {
-        let event = NSApp.currentEvent
-        if event?.type == .rightMouseUp {
-            trayPopover?.performClose(nil)
-            if let menu = trayMenu, let item = statusItem {
-                item.menu = menu
-                item.button?.performClick(nil)
-                item.menu = nil
-            }
-            return
-        }
-
-        guard let popover = trayPopover, let button = statusItem?.button else { return }
-        if popover.isShown {
-            popover.performClose(sender)
-        } else {
-            refreshStatusItemIconAndMenu()
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-        }
     }
 
     public func menuNeedsUpdate(_ menu: NSMenu) {
@@ -278,10 +271,13 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
             }
         }
 
-        statusHeaderItem?.title = "Pupil — \(coordinator.state.label)"
-        let acStatus = coordinator.powerMonitor.isOnACPower ? "AC Charger Connected" : "On Battery"
-        let gazeStatus = coordinator.settings.gazeDetectionEnabled ? "Vision Iris On" : "Vision Off"
-        powerInfoItem?.title = "\(acStatus) · \(gazeStatus)"
+        let powerText = coordinator.powerMonitor.isOnACPower ? "Power Adapter" : "Battery"
+        statusHeaderItem?.title = "● Pupil is \(coordinator.state.label.lowercased())    (\(powerText))"
+
+        gazeMenuItem?.state = coordinator.settings.gazeDetectionEnabled ? .on : .off
+        blurMenuItem?.state = coordinator.settings.blurScreenOnGaze ? .on : .off
+        autoArmMenuItem?.state = coordinator.settings.autoArmOnScreenLock ? .on : .off
+        lockInputMenuItem?.state = coordinator.settings.lockOnInputWhenArmed ? .on : .off
 
         switch coordinator.state {
         case .disarmed:
@@ -294,6 +290,32 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
             toggleArmItem?.title = "Disarm Pupil…"
             toggleArmItem?.image = NSImage(systemSymbolName: "lock.open.fill", accessibilityDescription: nil)
         }
+    }
+
+    @objc private func toggleGazeDeterrence() {
+        let current = coordinator.settings.gazeDetectionEnabled
+        coordinator.settings.gazeDetectionEnabled = !current
+        if current {
+            coordinator.setCameraPreviewRequested(false)
+            coordinator.dismissGazeWarning()
+        }
+        coordinator.syncCameraLifecycle()
+        refreshStatusItemIconAndMenu()
+    }
+
+    @objc private func toggleBlurScreen() {
+        coordinator.settings.blurScreenOnGaze.toggle()
+        refreshStatusItemIconAndMenu()
+    }
+
+    @objc private func toggleAutoArm() {
+        coordinator.settings.autoArmOnScreenLock.toggle()
+        refreshStatusItemIconAndMenu()
+    }
+
+    @objc private func toggleLockOnInput() {
+        coordinator.settings.lockOnInputWhenArmed.toggle()
+        refreshStatusItemIconAndMenu()
     }
 
     @objc private func toggleArmState() {
