@@ -25,7 +25,9 @@ self.addEventListener('push', (event) => {
         body: parsed.body || payload.body,
         severity: parsed.severity || payload.severity,
         tag: parsed.tag || payload.tag,
-        timestamp: parsed.timestamp || Date.now()
+        timestamp: parsed.timestamp || Date.now(),
+        snapshotBase64: parsed.snapshotBase64 || null,
+        hasSnapshot: Boolean(parsed.hasSnapshot || parsed.snapshotBase64)
       };
     } catch {
       const rawText = event.data.text();
@@ -46,9 +48,21 @@ self.addEventListener('push', (event) => {
     data: payload
   };
 
+  const cacheSnapshotPromise = payload.snapshotBase64 && 'caches' in self
+    ? caches.open('pupil-snapshots-v1').then((cache) =>
+        cache.put(
+          new Request('./latest-snapshot.json'),
+          new Response(JSON.stringify(payload), {
+            headers: { 'Content-Type': 'application/json' }
+          })
+        )
+      ).catch(() => {})
+    : Promise.resolve();
+
   event.waitUntil(
     Promise.all([
       self.registration.showNotification(payload.title, options),
+      cacheSnapshotPromise,
       self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
         for (const client of windowClients) {
           client.postMessage({ type: 'PUPIL_PUSH_RECEIVED', payload });

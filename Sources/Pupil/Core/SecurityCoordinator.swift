@@ -42,6 +42,7 @@ public enum TamperSource: String, Codable, Sendable {
     case chargerUnplugged = "AC Charger Unplugged"
     case lidClosed = "Clamshell Lid Closed"
     case screenLocked = "Screen Locked"
+    case peripheralDisconnected = "Peripheral Unplugged"
     case wakeWhileArmed = "System Woke While Armed"
     case cameraMotionDetected = "Spatial Lift / Motion Detected"
     case manualTest = "Simulated Tamper Test"
@@ -177,6 +178,9 @@ public final class SecurityCoordinator {
         self.alertNotifier.onResult = { [weak self] message, result in
             self?.logAlertResult(message, result)
         }
+        self.webPushManager.onRemoteDisarmRequested = { [weak self] in
+            self?.disarmViaRemotePhone()
+        }
 
         // Ensure a default PIN ("1234") is enrolled on first launch if none exists so the user can test immediately,
         // and clearly surface PIN changes in Settings.
@@ -294,6 +298,7 @@ public final class SecurityCoordinator {
             acNote = "Armed on battery."
         }
         logEvent("System Armed", detail: "Monitoring active. \(acNote)")
+        webPushManager.startRemoteCommandListener()
         syncCameraLifecycle()
         onStateChanged?(state)
         onNotchUpdateNeeded?()
@@ -331,6 +336,14 @@ public final class SecurityCoordinator {
         stopArmedInputMonitoring()
         isInteractiveUnlockRequested = false
         performValidatedDisarm(method: "Exit Delay Cancel")
+    }
+
+    @discardableResult
+    public func disarmViaRemotePhone() -> Bool {
+        guard state == .armed || state == .tamperPending || state == .alarm else { return false }
+        performValidatedDisarm(method: "Remote Phone")
+        logEvent("Disarmed Remotely via Phone", detail: "Authenticated remote disarm command received from paired phone.")
+        return true
     }
 
     public func updatePin(newPin: String) throws {
@@ -376,6 +389,7 @@ public final class SecurityCoordinator {
         isInteractiveUnlockRequested = false
         powerMonitor.isFastPolling = false
         stopArmedInputMonitoring()
+        webPushManager.stopRemoteCommandListener()
         gazeDwellProgress = 0
         gazeAggregator.reset()
         motionAggregator.reset()
@@ -500,6 +514,18 @@ public final class SecurityCoordinator {
         alertNotifier.send(AlertMessage(title: "Pupil Screen Locked", body: "Keyboard or trackpad activity detected while your MacBook is armed.", severity: "high", tag: "pupil-input-lock"))
     }
 
+    public func requestInteractiveUnlock() {
+        guard state == .armed || state == .tamperPending || state == .alarm else { return }
+        if state == .armed && !isInteractiveUnlockRequested {
+            isInteractiveUnlockRequested = true
+            onStateChanged?(state)
+            onNotchUpdateNeeded?()
+            NotificationCenter.default.post(name: .screenShieldSync, object: nil)
+        }
+        NotificationCenter.default.post(name: .screenShieldOpenPrompt, object: nil)
+        NotificationCenter.default.post(name: .screenShieldFocusPrimary, object: nil)
+    }
+
     // MARK: - Tamper & Alarm Escalation
 
     public func triggerTamper(source: TamperSource, immediateAlarm: Bool = false, simulated: Bool = false) {
@@ -535,7 +561,13 @@ public final class SecurityCoordinator {
         onNotchUpdateNeeded?()
 
         let grace = settings.gracePeriodSeconds
-        alertNotifier.send(AlertMessage(title: "Pupil Tamper Countdown (\(grace)s)", body: "\(source.rawValue) detected on your MacBook. Siren sounds in \(grace)s unless disarmed.", severity: "high", tag: "pupil-tamper"))
+        alertNotifier.send(AlertMessage(
+            title: "Pupil Tamper Countdown (\(grace)s)",
+            body: "\(source.rawValue) detected on your MacBook. Siren sounds in \(grace)s unless disarmed.",
+            severity: "high",
+            tag: "pupil-tamper",
+            snapshotBase64: captureVerificationSnapshotBase64()
+        ))
 
         startCountdownTimer(seconds: settings.gracePeriodSeconds) { [weak self] in
             guard let self else { return }
@@ -608,7 +640,53 @@ public final class SecurityCoordinator {
         onStateChanged?(state)
         onNotchUpdateNeeded?()
 
-        alertNotifier.send(AlertMessage(title: "Pupil Siren Alarm Active", body: "\(source.rawValue) — Audible siren and sleep lock engaged on your MacBook!", severity: "critical", tag: "pupil-alarm"))
+        alertNotifier.send(AlertMessage(
+            title: "Pupil Siren Alarm Active",
+            body: "\(source.rawValue) — Audible siren and sleep lock engaged on your MacBook!",
+            severity: "critical",
+            tag: "pupil-alarm",
+            snapshotBase64: captureVerificationSnapshotBase64()
+        ))
+    }
+
+    private func captureVerificationSnapshotBase64() -> String? {
+        guard let cgImage = cameraManager.lastFrameImage else { return nil }
+        let width = cgImage.width
+        let height = cgImage.height
+        guard width > 0, height > 0 else { return nil }
+
+        let maxWidth = 480
+        let targetWidth: Int
+        let targetHeight: Int
+        if width > maxWidth {
+            targetWidth = maxWidth
+            targetHeight = max(1, Int((Double(height) * Double(maxWidth) / Double(width)).rounded()))
+        } else {
+            targetWidth = width
+            targetHeight = height
+        }
+
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(
+            data: nil,
+            width: targetWidth,
+            height: targetHeight,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return nil
+        }
+        context.interpolationQuality = .medium
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: targetWidth, height: targetHeight))
+        guard let scaledImage = context.makeImage() else { return nil }
+
+        let bitmap = NSBitmapImageRep(cgImage: scaledImage)
+        guard let jpegData = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.5]) else {
+            return nil
+        }
+        return jpegData.base64EncodedString()
     }
 
     // MARK: - Gaze Processing & Simulation
@@ -1001,6 +1079,10 @@ public final class SecurityCoordinator {
                 }
             case .lidOpened:
                 break
+            case .peripheralDisconnected:
+                if self.settings.hardwareTriggers.contains(.peripheralDisconnect) {
+                    self.triggerTamper(source: .peripheralDisconnected, immediateAlarm: false)
+                }
             }
         }
 
@@ -1008,7 +1090,11 @@ public final class SecurityCoordinator {
             guard let self else { return }
             switch event {
             case .screenLocked:
-                if self.settings.hardwareTriggers.contains(.screenLock) {
+                if self.state == .disarmed {
+                    if self.settings.autoArmOnScreenLock {
+                        self.startArming()
+                    }
+                } else if self.settings.hardwareTriggers.contains(.screenLock) {
                     self.triggerTamper(source: .screenLocked, immediateAlarm: false)
                 }
             case .willSleep:

@@ -13,12 +13,20 @@ public struct AlertMessage: Sendable, Equatable {
     public let body: String
     public let severity: String
     public let tag: String
+    public let snapshotBase64: String?
 
-    public init(title: String, body: String, severity: String = "high", tag: String) {
+    public init(
+        title: String,
+        body: String,
+        severity: String = "high",
+        tag: String,
+        snapshotBase64: String? = nil
+    ) {
         self.title = title
         self.body = body
         self.severity = severity
         self.tag = tag
+        self.snapshotBase64 = snapshotBase64
     }
 }
 

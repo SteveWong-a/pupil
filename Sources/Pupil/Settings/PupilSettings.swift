@@ -130,6 +130,7 @@ public enum HardwareTrigger: String, CaseIterable, Identifiable, Codable, Hashab
     case chargerUnplug
     case lidClose
     case screenLock
+    case peripheralDisconnect
 
     public var id: String { rawValue }
 
@@ -138,6 +139,7 @@ public enum HardwareTrigger: String, CaseIterable, Identifiable, Codable, Hashab
         case .chargerUnplug: return "Power Unplug"
         case .lidClose: return "Lid Close"
         case .screenLock: return "Screen Lock"
+        case .peripheralDisconnect: return "Peripheral Unplug"
         }
     }
 
@@ -146,6 +148,7 @@ public enum HardwareTrigger: String, CaseIterable, Identifiable, Codable, Hashab
         case .chargerUnplug: return "bolt.slash.fill"
         case .lidClose: return "laptopcomputer.slash"
         case .screenLock: return "lock.fill"
+        case .peripheralDisconnect: return "cable.connector.slash"
         }
     }
 }
@@ -255,6 +258,14 @@ public final class PupilSettings {
             defaults.set(lockOnInputWhenArmed, forKey: Keys.lockOnInputWhenArmed)
             NotificationCenter.default.post(name: .screenShieldSync, object: nil)
         }
+    }
+
+    public var autoArmOnScreenLock: Bool {
+        didSet { defaults.set(autoArmOnScreenLock, forKey: Keys.autoArmOnScreenLock) }
+    }
+
+    public var globalArmShortcutEnabled: Bool {
+        didSet { defaults.set(globalArmShortcutEnabled, forKey: Keys.globalArmShortcutEnabled) }
     }
 
     public var allowTouchIDDisarm: Bool {
@@ -411,6 +422,8 @@ public final class PupilSettings {
         self.blurBackgroundWhenArmed = defaults.object(forKey: Keys.blurBackgroundWhenArmed) as? Bool ?? false
         self.blurScreenOnGaze = defaults.object(forKey: Keys.blurScreenOnGaze) as? Bool ?? true
         self.lockOnInputWhenArmed = defaults.object(forKey: Keys.lockOnInputWhenArmed) as? Bool ?? true
+        self.autoArmOnScreenLock = defaults.object(forKey: Keys.autoArmOnScreenLock) as? Bool ?? false
+        self.globalArmShortcutEnabled = defaults.object(forKey: Keys.globalArmShortcutEnabled) as? Bool ?? false
         self.allowTouchIDDisarm = defaults.object(forKey: Keys.allowTouchIDDisarm) as? Bool ?? true
         self.autoPromptTouchID = defaults.object(forKey: Keys.autoPromptTouchID) as? Bool ?? true
         self.hapticFeedbackEnabled = defaults.object(forKey: Keys.hapticFeedbackEnabled) as? Bool ?? true
@@ -457,6 +470,8 @@ public final class PupilSettings {
         static let blurBackgroundWhenArmed = "pupil.blurBackgroundWhenArmed"
         static let blurScreenOnGaze = "pupil.blurScreenOnGaze"
         static let lockOnInputWhenArmed = "pupil.lockOnInputWhenArmed"
+        static let autoArmOnScreenLock = "pupil.autoArmOnScreenLock"
+        static let globalArmShortcutEnabled = "pupil.globalArmShortcutEnabled"
         static let allowTouchIDDisarm = "pupil.allowTouchIDDisarm"
         static let autoPromptTouchID = "pupil.autoPromptTouchID"
         static let hapticFeedbackEnabled = "pupil.hapticFeedbackEnabled"

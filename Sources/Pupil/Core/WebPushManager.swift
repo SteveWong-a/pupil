@@ -91,13 +91,21 @@ public final class WebPushManager {
     public static let companionBaseURL = "https://stevewong-a.github.io/pupil/"
 
     public private(set) var isListeningForPairing: Bool = false
+    public private(set) var isListeningForRemoteCommands: Bool = false
     public private(set) var isSendingPush: Bool = false
     public private(set) var statusMessage: String?
     public private(set) var lastPushDate: Date?
     public private(set) var lastPushSucceeded: Bool = true
 
+    /// Invoked on the main actor when a verified remote disarm command arrives from the paired phone.
+    public var onRemoteDisarmRequested: (() -> Void)?
+
     private let settings: PupilSettings
     private var pairingPollTimer: Timer?
+    private var remoteCommandPollTimer: Timer?
+    private var remoteListenerStartedAt: Date?
+    private var processedCommandIDs: Set<String> = []
+    private var processedDisarmNonces: Set<String> = []
 
     public init(settings: PupilSettings = .shared) {
         self.settings = settings
@@ -330,9 +338,205 @@ public final class WebPushManager {
     }
 
     public func unpairPhone() {
+        stopRemoteCommandListener()
         settings.pairedPhoneSubscription = nil
         statusMessage = "Phone unpaired."
         regeneratePairingChannel()
+    }
+
+    // MARK: - Remote Disarm Command Listener & Token Authentication
+
+    public func startRemoteCommandListener() {
+        stopRemoteCommandListener()
+        let channel = settings.pairingChannelID
+        guard !channel.isEmpty else { return }
+
+        isListeningForRemoteCommands = true
+        remoteListenerStartedAt = Date()
+
+        Task { [weak self] in
+            await self?.pollRemoteCommandsOnce()
+        }
+
+        remoteCommandPollTimer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.isListeningForRemoteCommands else { return }
+                await self.pollRemoteCommandsOnce()
+            }
+        }
+    }
+
+    public func stopRemoteCommandListener() {
+        remoteCommandPollTimer?.invalidate()
+        remoteCommandPollTimer = nil
+        isListeningForRemoteCommands = false
+    }
+
+    private func pollRemoteCommandsOnce() async {
+        let channel = settings.pairingChannelID
+        guard !channel.isEmpty,
+              let url = URL(string: "https://ntfy.sh/\(channel)/json?poll=1&since=5m") else {
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 4.0
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return }
+            guard let text = String(data: data, encoding: .utf8), !text.isEmpty else { return }
+            _ = processRemoteCommandLines(text)
+        } catch {
+            // Silent retry on next poll tick
+        }
+    }
+
+    /// Processes newline-delimited JSON envelopes from `ntfy.sh/<channel>/json`.
+    /// Returns `true` if a valid remote disarm command was verified and dispatched.
+    @discardableResult
+    public func processRemoteCommandLines(_ text: String, now: Date = Date()) -> Bool {
+        let lines = text.split(whereSeparator: \.isNewline)
+        for line in lines {
+            guard let lineData = String(line).data(using: .utf8),
+                  let envelope = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
+                  let message = envelope["message"] as? String else {
+                continue
+            }
+
+            if let eventID = envelope["id"] as? String {
+                if processedCommandIDs.contains(eventID) { continue }
+                processedCommandIDs.insert(eventID)
+            }
+
+            if let startedAt = remoteListenerStartedAt,
+               let ntfyTime = envelope["time"] as? TimeInterval,
+               ntfyTime < startedAt.timeIntervalSince1970 - 5 {
+                continue
+            }
+
+            if validateRemoteDisarmToken(message, now: now) {
+                statusMessage = "Remote disarm verified from paired phone."
+                onRemoteDisarmRequested?()
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Generates an HMAC-SHA256 authenticated `pupildisarm://` token for the current pairing channel.
+    public func makeRemoteDisarmToken(
+        channel: String? = nil,
+        vapidPublicKey: String? = nil,
+        timestampMs: Int64? = nil,
+        nonce: String? = nil
+    ) -> String? {
+        let ch = channel ?? settings.pairingChannelID
+        let vKey = vapidPublicKey ?? vapidPublicKeyBase64URL
+        guard !ch.isEmpty else { return nil }
+
+        let ts = timestampMs ?? Int64(Date().timeIntervalSince1970 * 1000)
+        let resolvedNonce = nonce ?? Self.generateRandomNonce()
+        let sig = Self.computeDisarmSignature(channel: ch, vapidPublicKey: vKey, timestampMs: ts, nonce: resolvedNonce)
+
+        let payload: [String: Any] = [
+            "type": "pupil-remote-disarm",
+            "channel": ch,
+            "timestamp": ts,
+            "nonce": resolvedNonce,
+            "sig": sig
+        ]
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: payload) else {
+            return nil
+        }
+        return "pupildisarm://" + jsonData.base64URLEncodedString()
+    }
+
+    /// Validates an HMAC-SHA256 signed `pupildisarm://` token or JSON payload against `settings.pairingChannelID`.
+    @discardableResult
+    public func validateRemoteDisarmToken(
+        _ rawInput: String,
+        now: Date = Date(),
+        maxAgeSeconds: TimeInterval = 120
+    ) -> Bool {
+        let trimmed = rawInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        let jsonData: Data
+
+        if trimmed.hasPrefix("pupildisarm://") {
+            let b64Part = String(trimmed.dropFirst("pupildisarm://".count))
+            guard let decoded = Data(base64URLEncoded: b64Part) else {
+                return false
+            }
+            jsonData = decoded
+        } else if let directData = trimmed.data(using: .utf8), trimmed.hasPrefix("{") {
+            jsonData = directData
+        } else {
+            return false
+        }
+
+        guard let obj = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+              (obj["type"] as? String) == "pupil-remote-disarm",
+              let channel = obj["channel"] as? String,
+              !channel.isEmpty,
+              channel == settings.pairingChannelID,
+              let nonce = obj["nonce"] as? String,
+              !nonce.isEmpty,
+              let sig = obj["sig"] as? String,
+              let sigData = Data(base64URLEncoded: sig) else {
+            return false
+        }
+
+        let timestampMs: Int64
+        if let tsInt = obj["timestamp"] as? Int64 {
+            timestampMs = tsInt
+        } else if let tsNum = obj["timestamp"] as? NSNumber {
+            timestampMs = tsNum.int64Value
+        } else {
+            return false
+        }
+
+        let nowMs = Int64(now.timeIntervalSince1970 * 1000)
+        let maxAgeMs = Int64(maxAgeSeconds * 1000)
+        guard abs(nowMs - timestampMs) <= maxAgeMs else {
+            return false
+        }
+
+        let nonceKey = "\(channel):\(nonce)"
+        guard !processedDisarmNonces.contains(nonceKey) else {
+            return false
+        }
+
+        let hmacKey = Self.disarmHMACKey(channel: channel, vapidPublicKey: vapidPublicKeyBase64URL)
+        let signingInput = Data("\(channel):\(timestampMs):\(nonce)".utf8)
+        guard HMAC<SHA256>.isValidAuthenticationCode(sigData, authenticating: signingInput, using: hmacKey) else {
+            return false
+        }
+
+        processedDisarmNonces.insert(nonceKey)
+        return true
+    }
+
+    private nonisolated static func disarmHMACKey(channel: String, vapidPublicKey: String) -> SymmetricKey {
+        let keyMaterial = Data("\(channel):\(vapidPublicKey)".utf8)
+        let digest = SHA256.hash(data: keyMaterial)
+        return SymmetricKey(data: digest)
+    }
+
+    private nonisolated static func computeDisarmSignature(
+        channel: String,
+        vapidPublicKey: String,
+        timestampMs: Int64,
+        nonce: String
+    ) -> String {
+        let key = disarmHMACKey(channel: channel, vapidPublicKey: vapidPublicKey)
+        let mac = HMAC<SHA256>.authenticationCode(for: Data("\(channel):\(timestampMs):\(nonce)".utf8), using: key)
+        return Data(mac).base64URLEncodedString()
+    }
+
+    private nonisolated static func generateRandomNonce() -> String {
+        var bytes = [UInt8](repeating: 0, count: 12)
+        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        return Data(bytes).base64URLEncodedString()
     }
 
     // MARK: - Direct Push Delivery to Apple (web.push.apple.com)
@@ -342,10 +546,50 @@ public final class WebPushManager {
         title: String,
         body: String,
         severity: String = "high",
-        tag: String = "pupil-security-alert"
+        tag: String = "pupil-security-alert",
+        snapshotBase64: String? = nil
     ) async -> Bool {
-        let outcome = await deliverPush(AlertMessage(title: title, body: body, severity: severity, tag: tag))
+        let outcome = await deliverPush(
+            AlertMessage(title: title, body: body, severity: severity, tag: tag, snapshotBase64: snapshotBase64)
+        )
         return outcome == .delivered
+    }
+
+    /// Posts an alert envelope with a lightweight JPEG verification snapshot to the pairing `ntfy.sh` channel
+    /// so the mobile PWA can display it even when the frame exceeds W3C Web Push's 4 KB payload cap.
+    public func postAlertSnapshotEnvelope(
+        title: String,
+        body: String,
+        severity: String,
+        tag: String,
+        snapshotBase64: String
+    ) async {
+        let channel = settings.pairingChannelID
+        guard !channel.isEmpty,
+              !snapshotBase64.isEmpty,
+              let url = URL(string: "https://ntfy.sh/\(channel)") else {
+            return
+        }
+
+        let envelope: [String: Any] = [
+            "type": "pupil-alert-snapshot",
+            "title": title,
+            "body": body,
+            "severity": severity,
+            "tag": tag,
+            "timestamp": Int64(Date().timeIntervalSince1970 * 1000),
+            "snapshotBase64": snapshotBase64
+        ]
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: envelope) else { return }
+        let encoded = "pupilalert://" + jsonData.base64URLEncodedString()
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 6.0
+        request.setValue("text/plain;charset=utf-8", forHTTPHeaderField: "Content-Type")
+        request.httpBody = Data(encoded.utf8)
+
+        _ = try? await URLSession.shared.data(for: request)
     }
 
     /// Performs one delivery attempt and classifies the result so a retry queue can decide what to do.
@@ -365,13 +609,28 @@ public final class WebPushManager {
         let encryptedBody: Data
         let vapidHeader: String
         do {
-            let payloadDict: [String: Any] = [
+            var payloadDict: [String: Any] = [
                 "title": message.title,
                 "body": message.body,
                 "severity": message.severity,
                 "tag": message.tag,
                 "timestamp": Int(Date().timeIntervalSince1970 * 1000)
             ]
+            if let snapshot = message.snapshotBase64, !snapshot.isEmpty {
+                payloadDict["hasSnapshot"] = true
+                if snapshot.utf8.count <= 2000 {
+                    payloadDict["snapshotBase64"] = snapshot
+                }
+                Task { [weak self] in
+                    await self?.postAlertSnapshotEnvelope(
+                        title: message.title,
+                        body: message.body,
+                        severity: message.severity,
+                        tag: message.tag,
+                        snapshotBase64: snapshot
+                    )
+                }
+            }
             let plaintext = try JSONSerialization.data(withJSONObject: payloadDict)
             encryptedBody = try Self.encryptWebPushPayload(
                 plaintext,

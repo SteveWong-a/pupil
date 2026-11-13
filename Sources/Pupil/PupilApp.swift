@@ -38,6 +38,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
     public let coordinator = SecurityCoordinator()
     private var notchOverlayController: NotchOverlayController?
     private var screenShieldController: ScreenShieldController?
+    private var globalHotkeyMonitor: GlobalHotkeyMonitor?
 
     private var statusItem: NSStatusItem?
     private var statusHeaderItem: NSMenuItem?
@@ -61,6 +62,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate 
 
         let shield = ScreenShieldController(coordinator: coordinator)
         self.screenShieldController = shield
+
+        let hotkeyMonitor = GlobalHotkeyMonitor(coordinator: coordinator)
+        hotkeyMonitor.start()
+        self.globalHotkeyMonitor = hotkeyMonitor
 
         coordinator.onStateChanged = { [weak self] _ in
             self?.refreshStatusItemIconAndMenu()

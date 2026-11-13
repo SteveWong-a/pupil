@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="color-scheme" content="light dark">
+  <meta name="color-scheme" content="dark">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Pupil">
-  <meta name="theme-color" content="#0b0d13">
+  <meta name="theme-color" content="#000000">
   <title>Pupil Sentinel Companion</title>
   <link rel="manifest" href="./manifest.json">
   <link rel="apple-touch-icon" href="./apple-touch-icon.png">
@@ -16,68 +16,22 @@
   <link rel="shortcut icon" href="./favicon.ico">
   <style>
     :root {
-      --bg-light: #f2f4f8;
-      --bg-dark: #000000;
-      --card-bg-light: rgba(255, 255, 255, 0.85);
-      --card-bg-dark: rgba(26, 31, 42, 0.65);
-      --card-border-light: rgba(0, 0, 0, 0.08);
-      --card-border-dark: rgba(255, 255, 255, 0.12);
-      --row-bg-light: rgba(0, 0, 0, 0.03);
-      --row-bg-dark: rgba(255, 255, 255, 0.05);
-      --row-border-light: rgba(0, 0, 0, 0.06);
-      --row-border-dark: rgba(255, 255, 255, 0.08);
-      --text-primary-light: #0f172a;
-      --text-primary-dark: #eeeeee;
-      --text-secondary-light: #475569;
-      --text-secondary-dark: #bfbfbf;
-      --text-tertiary-light: #94a3b8;
-      --text-tertiary-dark: #808080;
-      --accent-light: #0066cc;
-      --accent-dark: #0A84FF;
-      --btn-text-light: #ffffff;
-      --btn-text-dark: #ffffff;
+      --bg: #000000;
+      --surface: #141414;
+      --row-bg: rgba(255, 255, 255, 0.06);
+      --row-border: rgba(255, 255, 255, 0.10);
+      --row-radius: 10px;
+      --row-inset: 14px;
+      --text-primary: #EEEEEE;
+      --text-secondary: #BFBFBF;
+      --text-tertiary: #999999;
+      --accent: #0A84FF;
       --armed-green: #30D158;
       --warning-amber: #FF9F0A;
       --alarm-red: #FF453A;
+      --neutral-btn: rgba(255, 255, 255, 0.08);
 
-      --bg: var(--bg-light);
-      --card-bg: var(--card-bg-light);
-      --card-border: var(--card-border-light);
-      --row-bg: var(--row-bg-light);
-      --row-border: var(--row-border-light);
-      --text-primary: var(--text-primary-light);
-      --text-secondary: var(--text-secondary-light);
-      --text-tertiary: var(--text-tertiary-light);
-      --accent: var(--accent-light);
-      --btn-text: var(--btn-text-light);
-
-      @media (prefers-color-scheme: dark) {
-        --bg: var(--bg-dark);
-        --card-bg: var(--card-bg-dark);
-        --card-border: var(--card-border-dark);
-        --row-bg: var(--row-bg-dark);
-        --row-border: var(--row-border-dark);
-        --text-primary: var(--text-primary-dark);
-        --text-secondary: var(--text-secondary-dark);
-        --text-tertiary: var(--text-tertiary-dark);
-        --accent: var(--accent-dark);
-        --btn-text: var(--btn-text-dark);
-      }
-
-      @supports (color: light-dark(white, black)) {
-        --bg: light-dark(var(--bg-light), var(--bg-dark));
-        --card-bg: light-dark(var(--card-bg-light), var(--card-bg-dark));
-        --card-border: light-dark(var(--card-border-light), var(--card-border-dark));
-        --row-bg: light-dark(var(--row-bg-light), var(--row-bg-dark));
-        --row-border: light-dark(var(--row-border-light), var(--row-border-dark));
-        --text-primary: light-dark(var(--text-primary-light), var(--text-primary-dark));
-        --text-secondary: light-dark(var(--text-secondary-light), var(--text-secondary-dark));
-        --text-tertiary: light-dark(var(--text-tertiary-light), var(--text-tertiary-dark));
-        --accent: light-dark(var(--accent-light), var(--accent-dark));
-        --btn-text: light-dark(var(--btn-text-light), var(--btn-text-dark));
-      }
-
-      color-scheme: light dark;
+      color-scheme: dark;
       accent-color: var(--accent);
     }
 
@@ -95,33 +49,38 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: env(safe-area-inset-top, 24px) 16px env(safe-area-inset-bottom, 28px);
+      padding: calc(env(safe-area-inset-top, 16px) + 12px) 16px calc(env(safe-area-inset-bottom, 20px) + 16px);
       -webkit-font-smoothing: antialiased;
     }
 
     header, main, footer {
       width: 100%;
-      max-width: 420px;
+      max-width: 460px;
     }
 
     header {
       display: flex;
-      flex-direction: column;
       align-items: center;
-      text-align: center;
-      margin-bottom: 22px;
-      padding-top: 8px;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 4px 2px 16px;
+    }
+
+    .header-identity {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
     }
 
     .app-icon-wrap {
-      width: 76px;
-      height: 76px;
-      border-radius: 20px;
-      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
-      border: 1px solid var(--card-border);
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      border: 1px solid var(--row-border);
       overflow: hidden;
-      margin-bottom: 12px;
-      background-color: #0b0d13;
+      background-color: var(--surface);
+      flex-shrink: 0;
     }
 
     .app-icon {
@@ -131,103 +90,106 @@
       display: block;
     }
 
+    .header-titles {
+      min-width: 0;
+    }
+
     h1 {
-      font-size: 1.45rem;
-      font-weight: 700;
-      letter-spacing: -0.025em;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: -0.015em;
       color: var(--text-primary);
-      margin-bottom: 4px;
+      line-height: 1.2;
     }
 
     .subtitle {
-      font-size: 0.88rem;
-      color: var(--text-secondary);
-      line-height: 1.35;
-      margin-bottom: 12px;
+      font-size: 11px;
+      color: var(--text-tertiary);
+      line-height: 1.3;
     }
 
     /* macOS HeaderStatusButton Pill */
     .header-status-pill {
       display: inline-flex;
       align-items: center;
-      gap: 7px;
-      padding: 6px 14px;
+      gap: 6px;
+      height: 28px;
+      padding: 0 11px;
       border-radius: 9999px;
-      font-size: 0.80rem;
+      font-size: 12px;
       font-weight: 500;
       background-color: var(--row-bg);
       border: 1px solid var(--row-border);
-      color: var(--text-primary);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+      color: var(--text-secondary);
+      flex-shrink: 0;
     }
 
     .header-status-pill.ready {
-      border-color: rgba(48, 209, 88, 0.35);
+      border-color: rgba(48, 209, 88, 0.30);
       background-color: rgba(48, 209, 88, 0.12);
       color: var(--armed-green);
     }
 
-    .header-status-pill.pending {
-      border-color: var(--row-border);
-      color: var(--text-secondary);
-    }
-
     .status-dot {
-      width: 7px;
-      height: 7px;
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
       background-color: var(--text-tertiary);
     }
 
     .header-status-pill.ready .status-dot {
       background-color: var(--armed-green);
-      box-shadow: 0 0 8px rgba(48, 209, 88, 0.6);
     }
 
-    /* macOS Section Titles (SettingsSectionTitle) */
+    /* SettingsSectionTitle */
     .section-title {
-      font-size: 0.72rem;
-      font-weight: 600;
-      letter-spacing: 0.05em;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
       color: var(--text-tertiary);
-      margin: 18px 0 6px 6px;
+      padding: 4px 0 6px 10px;
+      margin-top: 14px;
     }
 
-    /* macOS Group Container (SettingsGroup) */
+    .section-title:first-child {
+      margin-top: 0;
+    }
+
+    /* SettingsGroup */
     .settings-group {
-      background-color: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 16px;
+      background-color: var(--row-bg);
+      border: 1px solid var(--row-border);
+      border-radius: var(--row-radius);
       overflow: hidden;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
-      backdrop-filter: blur(28px) saturate(180%);
-      -webkit-backdrop-filter: blur(28px) saturate(180%);
-      margin-bottom: 8px;
     }
 
     .group-row {
-      padding: 14px 16px;
+      min-height: 44px;
+      padding: 10px var(--row-inset);
       display: flex;
       align-items: center;
-      gap: 14px;
+      justify-content: space-between;
+      gap: 12px;
     }
 
     .group-row + .group-row {
       border-top: 1px solid var(--row-border);
     }
 
-    .group-card-body {
-      padding: 16px;
+    .row-leading {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      flex: 1;
     }
 
     .row-icon-wrap {
-      width: 32px;
-      height: 32px;
-      border-radius: 9px;
-      background-color: var(--row-bg);
+      width: 28px;
+      height: 28px;
+      border-radius: 7px;
+      background-color: var(--surface);
       border: 1px solid var(--row-border);
       display: inline-flex;
       align-items: center;
@@ -242,88 +204,107 @@
     }
 
     .row-title {
-      font-size: 0.90rem;
-      font-weight: 600;
+      font-size: 13px;
+      font-weight: 500;
       color: var(--text-primary);
-      margin-bottom: 2px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
+      line-height: 1.3;
     }
 
-    .row-desc {
-      font-size: 0.80rem;
-      color: var(--text-secondary);
+    .row-caption {
+      font-size: 11px;
+      color: var(--text-tertiary);
       line-height: 1.35;
+      margin-top: 2px;
     }
 
-    /* Buttons */
-    .btn-stack {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-top: 14px;
+    .group-body {
+      padding: 12px var(--row-inset);
+    }
+
+    /* Buttons (SettingsPrimaryButton, PillActionButton, SettingsActionRowContent) */
+    button {
+      font-family: inherit;
+      cursor: pointer;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: opacity 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button:active:not(:disabled) {
+      opacity: 0.78;
+    }
+
+    button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      width: 100%;
+      min-height: 36px;
+      padding: 7px 16px;
+      border-radius: 9999px;
+      background-color: var(--accent);
+      color: #FFFFFF;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .btn-pill {
+      min-height: 28px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      background-color: var(--neutral-btn);
+      border: 1px solid var(--row-border);
+      color: var(--text-primary);
+      font-size: 12px;
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+
+    .btn-destructive {
+      min-height: 28px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      background-color: rgba(255, 69, 58, 0.88);
+      color: #FFFFFF;
+      font-size: 12px;
+      font-weight: 600;
+      flex-shrink: 0;
     }
 
     .btn-row {
       display: flex;
       gap: 8px;
+      margin-top: 10px;
     }
 
-    button {
-      font-family: inherit;
-      border-radius: 11px;
-      cursor: pointer;
-      font-size: 0.88rem;
-      font-weight: 500;
-      min-block-size: 48px;
-      min-inline-size: 48px;
-      padding: 0 16px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      transition: all 0.18s cubic-bezier(0.25, 1, 0.5, 1);
-      width: 100%;
-    }
-
-    button:active {
-      transform: scale(0.985);
-      filter: brightness(0.92);
-    }
-
-    button.primary {
-      background-color: var(--accent);
-      color: var(--btn-text);
-      border: none;
-      font-weight: 600;
-      box-shadow: 0 4px 14px rgba(10, 132, 255, 0.35);
-    }
-
-    button.secondary {
-      background-color: var(--row-bg);
-      color: var(--text-primary);
-      border: 1px solid var(--row-border);
+    .btn-row .btn-pill {
+      flex: 1;
     }
 
     :where(a:any-link, button):focus-visible {
-      outline: 3px solid var(--accent);
-      outline-offset: 3px;
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
     }
 
-    /* Live Status Banner */
+    /* Status Banner */
     .status-banner {
       display: flex;
       align-items: flex-start;
-      gap: 10px;
-      padding: 10px 12px;
-      border-radius: 10px;
-      font-size: 0.82rem;
+      gap: 8px;
+      padding: 9px 11px;
+      border-radius: 8px;
+      font-size: 11px;
       line-height: 1.4;
-      background-color: var(--row-bg);
+      background-color: var(--surface);
       border: 1px solid var(--row-border);
       color: var(--text-secondary);
-      margin-top: 12px;
+      margin-top: 10px;
     }
 
     .status-banner-icon {
@@ -332,18 +313,58 @@
       color: var(--accent);
     }
 
+    /* Verification Snapshot Viewer */
+    .snapshot-frame-wrap {
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      border-radius: 8px;
+      background-color: var(--surface);
+      border: 1px solid var(--row-border);
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 10px;
+    }
+
+    .snapshot-frame-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .snapshot-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-tertiary);
+      font-size: 11px;
+      text-align: center;
+      padding: 16px;
+    }
+
+    .snapshot-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 8px;
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+
     /* Security Alert List */
     .alert-log {
       list-style: none;
-      margin: 0;
-      padding: 0;
     }
 
     .alert-log li {
-      padding: 12px 14px;
+      padding: 10px var(--row-inset);
       display: flex;
       align-items: flex-start;
-      gap: 12px;
+      gap: 10px;
     }
 
     .alert-log li + li {
@@ -351,9 +372,9 @@
     }
 
     .alert-badge {
-      width: 30px;
-      height: 30px;
-      border-radius: 8px;
+      width: 26px;
+      height: 26px;
+      border-radius: 7px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -362,22 +383,22 @@
     }
 
     .alert-badge.armed {
-      background-color: rgba(48, 209, 88, 0.15);
+      background-color: rgba(48, 209, 88, 0.14);
       color: var(--armed-green);
     }
 
     .alert-badge.warning {
-      background-color: rgba(255, 159, 10, 0.15);
+      background-color: rgba(255, 159, 10, 0.14);
       color: var(--warning-amber);
     }
 
     .alert-badge.alarm {
-      background-color: rgba(255, 69, 58, 0.18);
+      background-color: rgba(255, 69, 58, 0.16);
       color: var(--alarm-red);
     }
 
     .alert-badge.info {
-      background-color: rgba(10, 132, 255, 0.15);
+      background-color: rgba(10, 132, 255, 0.14);
       color: var(--accent);
     }
 
@@ -395,19 +416,20 @@
     }
 
     .alert-title {
-      font-size: 0.88rem;
-      font-weight: 600;
+      font-size: 13px;
+      font-weight: 500;
       color: var(--text-primary);
     }
 
     .alert-time {
-      font-size: 0.72rem;
+      font-size: 11px;
       color: var(--text-tertiary);
       font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
     }
 
     .alert-body {
-      font-size: 0.80rem;
+      font-size: 11px;
       color: var(--text-secondary);
       line-height: 1.35;
     }
@@ -415,12 +437,12 @@
     footer {
       text-align: center;
       margin-top: 18px;
-      font-size: 0.75rem;
+      font-size: 11px;
       color: var(--text-tertiary);
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
+      gap: 5px;
     }
 
     .sf-icon {
@@ -435,57 +457,44 @@
   </style>
 </head>
 <body>
-  <!-- Native macOS / Apple SF Symbols Vector Sprite -->
   <svg style="display: none;" aria-hidden="true">
     <defs>
-      <!-- sf-shield -->
       <g id="sf-shield">
         <path fill-rule="evenodd" d="M12 2.25a.75.75 0 0 1 .34.08c3.2 1.6 6.8 2.3 8.4 2.5a.75.75 0 0 1 .66.75v5.5c0 6.2-4.1 10.4-8.8 11.85a.75.75 0 0 1-.4 0C7.5 21.48 3.4 17.28 3.4 11.08v-5.5a.75.75 0 0 1 .66-.75c1.6-.2 5.2-.9 8.4-2.5a.75.75 0 0 1 .34-.08z"/>
       </g>
-      <!-- sf-lock -->
       <g id="sf-lock">
         <path fill-rule="evenodd" d="M12 2a4.5 4.5 0 0 0-4.5 4.5V9H6.5A2.5 2.5 0 0 0 4 11.5v8A2.5 2.5 0 0 0 6.5 22h11a2.5 2.5 0 0 0 2.5-2.5v-8A2.5 2.5 0 0 0 17.5 9h-1V6.5A4.5 4.5 0 0 0 12 2zm-3 4.5a3 3 0 1 1 6 0V9H9V6.5zm3 7a1.5 1.5 0 0 0-1 2.62V18a1 1 0 1 0 2 0v-1.88A1.5 1.5 0 0 0 12 13.5z"/>
       </g>
-      <!-- sf-lock-open -->
       <g id="sf-lock-open">
         <path fill-rule="evenodd" d="M12 2a4.5 4.5 0 0 0-4.5 4.5V8a.75.75 0 0 0 1.5 0V6.5a3 3 0 1 1 6 0V9H6.5A2.5 2.5 0 0 0 4 11.5v8A2.5 2.5 0 0 0 6.5 22h11a2.5 2.5 0 0 0 2.5-2.5v-8A2.5 2.5 0 0 0 17.5 9H13.5V6.5A4.5 4.5 0 0 0 12 2zM12 13.5a1.5 1.5 0 0 0-1 2.62V18a1 1 0 1 0 2 0v-1.88A1.5 1.5 0 0 0 12 13.5z"/>
       </g>
-      <!-- sf-triangle -->
       <g id="sf-triangle">
         <path fill-rule="evenodd" d="M10.74 3.46a1.45 1.45 0 0 1 2.52 0l8.7 15.06A1.45 1.45 0 0 1 20.7 20.7H3.3a1.45 1.45 0 0 1-1.26-2.18l8.7-15.06zM12 8a.75.75 0 0 0-.75.75v4.5a.75.75 0 0 0 1.5 0v-4.5A.75.75 0 0 0 12 8zm0 8a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/>
       </g>
-      <!-- sf-bell -->
       <g id="sf-bell">
         <path d="M12 2a1.75 1.75 0 0 0-1.75 1.75v.55A7 7 0 0 0 4.5 11v3.38l-1.32 1.98A1.25 1.25 0 0 0 4.22 18h15.56a1.25 1.25 0 0 0 1.04-1.94L19.5 14.38V11a7 7 0 0 0-5.75-6.7V3.75A1.75 1.75 0 0 0 12 2zm-2.5 17a2.5 2.5 0 0 0 5 0h-5z"/>
       </g>
-      <!-- sf-share -->
+      <g id="sf-camera">
+        <path d="M9.17 4a1.5 1.5 0 0 0-1.25.67L6.86 6.25H4.5A2.5 2.5 0 0 0 2 8.75v9A2.5 2.5 0 0 0 4.5 20.25h15a2.5 2.5 0 0 0 2.5-2.5v-9a2.5 2.5 0 0 0-2.5-2.5h-2.36l-1.06-1.58A1.5 1.5 0 0 0 14.83 4H9.17zM12 9.25a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm0 1.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/>
+      </g>
       <g id="sf-share">
         <path d="M12 2.5a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5A.75.75 0 0 1 12 2.5z"/>
         <path d="M8.22 6.28a.75.75 0 0 1 1.06-1.06L12 7.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L8.22 6.28z"/>
         <path d="M4 10.75A2.75 2.75 0 0 1 6.75 8h2a.75.75 0 0 1 0 1.5h-2A1.25 1.25 0 0 0 5.5 10.75v7.5c0 .69.56 1.25 1.25 1.25h10.5c.69 0 1.25-.56 1.25-1.25v-7.5c0-.69-.56-1.25-1.25-1.25h-2a.75.75 0 0 1 0-1.5h2A2.75 2.75 0 0 1 20 10.75v7.5A2.75 2.75 0 0 1 17.25 21H6.75A2.75 2.75 0 0 1 4 18.25v-7.5z"/>
       </g>
-      <!-- sf-plus-app -->
       <g id="sf-plus-app">
         <path d="M5.5 3A2.5 2.5 0 0 0 3 5.5v13A2.5 2.5 0 0 0 5.5 21h13a2.5 2.5 0 0 0 2.5-2.5v-13A2.5 2.5 0 0 0 18.5 3h-13zm0 1.5h13A1 1 0 0 1 19.5 5.5v13a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1zm6.5 3a.75.75 0 0 0-.75.75v3h-3a.75.75 0 0 0 0 1.5h3v3a.75.75 0 0 0 1.5 0v-3h3a.75.75 0 0 0 0-1.5h-3v-3A.75.75 0 0 0 12 7.5z"/>
       </g>
-      <!-- sf-iphone -->
       <g id="sf-iphone">
         <path d="M7.5 2A2.5 2.5 0 0 0 5 4.5v15A2.5 2.5 0 0 0 7.5 22h9a2.5 2.5 0 0 0 2.5-2.5v-15A2.5 2.5 0 0 0 16.5 2h-9zm0 1.5h9c.55 0 1 .45 1 1v15c0 .55-.45 1-1 1h-9c-.55 0-1-.45-1-1v-15c0-.55.45-1 1-1zm3 15.5h3a.75.75 0 0 1 0 1.5h-3a.75.75 0 0 1 0-1.5z"/>
       </g>
-      <!-- sf-clipboard -->
       <g id="sf-clipboard">
         <path d="M7.5 3A1.5 1.5 0 0 0 6 4.5v12A1.5 1.5 0 0 0 7.5 18h7a1.5 1.5 0 0 0 1.5-1.5v-12A1.5 1.5 0 0 0 14.5 3h-7zm0 1.5h7a.5.5 0 0 1 .5.5v12a.5.5 0 0 1-.5.5h-7a.5.5 0 0 1-.5-.5v-12a.5.5 0 0 1 .5-.5z"/>
         <path d="M10 2a1 1 0 0 0-.96.73h3.92A1 1 0 0 0 10 2zm6.5 4.5a.75.75 0 0 1 .75.75v12.25a2 2 0 0 1-2 2H7.75a.75.75 0 0 1 0-1.5h7.5a.5.5 0 0 0 .5-.5V7.25a.75.75 0 0 1 .75-.75z"/>
       </g>
-      <!-- sf-checkmark -->
-      <g id="sf-checkmark">
-        <path fill-rule="evenodd" d="M19.78 6.22a.75.75 0 0 1 0 1.06l-10 10a.75.75 0 0 1-1.06 0l-4.5-4.5a.75.75 0 0 1 1.06-1.06L9.25 15.69l9.47-9.47a.75.75 0 0 1 1.06 0z"/>
-      </g>
-      <!-- sf-checkmark-circle -->
       <g id="sf-checkmark-circle">
         <path fill-rule="evenodd" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.53 7.53a.75.75 0 0 0-1.06-1.06L10.5 13.44l-1.97-1.97a.75.75 0 0 0-1.06 1.06l2.5 2.5a.75.75 0 0 0 1.06 0l5.5-5.5z"/>
       </g>
-      <!-- sf-info -->
       <g id="sf-info">
         <path fill-rule="evenodd" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 5a1.25 1.25 0 1 0 0 2.5A1.25 1.25 0 0 0 12 7zm-1.25 4.5a.75.75 0 0 1 1.5 0v5a.75.75 0 0 1-1.5 0v-5z"/>
       </g>
@@ -493,15 +502,19 @@
   </svg>
 
   <header>
-    <div class="app-icon-wrap">
-      <img src="./apple-touch-icon.png" alt="Pupil app icon" class="app-icon">
+    <div class="header-identity">
+      <div class="app-icon-wrap">
+        <img src="./apple-touch-icon.png" alt="Pupil app icon" class="app-icon">
+      </div>
+      <div class="header-titles">
+        <h1>Pupil</h1>
+        <p class="subtitle">Mobile Sentinel Companion</p>
+      </div>
     </div>
-    <h1>Pupil</h1>
-    <p class="subtitle">Mobile Sentinel Companion</p>
-    
-    <div id="header-status-pill" class="header-status-pill pending">
+
+    <div id="header-status-pill" class="header-status-pill">
       <span class="status-dot"></span>
-      <svg class="sf-icon" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">
+      <svg class="sf-icon" viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true">
         <use id="header-status-icon" href="#sf-lock-open"/>
       </svg>
       <span id="header-status-label">Ready to Pair</span>
@@ -509,75 +522,78 @@
   </header>
 
   <main>
-    <!-- Step 1 Guide: Shown only when opened in regular Safari -->
+    <!-- Home Screen Install Guide (Safari iOS only) -->
     <div id="install-guide-card" hidden>
-      <div class="section-title">HOME SCREEN SETUP</div>
+      <div class="section-title">Home Screen Setup</div>
       <div class="settings-group">
         <div class="group-row">
-          <div class="row-icon-wrap">
-            <svg class="sf-icon" viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true">
-              <use href="#sf-share"/>
-            </svg>
-          </div>
-          <div class="row-text">
-            <div class="row-title">1. Tap Share in Safari</div>
-            <div class="row-desc">In the bottom toolbar of Safari on your iPhone.</div>
-          </div>
-        </div>
-
-        <div class="group-row">
-          <div class="row-icon-wrap">
-            <svg class="sf-icon" viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true">
-              <use href="#sf-plus-app"/>
-            </svg>
-          </div>
-          <div class="row-text">
-            <div class="row-title">2. Add to Home Screen</div>
-            <div class="row-desc">Scroll down the share sheet and tap Add to Home Screen.</div>
+          <div class="row-leading">
+            <div class="row-icon-wrap">
+              <svg class="sf-icon" viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true">
+                <use href="#sf-share"/>
+              </svg>
+            </div>
+            <div class="row-text">
+              <div class="row-title">1. Tap Share in Safari</div>
+              <div class="row-caption">In the bottom toolbar of Safari on your iPhone.</div>
+            </div>
           </div>
         </div>
-
         <div class="group-row">
-          <div class="row-icon-wrap">
-            <svg class="sf-icon" viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true">
-              <use href="#sf-iphone"/>
-            </svg>
+          <div class="row-leading">
+            <div class="row-icon-wrap">
+              <svg class="sf-icon" viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true">
+                <use href="#sf-plus-app"/>
+              </svg>
+            </div>
+            <div class="row-text">
+              <div class="row-title">2. Add to Home Screen</div>
+              <div class="row-caption">Scroll down the share sheet and tap Add to Home Screen.</div>
+            </div>
           </div>
-          <div class="row-text">
-            <div class="row-title">3. Open from Home Screen</div>
-            <div class="row-desc">No rescan required — pairing parameters persist automatically.</div>
+        </div>
+        <div class="group-row">
+          <div class="row-leading">
+            <div class="row-icon-wrap">
+              <svg class="sf-icon" viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true">
+                <use href="#sf-iphone"/>
+              </svg>
+            </div>
+            <div class="row-text">
+              <div class="row-title">3. Open from Home Screen</div>
+              <div class="row-caption">Pairing parameters persist automatically.</div>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Main Alert Pairing Section -->
-    <div class="section-title">LOCK-SCREEN PUSH ALERTS</div>
+    <!-- Pairing & Push Alerts -->
+    <div class="section-title">Lock-Screen Push Alerts</div>
     <div class="settings-group">
-      <div class="group-card-body">
+      <div class="group-body">
         <div class="row-title">Direct Apple APNs Delivery</div>
-        <div class="row-desc">
-          Encrypted alerts wake your locked phone screen over Wi-Fi or cellular whenever your MacBook detects keyboard activity, physical displacement, or alarm triggers.
+        <div class="row-caption">
+          End-to-end encrypted alerts wake your locked phone whenever your Mac detects tamper, movement, or alarm triggers.
         </div>
 
-        <div class="btn-stack">
-          <button type="button" id="pair-btn" class="primary">
-            <svg class="sf-icon" viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true">
+        <div style="margin-top: 12px;">
+          <button type="button" id="pair-btn" class="btn-primary">
+            <svg class="sf-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
               <use href="#sf-shield"/>
             </svg>
             <span id="pair-btn-text">Pair &amp; Enable Lock-Screen Alerts</span>
           </button>
 
-          <div class="btn-row">
-            <button type="button" id="copy-token-btn" class="secondary" hidden>
-              <svg class="sf-icon" viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true">
+          <div class="btn-row" id="paired-utility-row" hidden>
+            <button type="button" id="copy-token-btn" class="btn-pill" hidden>
+              <svg class="sf-icon" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">
                 <use href="#sf-clipboard"/>
               </svg>
               <span>Copy Code</span>
             </button>
-
-            <button type="button" id="test-local-btn" class="secondary" hidden>
-              <svg class="sf-icon" viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true">
+            <button type="button" id="test-local-btn" class="btn-pill" hidden>
+              <svg class="sf-icon" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">
                 <use href="#sf-bell"/>
               </svg>
               <span>Test Alert</span>
@@ -586,7 +602,7 @@
         </div>
 
         <div id="live-status" class="status-banner" role="status" aria-live="polite">
-          <svg class="sf-icon status-banner-icon" viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true">
+          <svg class="sf-icon status-banner-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
             <use id="status-icon-symbol" href="#sf-info"/>
           </svg>
           <span id="live-status-text">Scan the QR code once in Pupil Settings on your Mac to pair.</span>
@@ -594,9 +610,48 @@
       </div>
     </div>
 
-    <!-- Recent Alerts Card -->
+    <!-- Verification Snapshot & Remote Disarm -->
+    <div class="section-title">Verification &amp; Remote Control</div>
+    <div class="settings-group">
+      <div class="group-body">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+          <div>
+            <div class="row-title">Verification Snapshot</div>
+            <div class="row-caption">Inspect the captured frame before disarming a false alarm.</div>
+          </div>
+          <button type="button" id="refresh-snapshot-btn" class="btn-pill" disabled>Refresh</button>
+        </div>
+
+        <div class="snapshot-frame-wrap" id="snapshot-frame-wrap">
+          <img id="verification-snapshot-img" class="snapshot-frame-img" alt="Verification snapshot from Mac" hidden>
+          <div id="snapshot-empty-state" class="snapshot-empty">
+            <svg class="sf-icon" viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
+              <use href="#sf-camera"/>
+            </svg>
+            <span>No verification frame received yet.</span>
+          </div>
+        </div>
+
+        <div class="snapshot-meta" id="snapshot-meta" hidden>
+          <span id="snapshot-reason-label">Alert frame</span>
+          <span id="snapshot-time-label"></span>
+        </div>
+      </div>
+
+      <div class="group-row">
+        <div class="row-text">
+          <div class="row-title">Remote Disarm</div>
+          <div class="row-caption">Send an authenticated disarm command if this was a false alarm.</div>
+        </div>
+        <button type="button" id="remote-disarm-btn" class="btn-destructive" disabled>
+          Disarm Mac (False Alarm)
+        </button>
+      </div>
+    </div>
+
+    <!-- Recent Alerts -->
     <div id="recent-alerts-card" hidden>
-      <div class="section-title">RECENT SECURITY ALERTS</div>
+      <div class="section-title">Recent Security Alerts</div>
       <div class="settings-group">
         <ul class="alert-log" id="alert-log-list" role="list"></ul>
       </div>
@@ -604,10 +659,10 @@
   </main>
 
   <footer>
-    <svg class="sf-icon" viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true">
+    <svg class="sf-icon" viewBox="0 0 24 24" width="11" height="11" fill="currentColor" aria-hidden="true">
       <use href="#sf-lock"/>
     </svg>
-    <span>End-to-End Encrypted Web Push (RFC 8291 + VAPID) • Zero tracking</span>
+    <span>End-to-End Encrypted Web Push (RFC 8291 + VAPID)</span>
   </footer>
 
   <script>
@@ -615,6 +670,7 @@
       const STORAGE_KEY_VAPID = 'pupil.vapidPublicKey';
       const STORAGE_KEY_CHANNEL = 'pupil.pairingChannel';
       const STORAGE_KEY_PAIRED_TOKEN = 'pupil.lastPairingToken';
+      const STORAGE_KEY_SNAPSHOT = 'pupil.lastSnapshot';
 
       const params = new URLSearchParams(window.location.search);
       const urlVapid = params.get('v');
@@ -645,11 +701,18 @@
       const headerStatusLabel = document.getElementById('header-status-label');
       const pairBtn = document.getElementById('pair-btn');
       const pairBtnText = document.getElementById('pair-btn-text');
+      const pairedUtilityRow = document.getElementById('paired-utility-row');
       const copyTokenBtn = document.getElementById('copy-token-btn');
       const testLocalBtn = document.getElementById('test-local-btn');
-      const liveStatus = document.getElementById('live-status');
       const liveStatusText = document.getElementById('live-status-text');
       const statusIconSymbol = document.getElementById('status-icon-symbol');
+      const refreshSnapshotBtn = document.getElementById('refresh-snapshot-btn');
+      const snapshotImg = document.getElementById('verification-snapshot-img');
+      const snapshotEmptyState = document.getElementById('snapshot-empty-state');
+      const snapshotMeta = document.getElementById('snapshot-meta');
+      const snapshotReasonLabel = document.getElementById('snapshot-reason-label');
+      const snapshotTimeLabel = document.getElementById('snapshot-time-label');
+      const remoteDisarmBtn = document.getElementById('remote-disarm-btn');
       const recentAlertsCard = document.getElementById('recent-alerts-card');
       const alertLogList = document.getElementById('alert-log-list');
 
@@ -670,12 +733,17 @@
           headerStatusLabel.textContent = 'Paired with Mac';
           statusIconSymbol.setAttribute('href', '#sf-checkmark-circle');
           pairBtnText.textContent = 'Re-Sync Pairing with Mac';
+          pairedUtilityRow.hidden = false;
           testLocalBtn.hidden = false;
+          remoteDisarmBtn.disabled = false;
+          refreshSnapshotBtn.disabled = false;
         } else {
-          headerStatusPill.className = 'header-status-pill pending';
+          headerStatusPill.className = 'header-status-pill';
           headerStatusIcon.setAttribute('href', '#sf-lock-open');
           headerStatusLabel.textContent = 'Ready to Pair';
           statusIconSymbol.setAttribute('href', '#sf-info');
+          remoteDisarmBtn.disabled = true;
+          refreshSnapshotBtn.disabled = !pairingChannel;
         }
       }
 
@@ -690,11 +758,29 @@
         return outputArray;
       }
 
+      function arrayBufferToBase64Url(buffer) {
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        return window.btoa(binary)
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=+$/, '');
+      }
+
       function toBase64Url(str) {
         return window.btoa(unescape(encodeURIComponent(str)))
           .replace(/\+/g, '-')
           .replace(/\//g, '_')
           .replace(/=+$/, '');
+      }
+
+      function fromBase64Url(b64url) {
+        const padding = '='.repeat((4 - (b64url.length % 4)) % 4);
+        const b64 = (b64url + padding).replace(/-/g, '+').replace(/_/g, '/');
+        return decodeURIComponent(escape(window.atob(b64)));
       }
 
       async function loadConfigFromCacheIfNeeded() {
@@ -714,8 +800,108 @@
         return { v, c };
       }
 
+      function renderVerificationSnapshot(payload) {
+        if (!payload || !payload.snapshotBase64) return;
+        const src = payload.snapshotBase64.startsWith('data:')
+          ? payload.snapshotBase64
+          : 'data:image/jpeg;base64,' + payload.snapshotBase64;
+        snapshotImg.src = src;
+        snapshotImg.hidden = false;
+        snapshotEmptyState.hidden = true;
+        snapshotMeta.hidden = false;
+        snapshotReasonLabel.textContent = payload.title || 'Verification frame';
+        const ts = new Date(payload.timestamp || Date.now());
+        snapshotTimeLabel.textContent = ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+        try {
+          localStorage.setItem(STORAGE_KEY_SNAPSHOT, JSON.stringify({
+            title: payload.title || 'Verification frame',
+            timestamp: payload.timestamp || Date.now(),
+            snapshotBase64: payload.snapshotBase64
+          }));
+        } catch {}
+      }
+
+      async function restoreCachedSnapshot() {
+        if ('caches' in window) {
+          try {
+            const cache = await caches.open('pupil-snapshots-v1');
+            const resp = await cache.match('./latest-snapshot.json');
+            if (resp) {
+              const data = await resp.json();
+              if (data && data.snapshotBase64) {
+                renderVerificationSnapshot(data);
+                return;
+              }
+            }
+          } catch {}
+        }
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY_SNAPSHOT);
+          if (raw) {
+            renderVerificationSnapshot(JSON.parse(raw));
+          }
+        } catch {}
+      }
+
+      async function fetchLatestSnapshotFromChannel() {
+        const { c } = await loadConfigFromCacheIfNeeded();
+        if (!c) return;
+        try {
+          const resp = await fetch('https://ntfy.sh/' + encodeURIComponent(c) + '/json?poll=1&since=15m');
+          if (!resp.ok) return;
+          const text = await resp.text();
+          if (!text) return;
+          const lines = text.trim().split('\n').reverse();
+          for (const line of lines) {
+            try {
+              const envelope = JSON.parse(line);
+              const msg = envelope.message || '';
+              if (msg.startsWith('pupilalert://')) {
+                const jsonStr = fromBase64Url(msg.slice('pupilalert://'.length));
+                const alertPayload = JSON.parse(jsonStr);
+                if (alertPayload && alertPayload.snapshotBase64) {
+                  renderVerificationSnapshot(alertPayload);
+                  return;
+                }
+              }
+            } catch {}
+          }
+        } catch {}
+      }
+
+      async function makeSignedDisarmToken(channel, vapidKey) {
+        const timestamp = Date.now();
+        const nonceBytes = new Uint8Array(12);
+        crypto.getRandomValues(nonceBytes);
+        const nonce = arrayBufferToBase64Url(nonceBytes.buffer);
+
+        const keyMaterial = new TextEncoder().encode(channel + ':' + vapidKey);
+        const keyHash = await crypto.subtle.digest('SHA-256', keyMaterial);
+        const cryptoKey = await crypto.subtle.importKey(
+          'raw',
+          keyHash,
+          { name: 'HMAC', hash: 'SHA-256' },
+          false,
+          ['sign']
+        );
+        const signingInput = new TextEncoder().encode(channel + ':' + timestamp + ':' + nonce);
+        const sigBuf = await crypto.subtle.sign('HMAC', cryptoKey, signingInput);
+        const sig = arrayBufferToBase64Url(sigBuf);
+
+        const payload = {
+          type: 'pupil-remote-disarm',
+          channel,
+          timestamp,
+          nonce,
+          sig
+        };
+        return 'pupildisarm://' + toBase64Url(JSON.stringify(payload));
+      }
+
       let latestPairingToken = localStorage.getItem(STORAGE_KEY_PAIRED_TOKEN) || '';
       if (latestPairingToken) {
+        pairedUtilityRow.hidden = false;
         copyTokenBtn.hidden = false;
         setStatus('Paired and active. Lock-screen alerts will wake your iPhone.', true);
       }
@@ -724,17 +910,17 @@
         try {
           if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
             if (isIOS && !isStandalone) {
-              setStatus('Please add Pupil to your Home Screen first (see steps above), then open from your Home Screen.', false);
+              setStatus('Add Pupil to your Home Screen first, then open it from there.', false);
               return;
             }
             setStatus('Web Push is not available in this browser window.', false);
             return;
           }
 
-          setStatus('Requesting notification permission…', false);
+          setStatus('Requesting notification permission...', false);
           const { v, c } = await loadConfigFromCacheIfNeeded();
           if (!v) {
-            setStatus('Missing Mac pairing key. Scan the QR code in Pupil Settings on your Mac once.', false);
+            setStatus('Missing Mac pairing key. Scan the QR code in Pupil Settings on your Mac.', false);
             return;
           }
 
@@ -743,11 +929,11 @@
 
           const permission = await Notification.requestPermission();
           if (permission !== 'granted') {
-            setStatus('Notification permission not granted. Enable Notifications for Pupil in iOS Settings.', false);
+            setStatus('Notification permission not granted. Enable Notifications in iOS Settings.', false);
             return;
           }
 
-          setStatus('Registering Apple Push Notification endpoint…', false);
+          setStatus('Registering Apple Push Notification endpoint...', false);
           const existingSub = await registration.pushManager.getSubscription();
           if (existingSub) {
             try { await existingSub.unsubscribe(); } catch {}
@@ -772,6 +958,7 @@
           const encodedToken = 'pupilpair://' + toBase64Url(JSON.stringify(pairingPayload));
           latestPairingToken = encodedToken;
           localStorage.setItem(STORAGE_KEY_PAIRED_TOKEN, encodedToken);
+          pairedUtilityRow.hidden = false;
           copyTokenBtn.hidden = false;
 
           try {
@@ -791,9 +978,9 @@
           }
 
           if (autoSynced) {
-            setStatus('Paired automatically with your Mac! You can lock your phone now.', true);
+            setStatus('Paired automatically with your Mac.', true);
           } else {
-            setStatus('Pairing code copied to clipboard! Click "Paste Pairing Code" in Pupil Settings on your Mac.', true);
+            setStatus('Pairing code copied. Click "Paste Pairing Code" in Pupil Settings on your Mac.', true);
           }
         } catch (err) {
           setStatus('Pairing error: ' + (err && err.message ? err.message : String(err)), false);
@@ -823,6 +1010,38 @@
         });
       });
 
+      refreshSnapshotBtn.addEventListener('click', async () => {
+        refreshSnapshotBtn.disabled = true;
+        await fetchLatestSnapshotFromChannel();
+        refreshSnapshotBtn.disabled = false;
+      });
+
+      remoteDisarmBtn.addEventListener('click', async () => {
+        const { v, c } = await loadConfigFromCacheIfNeeded();
+        if (!c || !v) {
+          setStatus('Missing pairing channel or key. Re-scan QR code in Pupil Settings.', false);
+          return;
+        }
+        remoteDisarmBtn.disabled = true;
+        try {
+          const disarmToken = await makeSignedDisarmToken(c, v);
+          const resp = await fetch('https://ntfy.sh/' + encodeURIComponent(c), {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: disarmToken
+          });
+          if (resp.ok) {
+            setStatus('Authenticated remote disarm command sent to your Mac.', true);
+          } else {
+            setStatus('Failed to send disarm command (HTTP ' + resp.status + ').', true);
+          }
+        } catch (err) {
+          setStatus('Remote disarm error: ' + (err && err.message ? err.message : String(err)), true);
+        } finally {
+          remoteDisarmBtn.disabled = false;
+        }
+      });
+
       function addAlertToLog(p) {
         recentAlertsCard.hidden = false;
         const li = document.createElement('li');
@@ -846,7 +1065,7 @@
 
         li.innerHTML = `
           <div class="alert-badge ${badgeType}">
-            <svg class="sf-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+            <svg class="sf-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
               <use href="${iconSymbol}"/>
             </svg>
           </div>
@@ -859,6 +1078,12 @@
           </div>
         `;
         alertLogList.prepend(li);
+
+        if (p.snapshotBase64) {
+          renderVerificationSnapshot(p);
+        } else if (p.hasSnapshot) {
+          fetchLatestSnapshotFromChannel();
+        }
       }
 
       if ('serviceWorker' in navigator) {
@@ -869,6 +1094,16 @@
           }
         });
       }
+
+      restoreCachedSnapshot();
+      if (pairingChannel) {
+        fetchLatestSnapshotFromChannel();
+      }
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          fetchLatestSnapshotFromChannel();
+        }
+      });
     })();
   </script>
 </body>

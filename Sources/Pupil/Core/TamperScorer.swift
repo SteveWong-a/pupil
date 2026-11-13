@@ -18,7 +18,7 @@ public extension TamperSource {
     var confidence: TamperConfidence {
         switch self {
         case .cameraMotionDetected: return .weak
-        case .chargerUnplugged, .lidClosed, .screenLocked, .wakeWhileArmed, .manualTest: return .strong
+        case .chargerUnplugged, .lidClosed, .screenLocked, .peripheralDisconnected, .wakeWhileArmed, .manualTest: return .strong
         }
     }
 }

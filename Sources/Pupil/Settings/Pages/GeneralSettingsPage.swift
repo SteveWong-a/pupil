@@ -49,6 +49,20 @@ public struct GeneralSettingsPage: View {
                 }
                 SettingsGroupDivider()
                 SettingsRowContent(
+                    title: "Auto-arm on screen lock",
+                    info: "Automatically arms Pupil whenever you lock your Mac screen."
+                ) {
+                    PupilToggle(isOn: $settings.autoArmOnScreenLock)
+                }
+                SettingsGroupDivider()
+                SettingsRowContent(
+                    title: "Global shortcut (⌃⌥⌘L)",
+                    info: "Press Control + Option + Command + L from anywhere to arm Pupil or open the unlock challenge."
+                ) {
+                    PupilToggle(isOn: $settings.globalArmShortcutEnabled)
+                }
+                SettingsGroupDivider()
+                SettingsRowContent(
                     title: "Gaze detection",
                     info: "Uses the camera while armed to detect when someone looks at your screen. Turning this off immediately turns off the camera."
                 ) {
