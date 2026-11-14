@@ -126,6 +126,49 @@ public enum SpatialMotionSensitivity: String, CaseIterable, Identifiable, Codabl
     }
 }
 
+public enum EnvironmentPreset: String, CaseIterable, Identifiable, Codable, Sendable {
+    case quietLibrary
+    case cafe
+    case busyPark
+    case custom
+
+    public var id: String { rawValue }
+
+    public var title: String {
+        switch self {
+        case .quietLibrary: return "Quiet Library"
+        case .cafe: return "Cafe"
+        case .busyPark: return "Busy Park"
+        case .custom: return "Custom"
+        }
+    }
+
+    public var volume: Double? {
+        switch self {
+        case .quietLibrary: return 0.45
+        case .cafe: return 0.80
+        case .busyPark: return 1.00
+        case .custom: return nil
+        }
+    }
+
+    public static var fixedPresets: [EnvironmentPreset] {
+        [.quietLibrary, .cafe, .busyPark]
+    }
+
+    public static func matching(volume: Double) -> EnvironmentPreset {
+        if abs(volume - 0.45) < 0.02 {
+            return .quietLibrary
+        } else if abs(volume - 0.80) < 0.02 {
+            return .cafe
+        } else if abs(volume - 1.00) < 0.02 {
+            return .busyPark
+        } else {
+            return .custom
+        }
+    }
+}
+
 public enum HardwareTrigger: String, CaseIterable, Identifiable, Codable, Hashable, Sendable {
     case chargerUnplug
     case lidClose
@@ -286,6 +329,25 @@ public final class PupilSettings {
 
     public var sirenFrequencyHz: Int {
         didSet { defaults.set(sirenFrequencyHz, forKey: Keys.sirenFrequencyHz) }
+    }
+
+    public var sirenSpeakerOverrideEnabled: Bool {
+        didSet { defaults.set(sirenSpeakerOverrideEnabled, forKey: Keys.sirenSpeakerOverrideEnabled) }
+    }
+
+    public var sirenOverrideVolume: Double {
+        didSet {
+            let clamped = min(max(sirenOverrideVolume, 0.10), 1.00)
+            if clamped != sirenOverrideVolume {
+                sirenOverrideVolume = clamped
+                return
+            }
+            defaults.set(sirenOverrideVolume, forKey: Keys.sirenOverrideVolume)
+        }
+    }
+
+    public var activeEnvironmentPreset: EnvironmentPreset {
+        EnvironmentPreset.matching(volume: sirenOverrideVolume)
     }
 
     public var preferredCameraID: String? {
@@ -455,6 +517,9 @@ public final class PupilSettings {
         self.hapticFeedbackEnabled = defaults.object(forKey: Keys.hapticFeedbackEnabled) as? Bool ?? true
         self.hardwareLockdownEnabled = defaults.object(forKey: Keys.hardwareLockdownEnabled) as? Bool ?? true
         self.sirenFrequencyHz = defaults.object(forKey: Keys.sirenFrequencyHz) as? Int ?? 880
+        self.sirenSpeakerOverrideEnabled = defaults.object(forKey: Keys.sirenSpeakerOverrideEnabled) as? Bool ?? true
+        let storedVolume = defaults.object(forKey: Keys.sirenOverrideVolume) as? Double ?? 0.80
+        self.sirenOverrideVolume = min(max(storedVolume, 0.10), 1.00)
         self.preferredCameraID = defaults.string(forKey: Keys.preferredCameraID)
         self.preferredDisplayID = defaults.string(forKey: Keys.preferredDisplayID)
         self.relayEnabled = defaults.object(forKey: Keys.relayEnabled) as? Bool ?? false
@@ -508,6 +573,8 @@ public final class PupilSettings {
         static let hapticFeedbackEnabled = "pupil.hapticFeedbackEnabled"
         static let hardwareLockdownEnabled = "pupil.hardwareLockdownEnabled"
         static let sirenFrequencyHz = "pupil.sirenFrequencyHz"
+        static let sirenSpeakerOverrideEnabled = "pupil.sirenSpeakerOverrideEnabled"
+        static let sirenOverrideVolume = "pupil.sirenOverrideVolume"
         static let preferredCameraID = "pupil.preferredCameraID"
         static let preferredDisplayID = "pupil.preferredDisplayID"
         static let relayEnabled = "pupil.relayEnabled"

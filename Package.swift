@@ -19,6 +19,7 @@ let package = Package(
                 .linkedFramework("Vision"),
                 .linkedFramework("AVFoundation"),
                 .linkedFramework("AudioToolbox"),
+                .linkedFramework("CoreAudio"),
                 .linkedFramework("IOKit"),
                 .linkedFramework("LocalAuthentication"),
                 .linkedFramework("Security"),
