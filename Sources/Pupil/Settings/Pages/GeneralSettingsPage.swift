@@ -88,7 +88,7 @@ public struct GeneralSettingsPage: View {
                 }
                 SettingsGroupDivider()
                 SettingsRowContent(
-                    title: "OS Hardware Lockdown",
+                    title: "OS hardware lockdown",
                     info: "Blocks Force Quit, Cmd+Tab, Dock, and Logout while the tamper shield is active."
                 ) {
                     PupilToggle(isOn: $settings.hardwareLockdownEnabled)

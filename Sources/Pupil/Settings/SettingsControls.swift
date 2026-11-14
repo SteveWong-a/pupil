@@ -283,6 +283,150 @@ public struct SettingsOptionSliderRowContent: View {
     }
 }
 
+/// Native macOS AppKit tick-marked slider that allows both snapping to ticks/labels
+/// and continuous off-tick dragging (used for Location Environment volume).
+public struct NativeTickSlider: NSViewRepresentable {
+    @Binding public var value: Double
+    public let range: ClosedRange<Double>
+    public let tickCount: Int
+    public var isEnabled: Bool = true
+
+    public init(
+        value: Binding<Double>,
+        in range: ClosedRange<Double> = 0.10...1.00,
+        tickCount: Int = 7,
+        isEnabled: Bool = true
+    ) {
+        self._value = value
+        self.range = range
+        self.tickCount = tickCount
+        self.isEnabled = isEnabled
+    }
+
+    public func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    public func makeNSView(context: Context) -> NSSlider {
+        let slider = NSSlider(
+            value: value,
+            minValue: range.lowerBound,
+            maxValue: range.upperBound,
+            target: context.coordinator,
+            action: #selector(Coordinator.valueChanged(_:))
+        )
+        slider.sliderType = .linear
+        slider.controlSize = .regular
+        slider.numberOfTickMarks = tickCount
+        slider.tickMarkPosition = .below
+        slider.allowsTickMarkValuesOnly = false
+        slider.isContinuous = true
+        slider.isEnabled = isEnabled
+        return slider
+    }
+
+    public func updateNSView(_ nsView: NSSlider, context: Context) {
+        if abs(nsView.doubleValue - value) > 0.0001 {
+            nsView.doubleValue = value
+        }
+        if nsView.numberOfTickMarks != tickCount {
+            nsView.numberOfTickMarks = tickCount
+        }
+        nsView.isEnabled = isEnabled
+    }
+
+    public final class Coordinator: NSObject {
+        private var parent: NativeTickSlider
+
+        init(_ parent: NativeTickSlider) {
+            self.parent = parent
+        }
+
+        @MainActor @objc func valueChanged(_ sender: NSSlider) {
+            let clamped = min(max(sender.doubleValue, parent.range.lowerBound), parent.range.upperBound)
+            if abs(parent.value - clamped) > 0.0001 {
+                parent.value = clamped
+            }
+        }
+    }
+}
+
+/// Native macOS tick-marked slider row with clickable environment stop labels beneath the track
+/// and a clean right-aligned value summary matching `SettingsSteppedSliderRowContent` and `SettingsOptionSliderRowContent`.
+public struct SettingsEnvironmentSliderRowContent: View {
+    public let title: String
+    public let valueLabel: String
+    @Binding public var value: Double
+    public let presets: [(label: String, targetValue: Double)]
+    public var isEnabled: Bool = true
+
+    public init(
+        title: String,
+        valueLabel: String,
+        value: Binding<Double>,
+        presets: [(label: String, targetValue: Double)],
+        isEnabled: Bool = true
+    ) {
+        self.title = title
+        self.valueLabel = valueLabel
+        self._value = value
+        self.presets = presets
+        self.isEnabled = isEnabled
+    }
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(title)
+                    .font(SettingsMetrics.rowFont)
+                    .foregroundStyle(SettingsMetrics.textPrimary)
+                Spacer(minLength: 8)
+                Text(valueLabel)
+                    .font(SettingsMetrics.rowFont)
+                    .foregroundStyle(SettingsMetrics.textSecondary)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                NativeTickSlider(
+                    value: $value,
+                    in: 0.10...1.00,
+                    tickCount: 7,
+                    isEnabled: isEnabled
+                )
+                .frame(height: 22)
+
+                HStack {
+                    ForEach(Array(presets.enumerated()), id: \.offset) { position, preset in
+                        Button {
+                            value = preset.targetValue
+                        } label: {
+                            Text(preset.label)
+                                .font(.system(size: 12))
+                                .foregroundStyle(
+                                    abs(value - preset.targetValue) < 0.02
+                                        ? SettingsMetrics.textSecondary
+                                        : SettingsMetrics.textTertiary
+                                )
+                                .frame(maxWidth: .infinity, alignment: alignment(at: position))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!isEnabled)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, SettingsMetrics.rowHorizontalInset)
+        .padding(.vertical, SettingsMetrics.sliderRowVerticalPadding)
+        .opacity(isEnabled ? 1.0 : 0.55)
+    }
+
+    private func alignment(at position: Int) -> Alignment {
+        if position == 0 { return .leading }
+        if position == presets.count - 1 { return .trailing }
+        return .center
+    }
+}
+
 public struct SettingsPrimaryButton: View {
     public let title: String
     public var isEnabled: Bool = true

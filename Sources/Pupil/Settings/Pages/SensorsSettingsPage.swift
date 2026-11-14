@@ -314,7 +314,7 @@ public struct SensorsSettingsPage: View {
                                     }
                                 }
                                 PillActionButton(
-                                    title: coordinator.bluetoothMonitor.isScanning ? "Stop Scan" : "Scan"
+                                    title: coordinator.bluetoothMonitor.isScanning ? "Stop scan" : "Scan"
                                 ) {
                                     if coordinator.bluetoothMonitor.isScanning {
                                         coordinator.bluetoothMonitor.stopScanning()
@@ -328,8 +328,8 @@ public struct SensorsSettingsPage: View {
                         if !coordinator.bluetoothMonitor.discoveredDevices.isEmpty {
                             SettingsGroupDivider()
                             VStack(alignment: .leading, spacing: 6) {
-                                Text("Nearby Devices")
-                                    .font(.system(size: 11.5, weight: .semibold))
+                                Text("Nearby devices")
+                                    .font(SettingsMetrics.sectionTitleFont)
                                     .foregroundStyle(SettingsMetrics.textSecondary)
 
                                 ForEach(coordinator.bluetoothMonitor.discoveredDevices.prefix(6)) { device in
@@ -343,7 +343,8 @@ public struct SensorsSettingsPage: View {
                                                 .font(.system(size: 12))
                                                 .foregroundStyle(isSelected ? PupilTheme.armedGreen : SettingsMetrics.textSecondary)
                                             Text(device.name)
-                                                .font(.system(size: 12.5, weight: isSelected ? .semibold : .regular))
+                                                .font(SettingsMetrics.rowFont)
+                                                .fontWeight(isSelected ? .medium : .regular)
                                                 .foregroundStyle(SettingsMetrics.textPrimary)
                                                 .lineLimit(1)
                                             Spacer()

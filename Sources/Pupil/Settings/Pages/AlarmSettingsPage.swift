@@ -31,7 +31,7 @@ public struct AlarmSettingsPage: View {
                 }
                 SettingsGroupDivider()
                 SettingsRowContent(
-                    title: "Force Built-in Speakers & Unmute",
+                    title: "Force built-in speakers & unmute",
                     subtitle: "Routes the theft alarm to MacBook speakers and unmutes audio even if headphones are plugged in."
                 ) {
                     PupilToggle(isOn: $settings.sirenSpeakerOverrideEnabled)
@@ -130,76 +130,26 @@ public struct AlarmSettingsPage: View {
         }
     }
 
-    private var locationEnvironmentBadgeText: String {
+    private var locationEnvironmentValueLabel: String {
+        let pct = Int((settings.sirenOverrideVolume * 100).rounded())
         let preset = settings.activeEnvironmentPreset
         if preset == .custom {
-            return "Custom (\(Int((settings.sirenOverrideVolume * 100).rounded()))%)"
+            return "Custom · \(pct)%"
         }
-        return preset.title
+        return "\(preset.title) · \(pct)%"
     }
 
     private var locationEnvironmentRow: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .center, spacing: 8) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Location Environment")
-                        .font(SettingsMetrics.rowFont)
-                        .foregroundStyle(SettingsMetrics.textPrimary)
-                    Text("Sets siren speaker volume when an alarm latches.")
-                        .font(.system(size: 11))
-                        .foregroundStyle(SettingsMetrics.textTertiary)
-                }
-
-                Spacer()
-
-                Text(locationEnvironmentBadgeText)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(settings.activeEnvironmentPreset == .custom ? PupilTheme.warningAmber : PupilTheme.accent)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 4)
-                    .background(
-                        Capsule()
-                            .fill(
-                                (settings.activeEnvironmentPreset == .custom ? PupilTheme.warningAmber : PupilTheme.accent)
-                                    .opacity(0.14)
-                            )
-                    )
-            }
-
-            Slider(value: $settings.sirenOverrideVolume, in: 0.10...1.00)
-                .tint(PupilTheme.accent)
-                .disabled(!settings.sirenSpeakerOverrideEnabled)
-
-            HStack(spacing: 8) {
-                ForEach(EnvironmentPreset.fixedPresets) { preset in
-                    let isSelected = settings.activeEnvironmentPreset == preset
-                    Button {
-                        if let presetVolume = preset.volume {
-                            settings.sirenOverrideVolume = presetVolume
-                        }
-                    } label: {
-                        Text("\(preset.title) (\(Int(((preset.volume ?? 0.80) * 100).rounded()))%)")
-                            .font(.system(size: 11, weight: isSelected ? .semibold : .medium))
-                            .foregroundStyle(isSelected ? PupilTheme.accent : SettingsMetrics.textSecondary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(
-                                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                    .fill(isSelected ? PupilTheme.accent.opacity(0.14) : SettingsMetrics.pickerPillFill)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!settings.sirenSpeakerOverrideEnabled)
-
-                    if preset != EnvironmentPreset.fixedPresets.last {
-                        Spacer(minLength: 4)
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, SettingsMetrics.rowHorizontalInset)
-        .padding(.vertical, SettingsMetrics.sliderRowVerticalPadding)
-        .opacity(settings.sirenSpeakerOverrideEnabled ? 1.0 : 0.55)
+        SettingsEnvironmentSliderRowContent(
+            title: "Location environment",
+            valueLabel: locationEnvironmentValueLabel,
+            value: $settings.sirenOverrideVolume,
+            presets: EnvironmentPreset.fixedPresets.compactMap { preset in
+                guard let volume = preset.volume else { return nil }
+                return (label: preset.title, targetValue: volume)
+            },
+            isEnabled: settings.sirenSpeakerOverrideEnabled
+        )
     }
 
     private func relativeTimeString(for date: Date) -> String {
