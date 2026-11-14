@@ -130,6 +130,7 @@ public final class ScreenShieldController {
         NSApp.activate(ignoringOtherApps: true)
         if let primary = shieldWindows.first {
             primary.makeKeyAndOrderFront(nil)
+            primary.makeKey()
         }
     }
 
