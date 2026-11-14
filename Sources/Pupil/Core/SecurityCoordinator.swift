@@ -151,6 +151,7 @@ public final class SecurityCoordinator {
     private var motionAggregator = MotionTemporalAggregator()
     private var tamperScorer = TamperScorer()
     private var lastMotionWarningTime: TimeInterval = 0
+    private var lastSurroundingsAlertTime: TimeInterval = 0
     private var countdownTimer: Timer?
     private var alarmReminderTimer: Timer?
     private var alarmStartTime: TimeInterval?
@@ -181,6 +182,10 @@ public final class SecurityCoordinator {
         self.webPushManager.onRemoteDisarmRequested = { [weak self] in
             self?.disarmViaRemotePhone()
         }
+        self.webPushManager.onRemoteSnapshotRequested = { [weak self] in
+            self?.handleRemoteSnapshotRequest()
+        }
+        self.cameraManager.motionDetector.surroundingsWatchEnabled = settings.surroundingsWatchEnabled
 
         // Ensure a default PIN ("1234") is enrolled on first launch if none exists so the user can test immediately,
         // and clearly surface PIN changes in Settings.
@@ -647,6 +652,33 @@ public final class SecurityCoordinator {
         )
     }
 
+    private func handleRemoteSnapshotRequest() {
+        guard state == .armed || state == .tamperPending || state == .alarm else { return }
+        logEvent("Remote Snapshot Requested", detail: "Capturing verification frame for mobile companion.")
+
+        Task { [weak self] in
+            guard let self else { return }
+            guard let frame = await self.cameraManager.captureOneShotFrame(
+                preferredDeviceID: self.settings.preferredCameraID,
+                timeoutSeconds: 2.0
+            ) else {
+                return
+            }
+            self.syncCameraLifecycle()
+            guard self.state == .armed || self.state == .tamperPending || self.state == .alarm,
+                  let snapshotBase64 = self.encodeVerificationSnapshotBase64(frame) else {
+                return
+            }
+            self.alertNotifier.send(AlertMessage(
+                title: "Pupil Snapshot",
+                body: "Requested verification frame (\(self.state.label)).",
+                severity: "normal",
+                tag: "pupil-snapshot",
+                snapshotBase64: snapshotBase64
+            ))
+        }
+    }
+
     private func dispatchMobileAlertWithOneShotSnapshotFallback(
         title: String,
         body: String,
@@ -775,7 +807,7 @@ public final class SecurityCoordinator {
     }
 
     public func ingestMotionSample(_ sample: MotionSample) {
-        guard settings.isSpatialMotionEnabled || isCameraPreviewRequested || isLiveCalibrating else { return }
+        guard settings.isSpatialMotionEnabled || settings.surroundingsWatchEnabled || isCameraPreviewRequested || isLiveCalibrating else { return }
 
         latestTextureEnergy = sample.textureEnergy
         isTextureAdequate = sample.isRegistrationReliable || sample.textureEnergy >= VisionMotionDetector.minimumTextureEnergy
@@ -823,6 +855,27 @@ public final class SecurityCoordinator {
         }
 
         guard state == .armed || state == .tamperPending else { return }
+
+        if settings.surroundingsWatchEnabled && sample.surroundingsActivityDetected {
+            let now = clock()
+            if now - lastSurroundingsAlertTime >= 10.0 {
+                lastSurroundingsAlertTime = now
+                logEvent(
+                    "Surroundings Activity",
+                    detail: "Peripheral movement detected around your Mac while armed."
+                )
+                alertNotifier.send(AlertMessage(
+                    title: "Surroundings Activity",
+                    body: "Peripheral movement detected around your Mac while armed.",
+                    severity: "normal",
+                    tag: "pupil-surroundings",
+                    snapshotBase64: captureVerificationSnapshotBase64()
+                ))
+                onNotchUpdateNeeded?()
+            }
+        }
+
+        guard settings.isSpatialMotionEnabled else { return }
 
         // If currently in tamper countdown from spatial motion, auto-revert once movement has ceased/settled
         if state == .tamperPending && activeTamperSource == .cameraMotionDetected {
@@ -1072,10 +1125,11 @@ public final class SecurityCoordinator {
 
     public func syncCameraLifecycle() {
         cameraManager.updateActiveROI(settings.activeCameraROI)
+        cameraManager.motionDetector.surroundingsWatchEnabled = settings.surroundingsWatchEnabled
         if !settings.gazeDetectionEnabled && isGazeWarningActive {
             dismissGazeWarning()
         }
-        let cameraNeededForMonitoring = isMonitoring && (settings.gazeDetectionEnabled || settings.isSpatialMotionEnabled)
+        let cameraNeededForMonitoring = isMonitoring && (settings.gazeDetectionEnabled || settings.isSpatialMotionEnabled || settings.surroundingsWatchEnabled)
         let shouldRunCamera = isCameraPreviewRequested || cameraNeededForMonitoring
         if shouldRunCamera {
             cameraManager.startCapture(preferredDeviceID: settings.preferredCameraID)

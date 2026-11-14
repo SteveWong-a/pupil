@@ -239,6 +239,13 @@ public final class PupilSettings {
         didSet { defaults.set(spatialMotionSensitivity.rawValue, forKey: Keys.spatialMotionSensitivity) }
     }
 
+    public var surroundingsWatchEnabled: Bool {
+        didSet {
+            defaults.set(surroundingsWatchEnabled, forKey: Keys.surroundingsWatchEnabled)
+            NotificationCenter.default.post(name: .screenShieldSync, object: nil)
+        }
+    }
+
     public var blurBackgroundWhenArmed: Bool {
         didSet {
             defaults.set(blurBackgroundWhenArmed, forKey: Keys.blurBackgroundWhenArmed)
@@ -419,6 +426,7 @@ public final class PupilSettings {
         } else {
             self.spatialMotionSensitivity = .medium
         }
+        self.surroundingsWatchEnabled = defaults.object(forKey: Keys.surroundingsWatchEnabled) as? Bool ?? false
         self.blurBackgroundWhenArmed = defaults.object(forKey: Keys.blurBackgroundWhenArmed) as? Bool ?? false
         self.blurScreenOnGaze = defaults.object(forKey: Keys.blurScreenOnGaze) as? Bool ?? true
         self.lockOnInputWhenArmed = defaults.object(forKey: Keys.lockOnInputWhenArmed) as? Bool ?? true
@@ -467,6 +475,7 @@ public final class PupilSettings {
         static let countdownChimeEnabled = "pupil.countdownChimeEnabled"
         static let isSpatialMotionEnabled = "pupil.experimentalSpatialMotionEnabled"
         static let spatialMotionSensitivity = "pupil.spatialMotionSensitivity"
+        static let surroundingsWatchEnabled = "pupil.surroundingsWatchEnabled"
         static let blurBackgroundWhenArmed = "pupil.blurBackgroundWhenArmed"
         static let blurScreenOnGaze = "pupil.blurScreenOnGaze"
         static let lockOnInputWhenArmed = "pupil.lockOnInputWhenArmed"

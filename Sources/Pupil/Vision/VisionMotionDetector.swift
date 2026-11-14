@@ -37,6 +37,8 @@ public struct MotionSample: Sendable, Equatable {
     public let textureEnergy: Float
     /// Whether a foreground human face was present in the anchor or current frame.
     public let hadFaceInScene: Bool
+    /// Whether frame-to-frame luminance/edge change was detected in peripheral regions when surroundings watch is enabled.
+    public let surroundingsActivityDetected: Bool
 
     public init(
         timestamp: TimeInterval,
@@ -49,7 +51,8 @@ public struct MotionSample: Sendable, Equatable {
         interFrameTranslation: Float = 0,
         isRegistrationReliable: Bool = true,
         textureEnergy: Float = 0,
-        hadFaceInScene: Bool = false
+        hadFaceInScene: Bool = false,
+        surroundingsActivityDetected: Bool = false
     ) {
         self.timestamp = timestamp
         self.translationMagnitude = translationMagnitude
@@ -62,6 +65,7 @@ public struct MotionSample: Sendable, Equatable {
         self.isRegistrationReliable = isRegistrationReliable
         self.textureEnergy = textureEnergy
         self.hadFaceInScene = hadFaceInScene
+        self.surroundingsActivityDetected = surroundingsActivityDetected
     }
 
     public var isFrameOccluded: Bool {
@@ -356,6 +360,20 @@ public final class VisionMotionDetector: @unchecked Sendable {
     private var anchorHadFace: Bool = false
     private var lastFaceBoundingBoxes: [CGRect] = []
     private var lastFaceDetectionTime: TimeInterval = 0
+    private var _surroundingsWatchEnabled: Bool = false
+
+    public var surroundingsWatchEnabled: Bool {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _surroundingsWatchEnabled
+        }
+        set {
+            lock.lock()
+            _surroundingsWatchEnabled = newValue
+            lock.unlock()
+        }
+    }
 
     /// Registration runs on a downscaled copy: faster, and averaging smooths sensor noise.
     public static let analysisWidth = 320
@@ -399,7 +417,8 @@ public final class VisionMotionDetector: @unchecked Sendable {
         faceBoundingBoxes: [CGRect] = [],
         metricDepthZ0: Float? = nil,
         timestamp: TimeInterval = Date().timeIntervalSince1970,
-        allowReanchorOnFaceAcquisition: Bool = false
+        allowReanchorOnFaceAcquisition: Bool = false,
+        surroundingsWatchEnabled: Bool? = nil
     ) -> MotionSample {
         lock.lock()
         let effectiveFaceBoxes: [CGRect]
@@ -484,6 +503,7 @@ public final class VisionMotionDetector: @unchecked Sendable {
         let anchorZ0 = anchorMetricDepthZ0
         let cachedAnchorEnergy = anchorTextureEnergyValue
         let wasAnchorHadFace = anchorHadFace
+        let isSurroundingsWatchActive = surroundingsWatchEnabled ?? _surroundingsWatchEnabled
         lock.unlock()
 
         guard let anchor = existingAnchor else {
@@ -524,6 +544,12 @@ public final class VisionMotionDetector: @unchecked Sendable {
             }
         }
 
+        var surroundingsDetected = false
+        if isSurroundingsWatchActive, let prev = prevRaw {
+            let (meanDiff, changedFraction) = Self.computePeripheralChange(previous: prev, current: currentRaw)
+            surroundingsDetected = meanDiff >= 0.035 || changedFraction >= 0.06
+        }
+
         return MotionSample(
             timestamp: timestamp,
             translationMagnitude: translationMag,
@@ -535,7 +561,8 @@ public final class VisionMotionDetector: @unchecked Sendable {
             interFrameTranslation: interFrameMag,
             isRegistrationReliable: reliable,
             textureEnergy: currentEnergy,
-            hadFaceInScene: hasFaceInScene
+            hadFaceInScene: hasFaceInScene,
+            surroundingsActivityDetected: surroundingsDetected
         )
     }
 
@@ -759,5 +786,75 @@ public final class VisionMotionDetector: @unchecked Sendable {
         let variance = max(0, meanSq - mean * mean)
 
         return (mean, variance)
+    }
+
+    /// Computes frame-to-frame luminance and edge change in peripheral left/right/lower regions
+    /// (outside the central upper anchor: x in [0.25, 0.75), y in [0, 0.55) in top-down buffer coords).
+    public static func computePeripheralChange(
+        previous: CGImage,
+        current: CGImage
+    ) -> (meanDiff: Float, changedFraction: Float) {
+        let w = 80
+        let h = 60
+        guard let prevLuma = downsampledLumaGrid(of: previous, width: w, height: h),
+              let currLuma = downsampledLumaGrid(of: current, width: w, height: h) else {
+            return (0, 0)
+        }
+
+        let centerLeft = w / 4          // 20
+        let centerRight = (w * 3) / 4   // 60
+        let upperBottom = (h * 55) / 100 // 33
+
+        var totalScore: Float = 0
+        var changedPixels = 0
+        var peripheralCount = 0
+
+        for y in 0..<(h - 1) {
+            for x in 0..<(w - 1) {
+                let inCentralUpper = (x >= centerLeft && x < centerRight && y < upperBottom)
+                if inCentralUpper { continue }
+
+                let idx = y * w + x
+                let p = prevLuma[idx]
+                let c = currLuma[idx]
+                let lumaDiff = abs(c - p)
+
+                let prevGrad = abs(prevLuma[idx + 1] - p) + abs(prevLuma[idx + w] - p)
+                let currGrad = abs(currLuma[idx + 1] - c) + abs(currLuma[idx + w] - c)
+                let edgeDiff = abs(currGrad - prevGrad)
+
+                let combined = 0.6 * lumaDiff + 0.4 * edgeDiff
+                totalScore += combined
+                if lumaDiff > 0.08 || edgeDiff > 0.08 {
+                    changedPixels += 1
+                }
+                peripheralCount += 1
+            }
+        }
+
+        guard peripheralCount > 0 else { return (0, 0) }
+        return (totalScore / Float(peripheralCount), Float(changedPixels) / Float(peripheralCount))
+    }
+
+    private static func downsampledLumaGrid(of image: CGImage, width w: Int, height h: Int) -> [Float]? {
+        var raw = [UInt8](repeating: 0, count: w * h * 4)
+        guard let ctx = CGContext(
+            data: &raw,
+            width: w,
+            height: h,
+            bitsPerComponent: 8,
+            bytesPerRow: w * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        ctx.interpolationQuality = .medium
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+
+        var luma = [Float](repeating: 0, count: w * h)
+        for i in 0..<(w * h) {
+            let o = i * 4
+            luma[i] = (0.2126 * Float(raw[o]) + 0.7152 * Float(raw[o + 1]) + 0.0722 * Float(raw[o + 2])) / 255.0
+        }
+        return luma
     }
 }

@@ -99,6 +99,8 @@ public final class WebPushManager {
 
     /// Invoked on the main actor when a verified remote disarm command arrives from the paired phone.
     public var onRemoteDisarmRequested: (() -> Void)?
+    /// Invoked on the main actor when a remote snapshot ping (`PING_SNAPSHOT`) arrives from the paired phone.
+    public var onRemoteSnapshotRequested: (() -> Void)?
 
     private let settings: PupilSettings
     private var pairingPollTimer: Timer?
@@ -420,6 +422,12 @@ public final class WebPushManager {
                 onRemoteDisarmRequested?()
                 return true
             }
+
+            if validateRemoteSnapshotCommand(message, now: now) {
+                statusMessage = "Remote snapshot requested from paired phone."
+                onRemoteSnapshotRequested?()
+                return true
+            }
         }
         return false
     }
@@ -513,6 +521,119 @@ public final class WebPushManager {
         }
 
         processedDisarmNonces.insert(nonceKey)
+        return true
+    }
+
+    /// Generates an HMAC-SHA256 authenticated `pupilsnapshot://` `PING_SNAPSHOT` token for the current pairing channel.
+    public func makeRemoteSnapshotToken(
+        channel: String? = nil,
+        vapidPublicKey: String? = nil,
+        timestampMs: Int64? = nil,
+        nonce: String? = nil
+    ) -> String? {
+        let ch = channel ?? settings.pairingChannelID
+        let vKey = vapidPublicKey ?? vapidPublicKeyBase64URL
+        guard !ch.isEmpty else { return nil }
+
+        let ts = timestampMs ?? Int64(Date().timeIntervalSince1970 * 1000)
+        let resolvedNonce = nonce ?? Self.generateRandomNonce()
+        let sig = Self.computeDisarmSignature(channel: ch, vapidPublicKey: vKey, timestampMs: ts, nonce: resolvedNonce)
+
+        let payload: [String: Any] = [
+            "type": "pupil-remote-snapshot",
+            "command": "PING_SNAPSHOT",
+            "channel": ch,
+            "timestamp": ts,
+            "nonce": resolvedNonce,
+            "sig": sig
+        ]
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: payload) else {
+            return nil
+        }
+        return "pupilsnapshot://" + jsonData.base64URLEncodedString()
+    }
+
+    /// Validates a `PING_SNAPSHOT` command string, JSON envelope, or signed `pupilsnapshot://` token.
+    @discardableResult
+    public func validateRemoteSnapshotCommand(
+        _ rawInput: String,
+        now: Date = Date(),
+        maxAgeSeconds: TimeInterval = 120
+    ) -> Bool {
+        let trimmed = rawInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed == "PING_SNAPSHOT" {
+            return true
+        }
+
+        let jsonData: Data
+        if trimmed.hasPrefix("pupilsnapshot://") {
+            let b64Part = String(trimmed.dropFirst("pupilsnapshot://".count))
+            guard let decoded = Data(base64URLEncoded: b64Part) else { return false }
+            jsonData = decoded
+        } else if trimmed.hasPrefix("pupilcmd://") {
+            let b64Part = String(trimmed.dropFirst("pupilcmd://".count))
+            guard let decoded = Data(base64URLEncoded: b64Part) else { return false }
+            jsonData = decoded
+        } else if let directData = trimmed.data(using: .utf8), trimmed.hasPrefix("{") {
+            jsonData = directData
+        } else {
+            return false
+        }
+
+        guard let obj = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
+            return false
+        }
+
+        let cmd = (obj["command"] as? String) ?? (obj["cmd"] as? String)
+        let type = obj["type"] as? String
+        let isSnapshotCommand = cmd == "PING_SNAPSHOT" || type == "PING_SNAPSHOT" || type == "pupil-remote-snapshot"
+        guard isSnapshotCommand else { return false }
+
+        if let channel = obj["channel"] as? String {
+            guard !channel.isEmpty, channel == settings.pairingChannelID else {
+                return false
+            }
+        }
+
+        if let sig = obj["sig"] as? String {
+            guard let channel = obj["channel"] as? String,
+                  !channel.isEmpty,
+                  channel == settings.pairingChannelID,
+                  let nonce = obj["nonce"] as? String,
+                  !nonce.isEmpty,
+                  let sigData = Data(base64URLEncoded: sig) else {
+                return false
+            }
+
+            let timestampMs: Int64
+            if let tsInt = obj["timestamp"] as? Int64 {
+                timestampMs = tsInt
+            } else if let tsNum = obj["timestamp"] as? NSNumber {
+                timestampMs = tsNum.int64Value
+            } else {
+                return false
+            }
+
+            let nowMs = Int64(now.timeIntervalSince1970 * 1000)
+            let maxAgeMs = Int64(maxAgeSeconds * 1000)
+            guard abs(nowMs - timestampMs) <= maxAgeMs else {
+                return false
+            }
+
+            let nonceKey = "snap:\(channel):\(nonce)"
+            guard !processedDisarmNonces.contains(nonceKey) else {
+                return false
+            }
+
+            let hmacKey = Self.disarmHMACKey(channel: channel, vapidPublicKey: vapidPublicKeyBase64URL)
+            let signingInput = Data("\(channel):\(timestampMs):\(nonce)".utf8)
+            guard HMAC<SHA256>.isValidAuthenticationCode(sigData, authenticating: signingInput, using: hmacKey) else {
+                return false
+            }
+
+            processedDisarmNonces.insert(nonceKey)
+        }
+
         return true
     }
 
