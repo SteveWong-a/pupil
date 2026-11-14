@@ -24,7 +24,7 @@ public final class CameraManager: NSObject {
     public private(set) var availableCameras: [CameraDeviceInfo] = []
     public private(set) var authorizationStatus: AVAuthorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
     public private(set) var isRunning: Bool = false
-    public private(set) var lastFrameImage: CGImage?
+    public internal(set) var lastFrameImage: CGImage?
 
     public var onGazeSample: ((GazeSample) -> Void)?
     public var onMotionSample: ((MotionSample) -> Void)?

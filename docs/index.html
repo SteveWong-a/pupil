@@ -619,7 +619,10 @@
             <div class="row-title">Verification Snapshot</div>
             <div class="row-caption">Inspect the captured frame before disarming a false alarm.</div>
           </div>
-          <button type="button" id="refresh-snapshot-btn" class="btn-pill" disabled>Refresh</button>
+          <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+            <button type="button" id="ping-snapshot-btn" class="btn-pill" disabled>Refresh Photo</button>
+            <button type="button" id="refresh-snapshot-btn" class="btn-pill" disabled>Refresh</button>
+          </div>
         </div>
 
         <div class="snapshot-frame-wrap" id="snapshot-frame-wrap">
@@ -707,6 +710,7 @@
       const liveStatusText = document.getElementById('live-status-text');
       const statusIconSymbol = document.getElementById('status-icon-symbol');
       const refreshSnapshotBtn = document.getElementById('refresh-snapshot-btn');
+      const pingSnapshotBtn = document.getElementById('ping-snapshot-btn');
       const snapshotImg = document.getElementById('verification-snapshot-img');
       const snapshotEmptyState = document.getElementById('snapshot-empty-state');
       const snapshotMeta = document.getElementById('snapshot-meta');
@@ -736,6 +740,7 @@
           pairedUtilityRow.hidden = false;
           testLocalBtn.hidden = false;
           remoteDisarmBtn.disabled = false;
+          pingSnapshotBtn.disabled = false;
           refreshSnapshotBtn.disabled = false;
         } else {
           headerStatusPill.className = 'header-status-pill';
@@ -743,6 +748,7 @@
           headerStatusLabel.textContent = 'Ready to Pair';
           statusIconSymbol.setAttribute('href', '#sf-info');
           remoteDisarmBtn.disabled = true;
+          pingSnapshotBtn.disabled = true;
           refreshSnapshotBtn.disabled = !pairingChannel;
         }
       }
@@ -870,7 +876,7 @@
         } catch {}
       }
 
-      async function makeSignedDisarmToken(channel, vapidKey) {
+      async function makeSignedCommandToken(channel, vapidKey, extraFields, prefix) {
         const timestamp = Date.now();
         const nonceBytes = new Uint8Array(12);
         crypto.getRandomValues(nonceBytes);
@@ -889,14 +895,25 @@
         const sigBuf = await crypto.subtle.sign('HMAC', cryptoKey, signingInput);
         const sig = arrayBufferToBase64Url(sigBuf);
 
-        const payload = {
-          type: 'pupil-remote-disarm',
+        const payload = Object.assign({
           channel,
           timestamp,
           nonce,
           sig
-        };
-        return 'pupildisarm://' + toBase64Url(JSON.stringify(payload));
+        }, extraFields);
+        return prefix + toBase64Url(JSON.stringify(payload));
+      }
+
+      async function makeSignedDisarmToken(channel, vapidKey) {
+        return makeSignedCommandToken(channel, vapidKey, { type: 'pupil-remote-disarm' }, 'pupildisarm://');
+      }
+
+      async function publishRemoteCommand(channel, body) {
+        return fetch('https://ntfy.sh/' + encodeURIComponent(channel), {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body
+        });
       }
 
       let latestPairingToken = localStorage.getItem(STORAGE_KEY_PAIRED_TOKEN) || '';
@@ -1016,6 +1033,34 @@
         refreshSnapshotBtn.disabled = false;
       });
 
+      pingSnapshotBtn.addEventListener('click', async () => {
+        const { v, c } = await loadConfigFromCacheIfNeeded();
+        if (!c || !v) {
+          setStatus('Missing pairing channel or key. Re-scan QR code in Pupil Settings.', false);
+          return;
+        }
+        pingSnapshotBtn.disabled = true;
+        try {
+          const snapshotToken = await makeSignedCommandToken(
+            c,
+            v,
+            { type: 'pupil-remote-snapshot', command: 'PING_SNAPSHOT' },
+            'pupilsnapshot://'
+          );
+          const resp = await publishRemoteCommand(c, snapshotToken);
+          if (resp.ok) {
+            setStatus('Snapshot request sent to your Mac.', true);
+            setTimeout(() => { fetchLatestSnapshotFromChannel(); }, 2500);
+          } else {
+            setStatus('Failed to send snapshot request (HTTP ' + resp.status + ').', true);
+          }
+        } catch (err) {
+          setStatus('Snapshot request error: ' + (err && err.message ? err.message : String(err)), true);
+        } finally {
+          pingSnapshotBtn.disabled = false;
+        }
+      });
+
       remoteDisarmBtn.addEventListener('click', async () => {
         const { v, c } = await loadConfigFromCacheIfNeeded();
         if (!c || !v) {
@@ -1025,11 +1070,7 @@
         remoteDisarmBtn.disabled = true;
         try {
           const disarmToken = await makeSignedDisarmToken(c, v);
-          const resp = await fetch('https://ntfy.sh/' + encodeURIComponent(c), {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: disarmToken
-          });
+          const resp = await publishRemoteCommand(c, disarmToken);
           if (resp.ok) {
             setStatus('Authenticated remote disarm command sent to your Mac.', true);
           } else {
