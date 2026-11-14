@@ -61,6 +61,8 @@ cat > "${APP_BUNDLE}/Contents/Info.plist" <<'PLIST'
     <string>Pupil uses your camera on-device via Apple Vision to detect sustained gaze toward your screen while armed. Frames are processed in memory and never saved.</string>
     <key>NSCameraUseContinuityCameraDeviceType</key>
     <true/>
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>Pupil uses Bluetooth Low Energy signal strength optionally to auto-arm your MacBook when you walk away with your trusted device and auto-disarm when you return.</string>
 </dict>
 </plist>
 PLIST

@@ -139,6 +139,7 @@ public final class SecurityCoordinator {
     public let cameraManager: CameraManager
     public let webPushManager: WebPushManager
     public let alertNotifier: AlertNotifier
+    public let bluetoothMonitor: BluetoothProximityMonitor
     /// Injectable clock (epoch seconds) so corroboration windows are testable.
     public var clock: () -> TimeInterval = { Date().timeIntervalSince1970 }
 
@@ -164,12 +165,14 @@ public final class SecurityCoordinator {
         lockMonitor: LockMonitor = LockMonitor(),
         cameraManager: CameraManager = CameraManager(),
         webPushManager: WebPushManager? = nil,
-        alertNotifier: AlertNotifier? = nil
+        alertNotifier: AlertNotifier? = nil,
+        bluetoothMonitor: BluetoothProximityMonitor? = nil
     ) {
         self.settings = settings
         self.powerMonitor = powerMonitor
         self.lockMonitor = lockMonitor
         self.cameraManager = cameraManager
+        self.bluetoothMonitor = bluetoothMonitor ?? BluetoothProximityMonitor()
         let pushManager = webPushManager ?? WebPushManager(settings: settings)
         self.webPushManager = pushManager
         self.alertNotifier = alertNotifier ?? AlertNotifier { message in
@@ -190,6 +193,7 @@ public final class SecurityCoordinator {
         }
 
         bindSensors()
+        syncBluetoothProximityMonitoring()
 
         NotificationCenter.default.addObserver(
             forName: .screenShieldSync,
@@ -202,6 +206,7 @@ public final class SecurityCoordinator {
                     self.dismissGazeWarning()
                 }
                 self.syncCameraLifecycle()
+                self.syncBluetoothProximityMonitoring()
                 if self.state == .armed {
                     if self.settings.lockOnInputWhenArmed {
                         self.startArmedInputMonitoring()
@@ -344,6 +349,27 @@ public final class SecurityCoordinator {
         performValidatedDisarm(method: "Remote Phone")
         logEvent("Disarmed Remotely via Phone", detail: "Authenticated remote disarm command received from paired phone.")
         return true
+    }
+
+    @discardableResult
+    public func disarmFromTrustedProximity() -> Bool {
+        guard settings.bluetoothProximityEnabled,
+              settings.bluetoothAutoDisarmEnabled,
+              state == .armed else { return false }
+        performValidatedDisarm(method: "Bluetooth Proximity")
+        let deviceName = settings.trustedBluetoothDeviceName.isEmpty ? "Trusted Device" : settings.trustedBluetoothDeviceName
+        logEvent("Disarmed via Bluetooth Proximity", detail: "\(deviceName) returned within proximity.")
+        return true
+    }
+
+    public func syncBluetoothProximityMonitoring() {
+        if settings.bluetoothProximityEnabled,
+           !settings.trustedBluetoothDeviceUUID.isEmpty,
+           let uuid = UUID(uuidString: settings.trustedBluetoothDeviceUUID) {
+            bluetoothMonitor.startMonitoring(deviceUUID: uuid)
+        } else {
+            bluetoothMonitor.stopMonitoring()
+        }
     }
 
     public func updatePin(newPin: String) throws {
@@ -1170,6 +1196,25 @@ public final class SecurityCoordinator {
 
         cameraManager.onMotionSample = { [weak self] sample in
             self?.ingestMotionSample(sample)
+        }
+
+        bluetoothMonitor.onWalkAway = { [weak self] in
+            guard let self else { return }
+            guard self.settings.bluetoothProximityEnabled,
+                  !self.settings.trustedBluetoothDeviceUUID.isEmpty,
+                  self.state == .disarmed else { return }
+            let deviceName = self.settings.trustedBluetoothDeviceName.isEmpty ? "Trusted device" : self.settings.trustedBluetoothDeviceName
+            self.logEvent("Bluetooth Walk-Away", detail: "\(deviceName) moved out of range. Auto-arming.")
+            self.startArming()
+        }
+
+        bluetoothMonitor.onReturn = { [weak self] in
+            guard let self else { return }
+            guard self.settings.bluetoothProximityEnabled,
+                  self.settings.bluetoothAutoDisarmEnabled,
+                  !self.settings.trustedBluetoothDeviceUUID.isEmpty,
+                  self.state == .armed else { return }
+            self.disarmFromTrustedProximity()
         }
     }
 
