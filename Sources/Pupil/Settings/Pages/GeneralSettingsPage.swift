@@ -87,6 +87,13 @@ public struct GeneralSettingsPage: View {
                     PupilToggle(isOn: $settings.autoPromptTouchID)
                 }
                 SettingsGroupDivider()
+                SettingsRowContent(
+                    title: "OS Hardware Lockdown",
+                    info: "Blocks Force Quit, Cmd+Tab, Dock, and Logout while the tamper shield is active."
+                ) {
+                    PupilToggle(isOn: $settings.hardwareLockdownEnabled)
+                }
+                SettingsGroupDivider()
                 displayPickerRow
             }
             .onAppear {
