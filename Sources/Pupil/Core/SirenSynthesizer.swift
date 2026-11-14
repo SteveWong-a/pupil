@@ -28,11 +28,18 @@ public final class SirenSynthesizer: @unchecked Sendable {
         return isSounding
     }
 
-    public func start(baseFrequencyHz: Double = 880.0) {
+    public func start(
+        baseFrequencyHz: Double = 880.0,
+        overrideSpeakers: Bool = false,
+        targetVolume: Float = 0.80
+    ) {
         lock.lock()
         defer { lock.unlock() }
         self.baseFrequencyHz = baseFrequencyHz
         guard !isSounding else { return }
+        if overrideSpeakers {
+            SystemAudioController.shared.forceBuiltInSpeakers(volume: targetVolume)
+        }
         isSounding = true
         sampleIndex = 0
 
@@ -85,8 +92,11 @@ public final class SirenSynthesizer: @unchecked Sendable {
 
     public func stop() {
         lock.lock()
-        defer { lock.unlock() }
-        guard isSounding else { return }
+        guard isSounding else {
+            lock.unlock()
+            SystemAudioController.shared.restoreIfNeeded()
+            return
+        }
         isSounding = false
         engine?.stop()
         if let node = sourceNode {
@@ -94,11 +104,14 @@ public final class SirenSynthesizer: @unchecked Sendable {
         }
         sourceNode = nil
         engine = nil
+        lock.unlock()
+
+        SystemAudioController.shared.restoreIfNeeded()
     }
 
     /// Plays a brief 1.2s test chirp so the user can verify speaker output from Settings.
     public func playTestChirp(baseFrequencyHz: Double = 880.0) {
-        start(baseFrequencyHz: baseFrequencyHz)
+        start(baseFrequencyHz: baseFrequencyHz, overrideSpeakers: false)
         DispatchQueue.global().asyncAfter(deadline: .now() + 1.2) { [weak self] in
             self?.stop()
         }

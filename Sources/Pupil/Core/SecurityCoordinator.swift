@@ -629,7 +629,11 @@ public final class SecurityCoordinator {
         }
 
         powerMonitor.acquireSleepHoldAssertion(reason: "Pupil Active Theft Siren")
-        SirenSynthesizer.shared.start(baseFrequencyHz: Double(settings.sirenFrequencyHz))
+        SirenSynthesizer.shared.start(
+            baseFrequencyHz: Double(settings.sirenFrequencyHz),
+            overrideSpeakers: settings.sirenSpeakerOverrideEnabled,
+            targetVolume: Float(settings.sirenOverrideVolume)
+        )
 
         logEvent(
             "ALARM LATCHED",
@@ -1151,7 +1155,11 @@ public final class SecurityCoordinator {
                 }
             case .wake:
                 if self.isMonitoring && self.state == .alarm {
-                    SirenSynthesizer.shared.start(baseFrequencyHz: Double(self.settings.sirenFrequencyHz))
+                    SirenSynthesizer.shared.start(
+                        baseFrequencyHz: Double(self.settings.sirenFrequencyHz),
+                        overrideSpeakers: self.settings.sirenSpeakerOverrideEnabled,
+                        targetVolume: Float(self.settings.sirenOverrideVolume)
+                    )
                 }
             case .screenUnlocked:
                 if self.settings.autoArmOnScreenLock {
