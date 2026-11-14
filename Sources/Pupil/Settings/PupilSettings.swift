@@ -319,6 +319,28 @@ public final class PupilSettings {
         }
     }
 
+    public var bluetoothProximityEnabled: Bool {
+        didSet {
+            defaults.set(bluetoothProximityEnabled, forKey: Keys.bluetoothProximityEnabled)
+            NotificationCenter.default.post(name: .screenShieldSync, object: nil)
+        }
+    }
+
+    public var trustedBluetoothDeviceUUID: String {
+        didSet {
+            defaults.set(trustedBluetoothDeviceUUID, forKey: Keys.trustedBluetoothDeviceUUID)
+            NotificationCenter.default.post(name: .screenShieldSync, object: nil)
+        }
+    }
+
+    public var trustedBluetoothDeviceName: String {
+        didSet { defaults.set(trustedBluetoothDeviceName, forKey: Keys.trustedBluetoothDeviceName) }
+    }
+
+    public var bluetoothAutoDisarmEnabled: Bool {
+        didSet { defaults.set(bluetoothAutoDisarmEnabled, forKey: Keys.bluetoothAutoDisarmEnabled) }
+    }
+
     public var cameraRoi: CameraROI {
         didSet {
             if let encoded = try? JSONEncoder().encode(cameraRoi) {
@@ -440,6 +462,10 @@ public final class PupilSettings {
         } else {
             self.pairedPhoneSubscription = nil
         }
+        self.bluetoothProximityEnabled = defaults.object(forKey: Keys.bluetoothProximityEnabled) as? Bool ?? false
+        self.trustedBluetoothDeviceUUID = defaults.string(forKey: Keys.trustedBluetoothDeviceUUID) ?? ""
+        self.trustedBluetoothDeviceName = defaults.string(forKey: Keys.trustedBluetoothDeviceName) ?? ""
+        self.bluetoothAutoDisarmEnabled = defaults.object(forKey: Keys.bluetoothAutoDisarmEnabled) as? Bool ?? false
         if let roiData = defaults.data(forKey: Keys.cameraRoi),
            let decoded = try? JSONDecoder().decode(CameraROI.self, from: roiData) {
             self.cameraRoi = decoded
@@ -483,6 +509,10 @@ public final class PupilSettings {
         static let vapidPrivateKeyRaw = "pupil.vapidPrivateKeyRaw"
         static let pairingChannelID = "pupil.pairingChannelID"
         static let pairedPhoneSubscription = "pupil.pairedPhoneSubscription"
+        static let bluetoothProximityEnabled = "pupil.bluetoothProximityEnabled"
+        static let trustedBluetoothDeviceUUID = "pupil.trustedBluetoothDeviceUUID"
+        static let trustedBluetoothDeviceName = "pupil.trustedBluetoothDeviceName"
+        static let bluetoothAutoDisarmEnabled = "pupil.bluetoothAutoDisarmEnabled"
         static let cameraRoi = "pupil.cameraRoi"
     }
 }

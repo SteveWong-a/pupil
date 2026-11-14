@@ -288,6 +288,89 @@ public struct SensorsSettingsPage: View {
                     }
                 }
             }
+
+            VStack(alignment: .leading, spacing: 8) {
+                SettingsSectionTitle(text: "Bluetooth Proximity")
+                SettingsGroup {
+                    SettingsRowContent(
+                        title: "Bluetooth walk-away auto-arm",
+                        subtitle: "Automatically arm Pupil when your trusted Bluetooth device moves out of range.",
+                        info: "Monitors Bluetooth Low Energy RSSI of a selected device with hysteresis to prevent false triggers."
+                    ) {
+                        PupilToggle(isOn: $settings.bluetoothProximityEnabled)
+                    }
+
+                    if settings.bluetoothProximityEnabled {
+                        SettingsGroupDivider()
+                        SettingsRowContent(
+                            title: "Trusted device",
+                            subtitle: trustedDeviceSubtitle
+                        ) {
+                            HStack(spacing: 8) {
+                                if !settings.trustedBluetoothDeviceUUID.isEmpty {
+                                    PillActionButton(title: "Clear") {
+                                        settings.trustedBluetoothDeviceUUID = ""
+                                        settings.trustedBluetoothDeviceName = ""
+                                    }
+                                }
+                                PillActionButton(
+                                    title: coordinator.bluetoothMonitor.isScanning ? "Stop Scan" : "Scan"
+                                ) {
+                                    if coordinator.bluetoothMonitor.isScanning {
+                                        coordinator.bluetoothMonitor.stopScanning()
+                                    } else {
+                                        coordinator.bluetoothMonitor.startScanning()
+                                    }
+                                }
+                            }
+                        }
+
+                        if !coordinator.bluetoothMonitor.discoveredDevices.isEmpty {
+                            SettingsGroupDivider()
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Nearby Devices")
+                                    .font(.system(size: 11.5, weight: .semibold))
+                                    .foregroundStyle(SettingsMetrics.textSecondary)
+
+                                ForEach(coordinator.bluetoothMonitor.discoveredDevices.prefix(6)) { device in
+                                    let isSelected = settings.trustedBluetoothDeviceUUID == device.id.uuidString
+                                    Button {
+                                        settings.trustedBluetoothDeviceUUID = device.id.uuidString
+                                        settings.trustedBluetoothDeviceName = device.name
+                                    } label: {
+                                        HStack(spacing: 8) {
+                                            Image(systemName: isSelected ? "checkmark.circle.fill" : "dot.radiowaves.left.and.right")
+                                                .font(.system(size: 12))
+                                                .foregroundStyle(isSelected ? PupilTheme.armedGreen : SettingsMetrics.textSecondary)
+                                            Text(device.name)
+                                                .font(.system(size: 12.5, weight: isSelected ? .semibold : .regular))
+                                                .foregroundStyle(SettingsMetrics.textPrimary)
+                                                .lineLimit(1)
+                                            Spacer()
+                                            Text("\(device.rssi) dBm")
+                                                .font(.system(size: 11, design: .monospaced))
+                                                .foregroundStyle(SettingsMetrics.textSecondary)
+                                        }
+                                        .padding(.vertical, 4)
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.horizontal, SettingsMetrics.rowHorizontalInset)
+                            .padding(.vertical, 10)
+                        }
+
+                        SettingsGroupDivider()
+                        SettingsRowContent(
+                            title: "Auto-disarm on return",
+                            subtitle: "Disarms automatically when your trusted device returns to close proximity while armed."
+                        ) {
+                            PupilToggle(isOn: $settings.bluetoothAutoDisarmEnabled)
+                        }
+                    }
+                }
+            }
         }
         .onAppear {
             if !coordinator.webPushManager.isPaired {
@@ -296,7 +379,22 @@ public struct SensorsSettingsPage: View {
         }
         .onDisappear {
             coordinator.webPushManager.stopPairingListener()
+            if !settings.bluetoothProximityEnabled || settings.trustedBluetoothDeviceUUID.isEmpty {
+                coordinator.bluetoothMonitor.stopScanning()
+            }
         }
+    }
+
+    private var trustedDeviceSubtitle: String {
+        if settings.trustedBluetoothDeviceUUID.isEmpty {
+            return coordinator.bluetoothMonitor.isScanning ? "Scanning for nearby Bluetooth devices…" : "No trusted device selected."
+        }
+        let name = settings.trustedBluetoothDeviceName.isEmpty ? settings.trustedBluetoothDeviceUUID : settings.trustedBluetoothDeviceName
+        if let rssi = coordinator.bluetoothMonitor.trackedDeviceRSSI {
+            let status = coordinator.bluetoothMonitor.isTrackedDeviceAway ? "Away" : "Nearby"
+            return "\(name) • \(Int(rssi.rounded())) dBm (\(status))"
+        }
+        return name
     }
 
     private func toggleTrigger(_ trigger: HardwareTrigger, isSelected: Bool) {
