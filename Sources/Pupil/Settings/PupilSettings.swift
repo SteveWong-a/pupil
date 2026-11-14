@@ -280,6 +280,10 @@ public final class PupilSettings {
         didSet { defaults.set(hapticFeedbackEnabled, forKey: Keys.hapticFeedbackEnabled) }
     }
 
+    public var hardwareLockdownEnabled: Bool {
+        didSet { defaults.set(hardwareLockdownEnabled, forKey: Keys.hardwareLockdownEnabled) }
+    }
+
     public var sirenFrequencyHz: Int {
         didSet { defaults.set(sirenFrequencyHz, forKey: Keys.sirenFrequencyHz) }
     }
@@ -427,6 +431,7 @@ public final class PupilSettings {
         self.allowTouchIDDisarm = defaults.object(forKey: Keys.allowTouchIDDisarm) as? Bool ?? true
         self.autoPromptTouchID = defaults.object(forKey: Keys.autoPromptTouchID) as? Bool ?? true
         self.hapticFeedbackEnabled = defaults.object(forKey: Keys.hapticFeedbackEnabled) as? Bool ?? true
+        self.hardwareLockdownEnabled = defaults.object(forKey: Keys.hardwareLockdownEnabled) as? Bool ?? true
         self.sirenFrequencyHz = defaults.object(forKey: Keys.sirenFrequencyHz) as? Int ?? 880
         self.preferredCameraID = defaults.string(forKey: Keys.preferredCameraID)
         self.preferredDisplayID = defaults.string(forKey: Keys.preferredDisplayID)
@@ -475,6 +480,7 @@ public final class PupilSettings {
         static let allowTouchIDDisarm = "pupil.allowTouchIDDisarm"
         static let autoPromptTouchID = "pupil.autoPromptTouchID"
         static let hapticFeedbackEnabled = "pupil.hapticFeedbackEnabled"
+        static let hardwareLockdownEnabled = "pupil.hardwareLockdownEnabled"
         static let sirenFrequencyHz = "pupil.sirenFrequencyHz"
         static let preferredCameraID = "pupil.preferredCameraID"
         static let preferredDisplayID = "pupil.preferredDisplayID"

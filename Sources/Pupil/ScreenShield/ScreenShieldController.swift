@@ -66,6 +66,12 @@ public final class ScreenShieldController {
     private func showShield() {
         guard let coordinator else { return }
 
+        if !coordinator.isShieldPreviewActive
+            && coordinator.settings.hardwareLockdownEnabled
+            && (coordinator.state == .tamperPending || coordinator.state == .alarm || coordinator.isInteractiveUnlockRequested) {
+            HardwareLockdownManager.shared.engage()
+        }
+
         // If screens count changed or no windows yet, build windows
         if shieldWindows.count != NSScreen.screens.count {
             destroyWindows()
@@ -99,6 +105,7 @@ public final class ScreenShieldController {
 
     private func hideShield() {
         isVisible = false
+        HardwareLockdownManager.shared.release()
         destroyWindows()
     }
 
