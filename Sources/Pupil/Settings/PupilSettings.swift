@@ -328,6 +328,20 @@ public final class PupilSettings {
         didSet { defaults.set(autoArmOnScreenLock, forKey: Keys.autoArmOnScreenLock) }
     }
 
+    public var idleAutoArmEnabled: Bool {
+        didSet {
+            defaults.set(idleAutoArmEnabled, forKey: Keys.idleAutoArmEnabled)
+            NotificationCenter.default.post(name: .screenShieldSync, object: nil)
+        }
+    }
+
+    public var idleAutoArmMinutes: Int {
+        didSet {
+            defaults.set(idleAutoArmMinutes, forKey: Keys.idleAutoArmMinutes)
+            NotificationCenter.default.post(name: .screenShieldSync, object: nil)
+        }
+    }
+
     public var globalArmShortcutEnabled: Bool {
         didSet { defaults.set(globalArmShortcutEnabled, forKey: Keys.globalArmShortcutEnabled) }
     }
@@ -445,6 +459,7 @@ public final class PupilSettings {
 
     public static let exitDelayStops: [Int] = [5, 10, 15, 30]
     public static let gracePeriodStops: [Int] = [5, 10, 15, 30]
+    public static let idleAutoArmStops: [Int] = [5, 10, 15, 30]
     public static let dwellStops: [Double] = [0.5, 1.0, 1.5, 2.0, 3.0]
 
     public var exitDelaySliderIndex: Double {
@@ -452,6 +467,14 @@ public final class PupilSettings {
         set {
             let idx = max(0, min(Self.exitDelayStops.count - 1, Int(newValue.rounded())))
             exitDelaySeconds = Self.exitDelayStops[idx]
+        }
+    }
+
+    public var idleAutoArmSliderIndex: Double {
+        get { Double(Self.idleAutoArmStops.firstIndex(of: idleAutoArmMinutes) ?? 1) }
+        set {
+            let idx = max(0, min(Self.idleAutoArmStops.count - 1, Int(newValue.rounded())))
+            idleAutoArmMinutes = Self.idleAutoArmStops[idx]
         }
     }
 
@@ -535,6 +558,9 @@ public final class PupilSettings {
         self.blurScreenOnGaze = defaults.object(forKey: Keys.blurScreenOnGaze) as? Bool ?? true
         self.lockOnInputWhenArmed = defaults.object(forKey: Keys.lockOnInputWhenArmed) as? Bool ?? true
         self.autoArmOnScreenLock = defaults.object(forKey: Keys.autoArmOnScreenLock) as? Bool ?? false
+        self.idleAutoArmEnabled = defaults.object(forKey: Keys.idleAutoArmEnabled) as? Bool ?? false
+        let storedIdleMinutes = defaults.object(forKey: Keys.idleAutoArmMinutes) as? Int ?? 10
+        self.idleAutoArmMinutes = Self.idleAutoArmStops.contains(storedIdleMinutes) ? storedIdleMinutes : 10
         self.globalArmShortcutEnabled = defaults.object(forKey: Keys.globalArmShortcutEnabled) as? Bool ?? false
         self.allowTouchIDDisarm = defaults.object(forKey: Keys.allowTouchIDDisarm) as? Bool ?? true
         self.autoPromptTouchID = defaults.object(forKey: Keys.autoPromptTouchID) as? Bool ?? true
@@ -594,6 +620,8 @@ public final class PupilSettings {
         static let blurScreenOnGaze = "pupil.blurScreenOnGaze"
         static let lockOnInputWhenArmed = "pupil.lockOnInputWhenArmed"
         static let autoArmOnScreenLock = "pupil.autoArmOnScreenLock"
+        static let idleAutoArmEnabled = "pupil.idleAutoArmEnabled"
+        static let idleAutoArmMinutes = "pupil.idleAutoArmMinutes"
         static let globalArmShortcutEnabled = "pupil.globalArmShortcutEnabled"
         static let allowTouchIDDisarm = "pupil.allowTouchIDDisarm"
         static let autoPromptTouchID = "pupil.autoPromptTouchID"
