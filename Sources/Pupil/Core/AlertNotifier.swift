@@ -78,6 +78,11 @@ public final class AlertNotifier {
 
     public var pendingCount: Int { pending.count }
 
+    /// Immediately wakes or restarts draining of pending messages (e.g., when network interface transitions or recovers).
+    public func flushPendingNow() {
+        startDrainingIfNeeded()
+    }
+
     /// Queues a message. Messages are delivered in order, one at a time.
     /// - A newer message with the same tag replaces one still waiting.
     /// - A critical message drops waiting lower-severity tamper countdown messages, which are stale
