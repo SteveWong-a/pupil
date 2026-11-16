@@ -201,8 +201,8 @@ public final class SecurityCoordinator {
         webPushManager: WebPushManager? = nil,
         alertNotifier: AlertNotifier? = nil,
         bluetoothMonitor: BluetoothProximityMonitor? = nil,
-        journalStore: TamperJournalStore? = nil,
-        networkSentinel: NetworkPathSentinel? = nil
+        networkSentinel: NetworkPathSentinel? = nil,
+        journalStore: TamperJournalStore? = nil
     ) {
         let resolvedJournalStore: TamperJournalStore
         if let journalStore {
