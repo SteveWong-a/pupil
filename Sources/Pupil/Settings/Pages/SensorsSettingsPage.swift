@@ -57,6 +57,13 @@ public struct SensorsSettingsPage: View {
                 }
                 SettingsGroupDivider()
                 SettingsRowContent(
+                    title: "Monitor network drops",
+                    subtitle: "Logs an advisory event and flushes queued phone alerts if Wi-Fi drops while armed."
+                ) {
+                    PupilToggle(isOn: $settings.networkDropMonitorEnabled)
+                }
+                SettingsGroupDivider()
+                SettingsRowContent(
                     title: "Trigger on external display unplug",
                     subtitle: "Starts the tamper countdown if a connected external monitor is unplugged while armed."
                 ) {
