@@ -240,6 +240,13 @@ public final class PupilSettings {
         }
     }
 
+    public var adaptiveFrameRateEnabled: Bool {
+        didSet {
+            defaults.set(adaptiveFrameRateEnabled, forKey: Keys.adaptiveFrameRateEnabled)
+            NotificationCenter.default.post(name: .screenShieldSync, object: nil)
+        }
+    }
+
     public var gazeSensitivity: GazeSensitivity {
         didSet { defaults.set(gazeSensitivity.rawValue, forKey: Keys.gazeSensitivity) }
     }
@@ -485,6 +492,7 @@ public final class PupilSettings {
         self.exitDelaySeconds = defaults.object(forKey: Keys.exitDelaySeconds) as? Int ?? 10
         self.gracePeriodSeconds = defaults.object(forKey: Keys.gracePeriodSeconds) as? Int ?? 15
         self.gazeDetectionEnabled = defaults.object(forKey: Keys.gazeDetectionEnabled) as? Bool ?? true
+        self.adaptiveFrameRateEnabled = defaults.object(forKey: Keys.adaptiveFrameRateEnabled) as? Bool ?? true
         if let rawSens = defaults.string(forKey: Keys.gazeSensitivity),
            let sens = GazeSensitivity(rawValue: rawSens) {
             self.gazeSensitivity = sens
@@ -567,6 +575,7 @@ public final class PupilSettings {
         static let exitDelaySeconds = "pupil.exitDelaySeconds"
         static let gracePeriodSeconds = "pupil.gracePeriodSeconds"
         static let gazeDetectionEnabled = "pupil.gazeDetectionEnabled"
+        static let adaptiveFrameRateEnabled = "pupil.adaptiveFrameRateEnabled"
         static let gazeSensitivity = "pupil.gazeSensitivity"
         static let dwellThresholdSeconds = "pupil.dwellThresholdSeconds"
         static let notchStyle = "pupil.notchStyle"

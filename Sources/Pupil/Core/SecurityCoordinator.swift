@@ -7,8 +7,10 @@
 //
 
 import AppKit
+import CryptoKit
 import Foundation
 import Observation
+import UniformTypeIdentifiers
 
 public enum SecurityState: String, Codable, Sendable, CaseIterable {
     case disarmed = "DISARMED"
@@ -140,8 +142,11 @@ public final class SecurityCoordinator {
     public let webPushManager: WebPushManager
     public let alertNotifier: AlertNotifier
     public let bluetoothMonitor: BluetoothProximityMonitor
+    public let journalStore: TamperJournalStore
     /// Injectable clock (epoch seconds) so corroboration windows are testable.
     public var clock: () -> TimeInterval = { Date().timeIntervalSince1970 }
+    /// Injectable thermal state provider for deterministic testing.
+    public var thermalStateProvider: () -> ProcessInfo.ThermalState = { ProcessInfo.processInfo.thermalState }
 
     public var onStateChanged: ((SecurityState) -> Void)?
     public var onNotchUpdateNeeded: (() -> Void)?
@@ -161,6 +166,19 @@ public final class SecurityCoordinator {
     private var liveCalibrationProfiler = RoomNoiseProfiler()
     private var liveCalibrationTimer: Timer?
 
+    public convenience init() {
+        self.init(
+            settings: .shared,
+            powerMonitor: PowerAndLidMonitor(),
+            lockMonitor: LockMonitor(),
+            cameraManager: CameraManager(),
+            webPushManager: nil,
+            alertNotifier: nil,
+            bluetoothMonitor: nil,
+            journalStore: .shared
+        )
+    }
+
     public init(
         settings: PupilSettings = .shared,
         powerMonitor: PowerAndLidMonitor = PowerAndLidMonitor(),
@@ -168,8 +186,20 @@ public final class SecurityCoordinator {
         cameraManager: CameraManager = CameraManager(),
         webPushManager: WebPushManager? = nil,
         alertNotifier: AlertNotifier? = nil,
-        bluetoothMonitor: BluetoothProximityMonitor? = nil
+        bluetoothMonitor: BluetoothProximityMonitor? = nil,
+        journalStore: TamperJournalStore? = nil
     ) {
+        let resolvedJournalStore: TamperJournalStore
+        if let journalStore {
+            resolvedJournalStore = journalStore
+        } else if settings === PupilSettings.shared {
+            resolvedJournalStore = .shared
+        } else {
+            let tempURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("pupil-test-journal-\(UUID().uuidString).enc.json")
+            resolvedJournalStore = TamperJournalStore(fileURL: tempURL, symmetricKey: SymmetricKey(size: .bits256))
+        }
+        self.journalStore = resolvedJournalStore
         self.settings = settings
         self.powerMonitor = powerMonitor
         self.lockMonitor = lockMonitor
@@ -190,6 +220,10 @@ public final class SecurityCoordinator {
             self?.handleRemoteSnapshotRequest()
         }
         self.cameraManager.motionDetector.surroundingsWatchEnabled = settings.surroundingsWatchEnabled
+
+        if let persisted = try? resolvedJournalStore.loadRecords(), !persisted.isEmpty {
+            self.events = Array(persisted.prefix(TamperJournalStore.maxRecords))
+        }
 
         // Ensure a default PIN ("1234") is enrolled on first launch if none exists so the user can test immediately,
         // and clearly surface PIN changes in Settings.
@@ -220,6 +254,16 @@ public final class SecurityCoordinator {
                         self.stopArmedInputMonitoring()
                     }
                 }
+            }
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: ProcessInfo.thermalStateDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.syncAdaptiveVisionFrameRate()
             }
         }
     }
@@ -849,6 +893,7 @@ public final class SecurityCoordinator {
         gazeDwellProgress = snapshot.dwellProgress
         eyeLookOffset = snapshot.eyeLookOffset
         activeFaceCount = snapshot.activeFaceCount
+        syncAdaptiveVisionFrameRate()
 
         guard state == .armed, settings.gazeDetectionEnabled else {
             if isGazeWarningActive {
@@ -885,6 +930,7 @@ public final class SecurityCoordinator {
                 ? sample.translationMagnitude / max(0.001, settings.spatialMotionSensitivity.translationDeadband)
                 : 0
             latestMotionDisplacementScore = min(1.0, translationRatio)
+            syncAdaptiveVisionFrameRate()
             return
         }
 
@@ -892,6 +938,7 @@ public final class SecurityCoordinator {
             guard settings.isSpatialMotionEnabled else {
                 hasMotionAnchor = false
                 latestMotionDisplacementScore = 0
+                syncAdaptiveVisionFrameRate()
                 return
             }
             hasMotionAnchor = sample.isAnchorFrame || hasMotionAnchor
@@ -899,6 +946,7 @@ public final class SecurityCoordinator {
                 ? sample.translationMagnitude / max(0.001, settings.spatialMotionSensitivity.translationDeadband)
                 : 0
             latestMotionDisplacementScore = min(1.0, translationRatio)
+            syncAdaptiveVisionFrameRate()
 
             // Auto-re-tare surroundings in preview mode: if laptop was moved to a new resting spot
             // and has been completely stationary for 2.5 seconds, auto-zero the baseline!
@@ -967,6 +1015,7 @@ public final class SecurityCoordinator {
         latestMotionDisplacementScore = snapshot.effectiveDisplacementScore
         continuousMotionSeconds = max(snapshot.continuousDisplacementSeconds, snapshot.continuousOcclusionSeconds)
         motionAnchorDepthMeters = snapshot.anchorDepthMeters
+        syncAdaptiveVisionFrameRate()
 
         if snapshot.isTamperTriggered {
             handleWeakMotionSignal(snapshot)
@@ -1198,10 +1247,52 @@ public final class SecurityCoordinator {
         } else {
             cameraManager.stopCapture()
         }
+        syncAdaptiveVisionFrameRate()
+    }
+
+    public func syncAdaptiveVisionFrameRate() {
+        guard settings.adaptiveFrameRateEnabled else {
+            cameraManager.updateAnalysisRate(fps: AdaptiveVisionGovernor.fullRateFPS)
+            return
+        }
+        let activitySuspected = activeFaceCount > 0
+            || gazeDwellProgress > 0
+            || isGazeWarningActive
+            || latestMotionDisplacementScore >= 0.35
+            || state == .arming
+            || state == .tamperPending
+            || state == .alarm
+            || isCameraPreviewRequested
+            || isLiveCalibrating
+        let targetFPS = AdaptiveVisionGovernor.evaluateTargetFPS(
+            isOnACPower: powerMonitor.isOnACPower,
+            batteryPercent: powerMonitor.batteryPercentage,
+            thermalState: thermalStateProvider(),
+            isActivitySuspected: activitySuspected
+        )
+        cameraManager.updateAnalysisRate(fps: targetFPS)
     }
 
     public func clearEventLog() {
         events.removeAll()
+        try? journalStore.clear()
+    }
+
+    public func exportIncidentReportMarkdown() -> String {
+        TamperJournalStore.exportMarkdownReport(records: events)
+    }
+
+    @MainActor
+    public func presentExportIncidentLogPanel() {
+        let markdown = exportIncidentReportMarkdown()
+        let panel = NSSavePanel()
+        panel.title = "Export Security Activity Log"
+        panel.nameFieldStringValue = "Pupil-Incident-Report.md"
+        panel.allowedContentTypes = [.plainText]
+        panel.canCreateDirectories = true
+        if panel.runModal() == .OK, let url = panel.url {
+            try? Data(markdown.utf8).write(to: url, options: [.atomic])
+        }
     }
 
     // MARK: - Private Sensor Bindings
@@ -1214,6 +1305,7 @@ public final class SecurityCoordinator {
                 if self.settings.hardwareTriggers.contains(.chargerUnplug) {
                     self.triggerTamper(source: .chargerUnplugged, immediateAlarm: false)
                 }
+                self.syncAdaptiveVisionFrameRate()
             case .lidClosed:
                 if self.settings.hardwareTriggers.contains(.lidClose) {
                     // Physical clamshell closed: trigger immediate siren before macOS cuts audio
@@ -1239,6 +1331,7 @@ public final class SecurityCoordinator {
                    self.settings.revertTamperOnPowerRestored {
                     self.revertTamperToArmed(reason: "Power adapter reconnected.")
                 }
+                self.syncAdaptiveVisionFrameRate()
             case .lidOpened:
                 break
             case .peripheralDisconnected:
@@ -1344,8 +1437,9 @@ public final class SecurityCoordinator {
             isSimulated: simulated
         )
         events.insert(record, at: 0)
-        if events.count > 100 {
-            events.removeLast(events.count - 100)
+        if events.count > TamperJournalStore.maxRecords {
+            events.removeLast(events.count - TamperJournalStore.maxRecords)
         }
+        try? journalStore.saveRecords(events)
     }
 }
