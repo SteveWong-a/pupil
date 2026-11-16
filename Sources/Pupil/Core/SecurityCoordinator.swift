@@ -47,6 +47,7 @@ public enum TamperSource: String, Codable, Sendable {
     case peripheralDisconnected = "Peripheral Unplugged"
     case wakeWhileArmed = "System Woke While Armed"
     case cameraMotionDetected = "Spatial Lift / Motion Detected"
+    case pinBruteForce = "Repeated Failed PIN Attempts"
     case manualTest = "Simulated Tamper Test"
 
     public static let spatialLiftDetected: TamperSource = .cameraMotionDetected
@@ -125,6 +126,9 @@ public final class SecurityCoordinator {
     public private(set) var liveCalibrationSecondsRemaining: Int = 0
     public private(set) var liveCalibrationReport: RoomCalibrationProfile?
     public var isPreviewFocusOverlayEnabled: Bool = true
+    public private(set) var attemptLimiter = PinAttemptLimiter()
+    public private(set) var pinLockoutSecondsRemaining: Int = 0
+    public var isPinLockedOut: Bool { pinLockoutSecondsRemaining > 0 }
 
     private var armedGlobalInputMonitor: Any?
     private var armedLocalInputMonitor: Any?
@@ -173,6 +177,7 @@ public final class SecurityCoordinator {
     private var gazeWarningDismissWorkItem: DispatchWorkItem?
     private var liveCalibrationProfiler = RoomNoiseProfiler()
     private var liveCalibrationTimer: Timer?
+    private var pinLockoutTimer: Timer?
 
     public convenience init() {
         self.init(
@@ -369,15 +374,69 @@ public final class SecurityCoordinator {
 
     @discardableResult
     public func disarmWithPin(_ pin: String) -> Bool {
-        guard KeychainManager.verifyPin(pin) else {
-            logEvent("Disarm Failed", detail: "Incorrect PIN entered during \(state.label).")
+        let now = clock()
+        let currentStatus = attemptLimiter.status(at: now)
+        if currentStatus.isLockedOut {
+            pinLockoutSecondsRemaining = currentStatus.remainingSeconds
+            startPinLockoutTimerIfNeeded()
+            logEvent("PIN Lockout Active", detail: "PIN entry blocked for \(currentStatus.remainingSeconds)s after repeated failed attempts.")
             if settings.hapticFeedbackEnabled {
                 NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
             }
             return false
         }
+
+        guard KeychainManager.verifyPin(pin) else {
+            let decision = attemptLimiter.recordFailure(at: now)
+            pinLockoutSecondsRemaining = decision.remainingSeconds
+            if decision.isLockedOut {
+                startPinLockoutTimerIfNeeded()
+            }
+            switch decision {
+            case .allowed:
+                logEvent("Disarm Failed", detail: "Incorrect PIN entered during \(state.label).")
+            case .lockedOut(let seconds):
+                logEvent("PIN Lockout Triggered", detail: "\(attemptLimiter.failedAttemptCount) failed PIN attempts. Locked out for \(seconds)s.")
+            case .escalateToAlarm(let seconds):
+                logEvent("PIN Brute-Force Lockout", detail: "\(attemptLimiter.failedAttemptCount) failed PIN attempts. Locked out for \(seconds)s and escalating to alarm.")
+                if state != .disarmed && state != .alarm {
+                    enterAlarm(source: .pinBruteForce)
+                }
+            }
+            if settings.hapticFeedbackEnabled {
+                NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+            }
+            onNotchUpdateNeeded?()
+            return false
+        }
+
         performValidatedDisarm(method: "PIN")
         return true
+    }
+
+    public func resetPinLockout() {
+        pinLockoutTimer?.invalidate()
+        pinLockoutTimer = nil
+        attemptLimiter.recordSuccess()
+        pinLockoutSecondsRemaining = 0
+    }
+
+    public func refreshPinLockoutCountdown() {
+        let current = attemptLimiter.status(at: clock())
+        pinLockoutSecondsRemaining = current.remainingSeconds
+        if !current.isLockedOut {
+            pinLockoutTimer?.invalidate()
+            pinLockoutTimer = nil
+        }
+    }
+
+    private func startPinLockoutTimerIfNeeded() {
+        guard pinLockoutTimer == nil else { return }
+        pinLockoutTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.refreshPinLockoutCountdown()
+            }
+        }
     }
 
     public func disarmWithTouchID() async -> Bool {
@@ -489,6 +548,7 @@ public final class SecurityCoordinator {
     public func updatePin(newPin: String) throws {
         try KeychainManager.enrollPin(newPin)
         hasEnrolledPin = KeychainManager.hasEnrolledPin
+        resetPinLockout()
         logEvent("PIN Updated", detail: "Security PIN updated in macOS Keychain.")
     }
 
@@ -497,6 +557,7 @@ public final class SecurityCoordinator {
             reason: "Verify Mac login password or Touch ID to unlock or reset your Pupil PIN"
         )
         guard verified else { return false }
+        resetPinLockout()
         if let newPin, KeychainManager.isValidPinFormat(newPin) {
             try? KeychainManager.enrollPin(newPin)
             hasEnrolledPin = KeychainManager.hasEnrolledPin
@@ -511,6 +572,7 @@ public final class SecurityCoordinator {
     private func performValidatedDisarm(method: String) {
         idleEvaluator.suppressCurrentStreak()
         let wasAlarm = (state == .alarm)
+        resetPinLockout()
         KeychainManager.cancelPendingAuthentication()
         countdownTimer?.invalidate()
         countdownTimer = nil
