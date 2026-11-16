@@ -7,8 +7,10 @@
 //
 
 import AppKit
+import CryptoKit
 import Foundation
 import Observation
+import UniformTypeIdentifiers
 
 public enum SecurityState: String, Codable, Sendable, CaseIterable {
     case disarmed = "DISARMED"
@@ -140,6 +142,7 @@ public final class SecurityCoordinator {
     public let webPushManager: WebPushManager
     public let alertNotifier: AlertNotifier
     public let bluetoothMonitor: BluetoothProximityMonitor
+    public let journalStore: TamperJournalStore
     /// Injectable clock (epoch seconds) so corroboration windows are testable.
     public var clock: () -> TimeInterval = { Date().timeIntervalSince1970 }
     /// Injectable thermal state provider for deterministic testing.
@@ -162,6 +165,19 @@ public final class SecurityCoordinator {
     private var liveCalibrationProfiler = RoomNoiseProfiler()
     private var liveCalibrationTimer: Timer?
 
+    public convenience init() {
+        self.init(
+            settings: .shared,
+            powerMonitor: PowerAndLidMonitor(),
+            lockMonitor: LockMonitor(),
+            cameraManager: CameraManager(),
+            webPushManager: nil,
+            alertNotifier: nil,
+            bluetoothMonitor: nil,
+            journalStore: .shared
+        )
+    }
+
     public init(
         settings: PupilSettings = .shared,
         powerMonitor: PowerAndLidMonitor = PowerAndLidMonitor(),
@@ -169,8 +185,20 @@ public final class SecurityCoordinator {
         cameraManager: CameraManager = CameraManager(),
         webPushManager: WebPushManager? = nil,
         alertNotifier: AlertNotifier? = nil,
-        bluetoothMonitor: BluetoothProximityMonitor? = nil
+        bluetoothMonitor: BluetoothProximityMonitor? = nil,
+        journalStore: TamperJournalStore? = nil
     ) {
+        let resolvedJournalStore: TamperJournalStore
+        if let journalStore {
+            resolvedJournalStore = journalStore
+        } else if settings === PupilSettings.shared {
+            resolvedJournalStore = .shared
+        } else {
+            let tempURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("pupil-test-journal-\(UUID().uuidString).enc.json")
+            resolvedJournalStore = TamperJournalStore(fileURL: tempURL, symmetricKey: SymmetricKey(size: .bits256))
+        }
+        self.journalStore = resolvedJournalStore
         self.settings = settings
         self.powerMonitor = powerMonitor
         self.lockMonitor = lockMonitor
@@ -191,6 +219,10 @@ public final class SecurityCoordinator {
             self?.handleRemoteSnapshotRequest()
         }
         self.cameraManager.motionDetector.surroundingsWatchEnabled = settings.surroundingsWatchEnabled
+
+        if let persisted = try? resolvedJournalStore.loadRecords(), !persisted.isEmpty {
+            self.events = Array(persisted.prefix(TamperJournalStore.maxRecords))
+        }
 
         // Ensure a default PIN ("1234") is enrolled on first launch if none exists so the user can test immediately,
         // and clearly surface PIN changes in Settings.
@@ -1211,6 +1243,24 @@ public final class SecurityCoordinator {
 
     public func clearEventLog() {
         events.removeAll()
+        try? journalStore.clear()
+    }
+
+    public func exportIncidentReportMarkdown() -> String {
+        TamperJournalStore.exportMarkdownReport(records: events)
+    }
+
+    @MainActor
+    public func presentExportIncidentLogPanel() {
+        let markdown = exportIncidentReportMarkdown()
+        let panel = NSSavePanel()
+        panel.title = "Export Security Activity Log"
+        panel.nameFieldStringValue = "Pupil-Incident-Report.md"
+        panel.allowedContentTypes = [.plainText]
+        panel.canCreateDirectories = true
+        if panel.runModal() == .OK, let url = panel.url {
+            try? Data(markdown.utf8).write(to: url, options: [.atomic])
+        }
     }
 
     // MARK: - Private Sensor Bindings
@@ -1353,8 +1403,9 @@ public final class SecurityCoordinator {
             isSimulated: simulated
         )
         events.insert(record, at: 0)
-        if events.count > 100 {
-            events.removeLast(events.count - 100)
+        if events.count > TamperJournalStore.maxRecords {
+            events.removeLast(events.count - TamperJournalStore.maxRecords)
         }
+        try? journalStore.saveRecords(events)
     }
 }
