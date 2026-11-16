@@ -29,6 +29,8 @@ public struct ScreenShieldView: View {
 
     private var isAlarm: Bool { coordinator.state == .alarm }
     private var isTamper: Bool { coordinator.state == .tamperPending }
+    private var isLockedOut: Bool { coordinator.pinLockoutSecondsRemaining > 0 }
+    private var lockoutColor: Color { isAlarm ? PupilTheme.alarmRed : PupilTheme.warningAmber }
     private var isGazePrivacyOnly: Bool {
         coordinator.state == .armed &&
         !coordinator.isInteractiveUnlockRequested &&
@@ -113,21 +115,30 @@ public struct ScreenShieldView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .screenShieldDeleteKey)) { _ in
+            guard !isLockedOut else { return }
             if isPrimary && !pinInput.isEmpty {
                 pinInput.removeLast()
                 hasError = false
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .screenShieldSubmitPrompt)) { _ in
+            guard !isLockedOut else { return }
             if isPrimary {
                 submitPin()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .screenShieldDigitTyped)) { notif in
+            guard !isLockedOut else { return }
             if isPrimary, let digit = notif.object as? String, pinInput.count < 8 {
                 KeychainManager.cancelPendingAuthentication()
                 pinInput.append(digit)
                 hasError = false
+            }
+        }
+        .onChange(of: coordinator.pinLockoutSecondsRemaining) { oldValue, newValue in
+            if oldValue > 0 && newValue == 0 {
+                hasError = false
+                isPinFocused = true
             }
         }
         .onChange(of: pinInput) { _, newValue in
@@ -348,6 +359,8 @@ public struct ScreenShieldView: View {
                     .font(.system(size: 13, design: .monospaced))
                     .foregroundStyle(Color.white)
                     .focused($isPinFocused)
+                    .disabled(isLockedOut)
+                    .opacity(isLockedOut ? 0.45 : 1.0)
                     .onSubmit {
                         submitPin()
                     }
@@ -386,10 +399,10 @@ public struct ScreenShieldView: View {
                 Button(action: submitPin) {
                     Image(systemName: "arrow.right.circle.fill")
                         .font(.system(size: 16))
-                        .foregroundStyle(pinInput.isEmpty ? Color.white.opacity(0.28) : Color.white.opacity(0.90))
+                        .foregroundStyle((pinInput.isEmpty || isLockedOut) ? Color.white.opacity(0.28) : Color.white.opacity(0.90))
                 }
                 .buttonStyle(.plain)
-                .disabled(pinInput.isEmpty)
+                .disabled(pinInput.isEmpty || isLockedOut)
             }
             .padding(.horizontal, 12)
             .frame(height: 34)
@@ -400,12 +413,17 @@ public struct ScreenShieldView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .strokeBorder(
-                        hasError ? PupilTheme.alarmRed : (isPinFocused ? Color.white.opacity(0.36) : Color.white.opacity(0.14)),
+                        isLockedOut ? lockoutColor : (hasError ? PupilTheme.alarmRed : (isPinFocused ? Color.white.opacity(0.36) : Color.white.opacity(0.14))),
                         lineWidth: 1
                     )
             )
 
-            if hasError {
+            if isLockedOut {
+                Text("Too many attempts. Try again in \(coordinator.pinLockoutSecondsRemaining)s")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(lockoutColor)
+                    .transition(.opacity)
+            } else if hasError {
                 Text("Incorrect PIN")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(PupilTheme.alarmRed)
@@ -444,6 +462,8 @@ public struct ScreenShieldView: View {
                     )
             }
             .buttonStyle(.plain)
+            .disabled(pinInput.isEmpty || isLockedOut)
+            .opacity(isLockedOut ? 0.45 : 1.0)
             .keyboardShortcut(.defaultAction)
         }
     }
@@ -556,6 +576,10 @@ public struct ScreenShieldView: View {
     }
 
     private func submitPin() {
+        guard !isLockedOut else {
+            triggerErrorShake()
+            return
+        }
         guard !pinInput.isEmpty else {
             isPinFocused = true
             return

@@ -120,7 +120,17 @@ public enum KeychainManager {
         }
     }
 
+    #if DEBUG
+    nonisolated(unsafe) public static var mockTouchIDResult: Bool?
+    nonisolated(unsafe) public static var mockDeviceOwnerResult: Bool?
+    #endif
+
     nonisolated public static func authenticateWithTouchID(reason: String) async -> Bool {
+        #if DEBUG
+        if let mock = mockTouchIDResult {
+            return mock
+        }
+        #endif
         let context = LAContext()
         context.localizedCancelTitle = "Use PIN"
         var error: NSError?
@@ -138,6 +148,11 @@ public enum KeychainManager {
 
     /// Authenticates the Mac owner via macOS System Login Password, Touch ID, or Apple Watch (for PIN recovery).
     nonisolated public static func authenticateDeviceOwner(reason: String) async -> Bool {
+        #if DEBUG
+        if let mock = mockDeviceOwnerResult {
+            return mock
+        }
+        #endif
         let context = LAContext()
         var error: NSError?
         guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
