@@ -160,6 +160,7 @@ public final class SecurityCoordinator {
     public var onNotchUpdateNeeded: (() -> Void)?
 
     public private(set) var activeRoomProfile: RoomCalibrationProfile?
+    public internal(set) var armedDisplayTopologyEvaluator = DisplayTopologyEvaluator()
     private var roomProfiler = RoomNoiseProfiler()
     private var gazeAggregator = GazeTemporalAggregator()
     private var motionAggregator = MotionTemporalAggregator()
@@ -299,6 +300,7 @@ public final class SecurityCoordinator {
         activeTamperSource = nil
         activeTamperTime = nil
         activeAlarmTime = nil
+        armedDisplayTopologyEvaluator.latchBaseline(PowerAndLidMonitor.readActiveDisplayTopology())
 
         if settings.holdSleepOnLidClose {
             powerMonitor.acquireSleepHoldAssertion()
@@ -338,6 +340,7 @@ public final class SecurityCoordinator {
         latestMotionDisplacementScore = 0
         continuousMotionSeconds = 0
         motionAnchorDepthMeters = nil
+        armedDisplayTopologyEvaluator.latchBaseline(PowerAndLidMonitor.readActiveDisplayTopology())
         state = .armed
         cameraManager.shouldReanchorOnFaceAcquisition = false
         if let profile = roomProfiler.finalizeCalibration() {
@@ -534,6 +537,7 @@ public final class SecurityCoordinator {
         gazeAggregator.reset()
         motionAggregator.reset()
         tamperScorer.reset()
+        armedDisplayTopologyEvaluator.reset()
         cameraManager.shouldReanchorOnFaceAcquisition = true
         cameraManager.resetMotionAnchor()
         hasMotionAnchor = false
@@ -743,6 +747,34 @@ public final class SecurityCoordinator {
             severity: "high",
             tag: "pupil-tamper"
         ))
+    }
+
+    public func latchArmedDisplayTopologyBaseline(_ snapshot: DisplayTopologySnapshot) {
+        armedDisplayTopologyEvaluator.latchBaseline(snapshot)
+    }
+
+    public func handleDisplayTopologyChange(_ snapshot: DisplayTopologySnapshot) {
+        guard state != .disarmed else { return }
+        let event = armedDisplayTopologyEvaluator.evaluate(snapshot)
+        if case .externalDisplayDisconnected(let removedCount) = event {
+            handleExternalDisplayUnplugged(removedCount: removedCount)
+        }
+    }
+
+    public func handleExternalDisplayUnplugged(removedCount: Int = 1) {
+        guard state != .disarmed else { return }
+        guard settings.displayUnplugTriggerEnabled && settings.hardwareTriggers.contains(.peripheralDisconnect) else {
+            logEvent(
+                "External Display Unplugged (Ignored)",
+                detail: "\(removedCount) external display(s) disconnected while armed (trigger disabled)."
+            )
+            return
+        }
+        logEvent(
+            "External Display Unplugged",
+            detail: "\(removedCount) external display(s) disconnected while armed."
+        )
+        triggerTamper(source: .peripheralDisconnected, immediateAlarm: false)
     }
 
     public func enterAlarm(source: TamperSource, simulated: Bool = false) {
@@ -1378,6 +1410,8 @@ public final class SecurityCoordinator {
                 if self.settings.hardwareTriggers.contains(.peripheralDisconnect) {
                     self.triggerTamper(source: .peripheralDisconnected, immediateAlarm: false)
                 }
+            case .externalDisplayUnplugged(let removedCount):
+                self.handleExternalDisplayUnplugged(removedCount: removedCount)
             }
         }
 
