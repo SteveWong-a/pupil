@@ -65,6 +65,7 @@ public struct ChargerFlapDetector: Sendable {
 @Observable
 public final class PowerAndLidMonitor {
     public private(set) var isOnACPower: Bool = true
+    public private(set) var batteryPercentage: Int = 100
     public private(set) var isLidClosed: Bool = false
     public private(set) var isSleepAssertionActive: Bool = false
     public private(set) var connectedDisplayCount: Int = 0
@@ -91,10 +92,24 @@ public final class PowerAndLidMonitor {
 
     public init() {
         self.isOnACPower = Self.readACPowerState()
+        self.batteryPercentage = Self.readBatteryPercentage()
         self.isLidClosed = Self.readClamshellClosedState()
         self.connectedDisplayCount = NSScreen.screens.count
         self.connectedUSBDeviceCount = Self.readUSBDeviceCount()
         startMonitoring()
+    }
+
+    public init(isOnACPower: Bool, batteryPercentage: Int, isLidClosed: Bool = false) {
+        self.isOnACPower = isOnACPower
+        self.batteryPercentage = batteryPercentage
+        self.isLidClosed = isLidClosed
+        self.connectedDisplayCount = NSScreen.screens.count
+        self.connectedUSBDeviceCount = 0
+    }
+
+    public func updatePowerStateForTesting(isOnACPower: Bool, batteryPercentage: Int) {
+        self.isOnACPower = isOnACPower
+        self.batteryPercentage = batteryPercentage
     }
 
     public func startMonitoring() {
@@ -213,6 +228,11 @@ public final class PowerAndLidMonitor {
             recordChargerTransition(isOnAC: currentAC)
         }
 
+        let currentBattery = Self.readBatteryPercentage()
+        if currentBattery != batteryPercentage {
+            batteryPercentage = currentBattery
+        }
+
         let currentClamshell = Self.readClamshellClosedState()
         if currentClamshell != isLidClosed {
             isLidClosed = currentClamshell
@@ -257,6 +277,23 @@ public final class PowerAndLidMonitor {
         }
         let typeString = powerTypeCF as String
         return typeString == (kIOPSACPowerValue as String)
+    }
+
+    nonisolated public static func readBatteryPercentage() -> Int {
+        guard let blob = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
+              let list = IOPSCopyPowerSourcesList(blob)?.takeRetainedValue() as? [CFTypeRef] else {
+            return 100
+        }
+        for source in list {
+            guard let desc = IOPSGetPowerSourceDescription(blob, source)?.takeUnretainedValue() as? [String: Any],
+                  let current = desc[kIOPSCurrentCapacityKey as String] as? Int,
+                  let maxCap = desc[kIOPSMaxCapacityKey as String] as? Int,
+                  maxCap > 0 else {
+                continue
+            }
+            return min(100, max(0, Int((Double(current) / Double(maxCap) * 100.0).rounded())))
+        }
+        return 100
     }
 
     nonisolated public static func readClamshellClosedState() -> Bool {
