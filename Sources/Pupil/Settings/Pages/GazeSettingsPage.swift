@@ -41,6 +41,13 @@ public struct GazeSettingsPage: View {
                     PupilToggle(isOn: $settings.blurScreenOnGaze)
                 }
                 SettingsGroupDivider()
+                SettingsRowContent(
+                    title: "Adaptive vision frame rate",
+                    subtitle: "Automatically throttles camera analysis on low battery or high thermal load when idle, bursting to 10 FPS on activity."
+                ) {
+                    PupilToggle(isOn: $settings.adaptiveFrameRateEnabled)
+                }
+                SettingsGroupDivider()
                 cameraDevicePickerRow
                 SettingsGroupDivider()
                 SettingsLabeledOptionRow(
