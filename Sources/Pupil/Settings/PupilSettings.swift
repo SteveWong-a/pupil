@@ -267,6 +267,13 @@ public final class PupilSettings {
         didSet { defaults.set(revertTamperOnPowerRestored, forKey: Keys.revertTamperOnPowerRestored) }
     }
 
+    public var networkDropMonitorEnabled: Bool {
+        didSet {
+            defaults.set(networkDropMonitorEnabled, forKey: Keys.networkDropMonitorEnabled)
+            NotificationCenter.default.post(name: .screenShieldSync, object: nil)
+        }
+    }
+
     public var countdownChimeEnabled: Bool {
         didSet { defaults.set(countdownChimeEnabled, forKey: Keys.countdownChimeEnabled) }
     }
@@ -502,6 +509,7 @@ public final class PupilSettings {
         }
         self.holdSleepOnLidClose = defaults.object(forKey: Keys.holdSleepOnLidClose) as? Bool ?? true
         self.revertTamperOnPowerRestored = defaults.object(forKey: Keys.revertTamperOnPowerRestored) as? Bool ?? true
+        self.networkDropMonitorEnabled = defaults.object(forKey: Keys.networkDropMonitorEnabled) as? Bool ?? true
         self.countdownChimeEnabled = defaults.object(forKey: Keys.countdownChimeEnabled) as? Bool ?? true
         // Clean up legacy key if present so it doesn't accidentally enable experimental motion
         if defaults.object(forKey: "pupil.spatialMotionLiftEnabled") != nil {
@@ -568,6 +576,7 @@ public final class PupilSettings {
         static let hardwareTriggers = "pupil.hardwareTriggers"
         static let holdSleepOnLidClose = "pupil.holdSleepOnLidClose"
         static let revertTamperOnPowerRestored = "pupil.revertTamperOnPowerRestored"
+        static let networkDropMonitorEnabled = "pupil.networkDropMonitorEnabled"
         static let countdownChimeEnabled = "pupil.countdownChimeEnabled"
         static let isSpatialMotionEnabled = "pupil.experimentalSpatialMotionEnabled"
         static let spatialMotionSensitivity = "pupil.spatialMotionSensitivity"

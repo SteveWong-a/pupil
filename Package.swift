@@ -25,7 +25,8 @@ let package = Package(
                 .linkedFramework("Security"),
                 .linkedFramework("ServiceManagement"),
                 .linkedFramework("CryptoKit"),
-                .linkedFramework("CoreBluetooth")
+                .linkedFramework("CoreBluetooth"),
+                .linkedFramework("Network")
             ]
         ),
         .testTarget(

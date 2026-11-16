@@ -140,6 +140,7 @@ public final class SecurityCoordinator {
     public let webPushManager: WebPushManager
     public let alertNotifier: AlertNotifier
     public let bluetoothMonitor: BluetoothProximityMonitor
+    public let networkSentinel: NetworkPathSentinel
     /// Injectable clock (epoch seconds) so corroboration windows are testable.
     public var clock: () -> TimeInterval = { Date().timeIntervalSince1970 }
 
@@ -167,13 +168,15 @@ public final class SecurityCoordinator {
         cameraManager: CameraManager = CameraManager(),
         webPushManager: WebPushManager? = nil,
         alertNotifier: AlertNotifier? = nil,
-        bluetoothMonitor: BluetoothProximityMonitor? = nil
+        bluetoothMonitor: BluetoothProximityMonitor? = nil,
+        networkSentinel: NetworkPathSentinel? = nil
     ) {
         self.settings = settings
         self.powerMonitor = powerMonitor
         self.lockMonitor = lockMonitor
         self.cameraManager = cameraManager
         self.bluetoothMonitor = bluetoothMonitor ?? BluetoothProximityMonitor()
+        self.networkSentinel = networkSentinel ?? NetworkPathSentinel()
         let pushManager = webPushManager ?? WebPushManager(settings: settings)
         self.webPushManager = pushManager
         self.alertNotifier = alertNotifier ?? AlertNotifier { message in
@@ -238,6 +241,8 @@ public final class SecurityCoordinator {
 
     public func startArming(immediate: Bool = false) {
         guard state == .disarmed else { return }
+        powerMonitor.resetChargerFlapState()
+        networkSentinel.startMonitoring()
         gazeAggregator.reset()
         motionAggregator.reset()
         tamperScorer.reset()
@@ -281,6 +286,8 @@ public final class SecurityCoordinator {
         countdownTimer?.invalidate()
         countdownTimer = nil
         countdownSecondsRemaining = 0
+        powerMonitor.resetChargerFlapState()
+        networkSentinel.startMonitoring()
         motionAggregator.reset()
         tamperScorer.reset()
         cameraManager.resetMotionAnchor()
@@ -422,6 +429,8 @@ public final class SecurityCoordinator {
         stopArmedInputMonitoring()
         webPushManager.stopRemoteCommandListener()
         gazeDwellProgress = 0
+        networkSentinel.stopMonitoring()
+        powerMonitor.resetChargerFlapState()
         gazeAggregator.reset()
         motionAggregator.reset()
         tamperScorer.reset()
@@ -1205,7 +1214,14 @@ public final class SecurityCoordinator {
                 if self.state == .tamperPending,
                    (self.activeTamperSource == .chargerUnplugged || self.activeTamperSource == .cameraMotionDetected),
                    self.settings.revertTamperOnPowerRestored {
-                    self.revertTamperToArmed(reason: "Power adapter reconnected.")
+                    if self.powerMonitor.isChargerFlapping {
+                        self.logEvent(
+                            "Charger Flap Ignored",
+                            detail: "Rapid power cycling detected (≥3 transitions in 6s). Grace countdown remains active."
+                        )
+                    } else {
+                        self.revertTamperToArmed(reason: "Power adapter reconnected.")
+                    }
                 }
             case .lidOpened:
                 break
@@ -1277,6 +1293,43 @@ public final class SecurityCoordinator {
                   !self.settings.trustedBluetoothDeviceUUID.isEmpty,
                   self.state == .armed else { return }
             self.disarmFromTrustedProximity()
+        }
+
+        networkSentinel.onTransition = { [weak self] transition in
+            guard let self else { return }
+            guard self.isMonitoring, self.settings.networkDropMonitorEnabled else { return }
+            switch transition {
+            case .connectivityLost(let previous):
+                self.logEvent(
+                    "Network Drop Detected",
+                    detail: "\(previous.rawValue) connection lost while \(self.state.label)."
+                )
+                self.alertNotifier.send(AlertMessage(
+                    title: "Pupil Network Drop Advisory",
+                    body: "\(previous.rawValue) connection dropped while MacBook is \(self.state.label).",
+                    severity: "high",
+                    tag: "pupil-network"
+                ))
+                self.alertNotifier.flushPendingNow()
+            case .interfaceChanged(let from, let to):
+                self.logEvent(
+                    "Network Interface Changed",
+                    detail: "Primary interface switched from \(from.rawValue) to \(to.rawValue) while \(self.state.label)."
+                )
+                self.alertNotifier.send(AlertMessage(
+                    title: "Pupil Network Change Advisory",
+                    body: "Network switched from \(from.rawValue) to \(to.rawValue) while \(self.state.label).",
+                    severity: "normal",
+                    tag: "pupil-network"
+                ))
+                self.alertNotifier.flushPendingNow()
+            case .connectivityRestored(let current):
+                self.logEvent(
+                    "Network Restored",
+                    detail: "\(current.rawValue) connection restored while \(self.state.label). Flushing queued alerts."
+                )
+                self.alertNotifier.flushPendingNow()
+            }
         }
     }
 
