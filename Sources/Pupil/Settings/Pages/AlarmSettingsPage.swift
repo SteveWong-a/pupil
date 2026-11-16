@@ -70,12 +70,17 @@ public struct AlarmSettingsPage: View {
                     SettingsSectionTitle(text: "Activity")
                     Spacer()
                     if !coordinator.events.isEmpty {
-                        Button("Clear") {
-                            coordinator.clearEventLog()
+                        HStack(spacing: 8) {
+                            PillActionButton(title: "Export log") {
+                                coordinator.presentExportIncidentLogPanel()
+                            }
+                            Button("Clear") {
+                                coordinator.clearEventLog()
+                            }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(PupilTheme.accent)
                         }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(PupilTheme.accent)
                         .padding(.trailing, 8)
                         .padding(.top, SettingsMetrics.sectionTitleVerticalPadding)
                     }
