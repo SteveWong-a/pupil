@@ -7,6 +7,7 @@
 //
 
 import AppKit
+import CoreGraphics
 import Foundation
 import Observation
 
@@ -143,6 +144,13 @@ public final class SecurityCoordinator {
     /// Injectable clock (epoch seconds) so corroboration windows are testable.
     public var clock: () -> TimeInterval = { Date().timeIntervalSince1970 }
 
+    public private(set) var idleEvaluator = IdleInactivityEvaluator()
+    private var idleInactivityTimer: Timer?
+    /// Injectable HID idle seconds provider (defaults to CoreGraphics combined session HID idle time).
+    public var hidIdleSecondsProvider: () -> Double = {
+        SecurityCoordinator.readSystemHIDIdleSeconds()
+    }
+
     public var onStateChanged: ((SecurityState) -> Void)?
     public var onNotchUpdateNeeded: (() -> Void)?
 
@@ -199,6 +207,7 @@ public final class SecurityCoordinator {
 
         bindSensors()
         syncBluetoothProximityMonitoring()
+        syncIdleInactivityMonitoring()
 
         NotificationCenter.default.addObserver(
             forName: .screenShieldSync,
@@ -212,6 +221,7 @@ public final class SecurityCoordinator {
                 }
                 self.syncCameraLifecycle()
                 self.syncBluetoothProximityMonitoring()
+                self.syncIdleInactivityMonitoring()
                 if self.state == .armed {
                     if self.settings.lockOnInputWhenArmed {
                         self.startArmedInputMonitoring()
@@ -345,6 +355,7 @@ public final class SecurityCoordinator {
         guard state == .arming else { return }
         stopArmedInputMonitoring()
         isInteractiveUnlockRequested = false
+        idleEvaluator.suppressCurrentStreak()
         performValidatedDisarm(method: "Exit Delay Cancel")
     }
 
@@ -377,6 +388,61 @@ public final class SecurityCoordinator {
         }
     }
 
+    nonisolated public static func readSystemHIDIdleSeconds() -> Double {
+        let eventTypes: [CGEventType] = [
+            .keyDown,
+            .keyUp,
+            .flagsChanged,
+            .leftMouseDown,
+            .leftMouseUp,
+            .rightMouseDown,
+            .rightMouseUp,
+            .mouseMoved,
+            .leftMouseDragged,
+            .rightMouseDragged,
+            .scrollWheel
+        ]
+        var minElapsed = Double.greatestFiniteMagnitude
+        for type in eventTypes {
+            let elapsed = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: type)
+            if elapsed >= 0 && elapsed < minElapsed {
+                minElapsed = elapsed
+            }
+        }
+        return minElapsed == .greatestFiniteMagnitude ? 0 : minElapsed
+    }
+
+    public func syncIdleInactivityMonitoring() {
+        idleInactivityTimer?.invalidate()
+        idleInactivityTimer = nil
+        guard settings.idleAutoArmEnabled else {
+            idleEvaluator.reset()
+            return
+        }
+        idleInactivityTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.pollIdleInactivity()
+            }
+        }
+    }
+
+    public func pollIdleInactivity(idleSeconds: Double? = nil) {
+        let currentIdle = idleSeconds ?? hidIdleSecondsProvider()
+        let shouldArm = idleEvaluator.evaluate(
+            idleSeconds: currentIdle,
+            thresholdMinutes: settings.idleAutoArmMinutes,
+            state: state,
+            featureEnabled: settings.idleAutoArmEnabled
+        )
+        if shouldArm {
+            logEvent(
+                "Idle Auto-Arm",
+                detail: "No keyboard or mouse activity for \(settings.idleAutoArmMinutes)m. Auto-arming."
+            )
+            startArming()
+        }
+    }
+
     public func updatePin(newPin: String) throws {
         try KeychainManager.enrollPin(newPin)
         hasEnrolledPin = KeychainManager.hasEnrolledPin
@@ -400,6 +466,7 @@ public final class SecurityCoordinator {
     }
 
     private func performValidatedDisarm(method: String) {
+        idleEvaluator.suppressCurrentStreak()
         let wasAlarm = (state == .alarm)
         KeychainManager.cancelPendingAuthentication()
         countdownTimer?.invalidate()
