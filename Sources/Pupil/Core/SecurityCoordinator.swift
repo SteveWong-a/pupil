@@ -7,6 +7,7 @@
 //
 
 import AppKit
+import CryptoKit
 import Foundation
 import Observation
 import UniformTypeIdentifiers
@@ -183,9 +184,19 @@ public final class SecurityCoordinator {
         webPushManager: WebPushManager? = nil,
         alertNotifier: AlertNotifier? = nil,
         bluetoothMonitor: BluetoothProximityMonitor? = nil,
-        journalStore: TamperJournalStore = .shared
+        journalStore: TamperJournalStore? = nil
     ) {
-        self.journalStore = journalStore
+        let resolvedJournalStore: TamperJournalStore
+        if let journalStore {
+            resolvedJournalStore = journalStore
+        } else if settings === PupilSettings.shared {
+            resolvedJournalStore = .shared
+        } else {
+            let tempURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("pupil-test-journal-\(UUID().uuidString).enc.json")
+            resolvedJournalStore = TamperJournalStore(fileURL: tempURL, symmetricKey: SymmetricKey(size: .bits256))
+        }
+        self.journalStore = resolvedJournalStore
         self.settings = settings
         self.powerMonitor = powerMonitor
         self.lockMonitor = lockMonitor
@@ -207,7 +218,7 @@ public final class SecurityCoordinator {
         }
         self.cameraManager.motionDetector.surroundingsWatchEnabled = settings.surroundingsWatchEnabled
 
-        if let persisted = try? journalStore.loadRecords(), !persisted.isEmpty {
+        if let persisted = try? resolvedJournalStore.loadRecords(), !persisted.isEmpty {
             self.events = Array(persisted.prefix(TamperJournalStore.maxRecords))
         }
 
