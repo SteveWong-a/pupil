@@ -142,6 +142,8 @@ public final class SecurityCoordinator {
     public let bluetoothMonitor: BluetoothProximityMonitor
     /// Injectable clock (epoch seconds) so corroboration windows are testable.
     public var clock: () -> TimeInterval = { Date().timeIntervalSince1970 }
+    /// Injectable thermal state provider for deterministic testing.
+    public var thermalStateProvider: () -> ProcessInfo.ThermalState = { ProcessInfo.processInfo.thermalState }
 
     public var onStateChanged: ((SecurityState) -> Void)?
     public var onNotchUpdateNeeded: (() -> Void)?
@@ -219,6 +221,16 @@ public final class SecurityCoordinator {
                         self.stopArmedInputMonitoring()
                     }
                 }
+            }
+        }
+
+        NotificationCenter.default.addObserver(
+            forName: ProcessInfo.thermalStateDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.syncAdaptiveVisionFrameRate()
             }
         }
     }
@@ -817,6 +829,7 @@ public final class SecurityCoordinator {
         gazeDwellProgress = snapshot.dwellProgress
         eyeLookOffset = snapshot.eyeLookOffset
         activeFaceCount = snapshot.activeFaceCount
+        syncAdaptiveVisionFrameRate()
 
         guard state == .armed, settings.gazeDetectionEnabled else {
             if isGazeWarningActive {
@@ -853,6 +866,7 @@ public final class SecurityCoordinator {
                 ? sample.translationMagnitude / max(0.001, settings.spatialMotionSensitivity.translationDeadband)
                 : 0
             latestMotionDisplacementScore = min(1.0, translationRatio)
+            syncAdaptiveVisionFrameRate()
             return
         }
 
@@ -860,6 +874,7 @@ public final class SecurityCoordinator {
             guard settings.isSpatialMotionEnabled else {
                 hasMotionAnchor = false
                 latestMotionDisplacementScore = 0
+                syncAdaptiveVisionFrameRate()
                 return
             }
             hasMotionAnchor = sample.isAnchorFrame || hasMotionAnchor
@@ -867,6 +882,7 @@ public final class SecurityCoordinator {
                 ? sample.translationMagnitude / max(0.001, settings.spatialMotionSensitivity.translationDeadband)
                 : 0
             latestMotionDisplacementScore = min(1.0, translationRatio)
+            syncAdaptiveVisionFrameRate()
 
             // Auto-re-tare surroundings in preview mode: if laptop was moved to a new resting spot
             // and has been completely stationary for 2.5 seconds, auto-zero the baseline!
@@ -935,6 +951,7 @@ public final class SecurityCoordinator {
         latestMotionDisplacementScore = snapshot.effectiveDisplacementScore
         continuousMotionSeconds = max(snapshot.continuousDisplacementSeconds, snapshot.continuousOcclusionSeconds)
         motionAnchorDepthMeters = snapshot.anchorDepthMeters
+        syncAdaptiveVisionFrameRate()
 
         if snapshot.isTamperTriggered {
             handleWeakMotionSignal(snapshot)
@@ -1166,6 +1183,30 @@ public final class SecurityCoordinator {
         } else {
             cameraManager.stopCapture()
         }
+        syncAdaptiveVisionFrameRate()
+    }
+
+    public func syncAdaptiveVisionFrameRate() {
+        guard settings.adaptiveFrameRateEnabled else {
+            cameraManager.updateAnalysisRate(fps: AdaptiveVisionGovernor.fullRateFPS)
+            return
+        }
+        let activitySuspected = activeFaceCount > 0
+            || gazeDwellProgress > 0
+            || isGazeWarningActive
+            || latestMotionDisplacementScore >= 0.35
+            || state == .arming
+            || state == .tamperPending
+            || state == .alarm
+            || isCameraPreviewRequested
+            || isLiveCalibrating
+        let targetFPS = AdaptiveVisionGovernor.evaluateTargetFPS(
+            isOnACPower: powerMonitor.isOnACPower,
+            batteryPercent: powerMonitor.batteryPercentage,
+            thermalState: thermalStateProvider(),
+            isActivitySuspected: activitySuspected
+        )
+        cameraManager.updateAnalysisRate(fps: targetFPS)
     }
 
     public func clearEventLog() {
@@ -1182,6 +1223,7 @@ public final class SecurityCoordinator {
                 if self.settings.hardwareTriggers.contains(.chargerUnplug) {
                     self.triggerTamper(source: .chargerUnplugged, immediateAlarm: false)
                 }
+                self.syncAdaptiveVisionFrameRate()
             case .lidClosed:
                 if self.settings.hardwareTriggers.contains(.lidClose) {
                     // Physical clamshell closed: trigger immediate siren before macOS cuts audio
@@ -1207,6 +1249,7 @@ public final class SecurityCoordinator {
                    self.settings.revertTamperOnPowerRestored {
                     self.revertTamperToArmed(reason: "Power adapter reconnected.")
                 }
+                self.syncAdaptiveVisionFrameRate()
             case .lidOpened:
                 break
             case .peripheralDisconnected:

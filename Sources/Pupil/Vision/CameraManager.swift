@@ -24,6 +24,7 @@ public final class CameraManager: NSObject {
     public private(set) var availableCameras: [CameraDeviceInfo] = []
     public private(set) var authorizationStatus: AVAuthorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
     public private(set) var isRunning: Bool = false
+    public private(set) var targetAnalysisFPS: Double = 10.0
     public internal(set) var lastFrameImage: CGImage?
 
     public var onGazeSample: ((GazeSample) -> Void)?
@@ -34,6 +35,7 @@ public final class CameraManager: NSObject {
     @ObservationIgnored private nonisolated let videoOutputQueue = DispatchQueue(label: "com.pupil.camera.output", qos: .userInitiated)
     @ObservationIgnored private nonisolated(unsafe) let ciContext = CIContext(options: [.useSoftwareRenderer: false])
     @ObservationIgnored private nonisolated(unsafe) var lastProcessedTime: TimeInterval = 0
+    @ObservationIgnored private nonisolated(unsafe) var minimumFrameInterval: TimeInterval = 0.10
     @ObservationIgnored private nonisolated(unsafe) var activeROI: CameraROI = .default
     @ObservationIgnored private nonisolated(unsafe) var warmupFramesRemaining: Int = 3
     @ObservationIgnored public nonisolated(unsafe) var shouldReanchorOnFaceAcquisition: Bool = true
@@ -56,6 +58,12 @@ public final class CameraManager: NSObject {
 
     public func updateActiveROI(_ roi: CameraROI) {
         activeROI = roi
+    }
+
+    public func updateAnalysisRate(fps: Double) {
+        let clampedFPS = min(max(fps, 1.0), 30.0)
+        targetAnalysisFPS = clampedFPS
+        minimumFrameInterval = 1.0 / clampedFPS
     }
 
     public var captureSessionReference: AVCaptureSession {
@@ -216,8 +224,8 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
         from connection: AVCaptureConnection
     ) {
         let now = Date().timeIntervalSince1970
-        // Throttle Vision inference to ~10 FPS to keep CPU and battery footprint minimal
-        guard (now - lastProcessedTime) >= 0.10 else { return }
+        // Throttle Vision inference dynamically based on governor policy
+        guard (now - lastProcessedTime) >= minimumFrameInterval else { return }
         lastProcessedTime = now
 
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
