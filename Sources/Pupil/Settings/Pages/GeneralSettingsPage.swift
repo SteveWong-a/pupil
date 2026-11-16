@@ -56,6 +56,13 @@ public struct GeneralSettingsPage: View {
                 }
                 SettingsGroupDivider()
                 SettingsRowContent(
+                    title: "Auto-arm on idle inactivity",
+                    info: "Automatically starts arming Pupil when no keyboard, mouse, or trackpad input is detected for the configured duration."
+                ) {
+                    PupilToggle(isOn: $settings.idleAutoArmEnabled)
+                }
+                SettingsGroupDivider()
+                SettingsRowContent(
                     title: "Global shortcut (⌃⌥⌘L)",
                     info: "Press Control + Option + Command + L from anywhere to arm Pupil or open the unlock challenge."
                 ) {
@@ -124,7 +131,17 @@ public struct GeneralSettingsPage: View {
                         index: $settings.gracePeriodSliderIndex,
                         stopCount: PupilSettings.gracePeriodStops.count
                     )
+                    if settings.idleAutoArmEnabled {
+                        SettingsGroupDivider()
+                        SettingsSteppedSliderRowContent(
+                            title: "Idle auto-arm timeout",
+                            valueLabel: "\(settings.idleAutoArmMinutes) minutes",
+                            index: $settings.idleAutoArmSliderIndex,
+                            stopCount: PupilSettings.idleAutoArmStops.count
+                        )
+                    }
                 }
+                .animation(SettingsMetrics.stateTransitionAnimation, value: settings.idleAutoArmEnabled)
             }
 
             VStack(alignment: .leading, spacing: 8) {

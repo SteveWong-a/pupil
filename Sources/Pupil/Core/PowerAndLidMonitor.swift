@@ -26,6 +26,41 @@ public enum PowerHardwareEvent: Sendable, Equatable {
     case systemDidWake
 }
 
+public struct ChargerFlapDetector: Sendable {
+    public let windowSeconds: TimeInterval
+    public let flapThreshold: Int
+    public private(set) var transitionTimestamps: [TimeInterval] = []
+
+    public init(windowSeconds: TimeInterval = 6.0, flapThreshold: Int = 3) {
+        self.windowSeconds = windowSeconds
+        self.flapThreshold = flapThreshold
+    }
+
+    /// Records an AC power transition (unplug or replug) at timestamp `now` (epoch seconds),
+    /// prunes transitions older than `now - windowSeconds`, and returns whether flapping is active.
+    @discardableResult
+    public mutating func recordTransition(at now: TimeInterval) -> Bool {
+        prune(at: now)
+        transitionTimestamps.append(now)
+        return isFlapping(at: now)
+    }
+
+    public mutating func prune(at now: TimeInterval) {
+        let cutoff = now - windowSeconds
+        transitionTimestamps.removeAll { $0 < cutoff }
+    }
+
+    public func isFlapping(at now: TimeInterval) -> Bool {
+        let cutoff = now - windowSeconds
+        let recentCount = transitionTimestamps.filter { $0 >= cutoff }.count
+        return recentCount >= flapThreshold
+    }
+
+    public mutating func reset() {
+        transitionTimestamps.removeAll()
+    }
+}
+
 @MainActor
 @Observable
 public final class PowerAndLidMonitor {
@@ -35,6 +70,9 @@ public final class PowerAndLidMonitor {
     public private(set) var isSleepAssertionActive: Bool = false
     public private(set) var connectedDisplayCount: Int = 0
     public private(set) var connectedUSBDeviceCount: Int = 0
+    public private(set) var isChargerFlapping: Bool = false
+    private var chargerFlapDetector = ChargerFlapDetector()
+    public var clock: () -> TimeInterval = { Date().timeIntervalSince1970 }
 
     public var onHardwareEvent: ((PowerHardwareEvent) -> Void)?
 
@@ -172,11 +210,22 @@ public final class PowerAndLidMonitor {
         isSleepAssertionActive = false
     }
 
+    public func recordChargerTransition(isOnAC: Bool, at timestamp: TimeInterval? = nil) {
+        let now = timestamp ?? clock()
+        isOnACPower = isOnAC
+        isChargerFlapping = chargerFlapDetector.recordTransition(at: now)
+        onHardwareEvent?(isOnAC ? .chargerPluggedIn : .chargerUnplugged)
+    }
+
+    public func resetChargerFlapState() {
+        chargerFlapDetector.reset()
+        isChargerFlapping = false
+    }
+
     private func pollHardwareSensors() {
         let currentAC = Self.readACPowerState()
         if currentAC != isOnACPower {
-            isOnACPower = currentAC
-            onHardwareEvent?(currentAC ? .chargerPluggedIn : .chargerUnplugged)
+            recordChargerTransition(isOnAC: currentAC)
         }
 
         let currentBattery = Self.readBatteryPercentage()

@@ -7,6 +7,7 @@
 //
 
 import AppKit
+import CoreGraphics
 import CryptoKit
 import Foundation
 import Observation
@@ -147,10 +148,18 @@ public final class SecurityCoordinator {
     public let alertNotifier: AlertNotifier
     public let bluetoothMonitor: BluetoothProximityMonitor
     public let journalStore: TamperJournalStore
+    public let networkSentinel: NetworkPathSentinel
     /// Injectable clock (epoch seconds) so corroboration windows are testable.
     public var clock: () -> TimeInterval = { Date().timeIntervalSince1970 }
     /// Injectable thermal state provider for deterministic testing.
     public var thermalStateProvider: () -> ProcessInfo.ThermalState = { ProcessInfo.processInfo.thermalState }
+
+    public private(set) var idleEvaluator = IdleInactivityEvaluator()
+    private var idleInactivityTimer: Timer?
+    /// Injectable HID idle seconds provider (defaults to CoreGraphics combined session HID idle time).
+    public var hidIdleSecondsProvider: () -> Double = {
+        SecurityCoordinator.readSystemHIDIdleSeconds()
+    }
 
     public var onStateChanged: ((SecurityState) -> Void)?
     public var onNotchUpdateNeeded: (() -> Void)?
@@ -191,6 +200,7 @@ public final class SecurityCoordinator {
         webPushManager: WebPushManager? = nil,
         alertNotifier: AlertNotifier? = nil,
         bluetoothMonitor: BluetoothProximityMonitor? = nil,
+        networkSentinel: NetworkPathSentinel? = nil,
         journalStore: TamperJournalStore? = nil
     ) {
         let resolvedJournalStore: TamperJournalStore
@@ -209,6 +219,7 @@ public final class SecurityCoordinator {
         self.lockMonitor = lockMonitor
         self.cameraManager = cameraManager
         self.bluetoothMonitor = bluetoothMonitor ?? BluetoothProximityMonitor()
+        self.networkSentinel = networkSentinel ?? NetworkPathSentinel()
         let pushManager = webPushManager ?? WebPushManager(settings: settings)
         self.webPushManager = pushManager
         self.alertNotifier = alertNotifier ?? AlertNotifier { message in
@@ -238,6 +249,7 @@ public final class SecurityCoordinator {
 
         bindSensors()
         syncBluetoothProximityMonitoring()
+        syncIdleInactivityMonitoring()
 
         NotificationCenter.default.addObserver(
             forName: .screenShieldSync,
@@ -251,6 +263,7 @@ public final class SecurityCoordinator {
                 }
                 self.syncCameraLifecycle()
                 self.syncBluetoothProximityMonitoring()
+                self.syncIdleInactivityMonitoring()
                 if self.state == .armed {
                     if self.settings.lockOnInputWhenArmed {
                         self.startArmedInputMonitoring()
@@ -287,6 +300,8 @@ public final class SecurityCoordinator {
 
     public func startArming(immediate: Bool = false) {
         guard state == .disarmed else { return }
+        powerMonitor.resetChargerFlapState()
+        networkSentinel.startMonitoring()
         gazeAggregator.reset()
         motionAggregator.reset()
         tamperScorer.reset()
@@ -330,6 +345,8 @@ public final class SecurityCoordinator {
         countdownTimer?.invalidate()
         countdownTimer = nil
         countdownSecondsRemaining = 0
+        powerMonitor.resetChargerFlapState()
+        networkSentinel.startMonitoring()
         motionAggregator.reset()
         tamperScorer.reset()
         cameraManager.resetMotionAnchor()
@@ -448,6 +465,7 @@ public final class SecurityCoordinator {
         guard state == .arming else { return }
         stopArmedInputMonitoring()
         isInteractiveUnlockRequested = false
+        idleEvaluator.suppressCurrentStreak()
         performValidatedDisarm(method: "Exit Delay Cancel")
     }
 
@@ -480,6 +498,61 @@ public final class SecurityCoordinator {
         }
     }
 
+    nonisolated public static func readSystemHIDIdleSeconds() -> Double {
+        let eventTypes: [CGEventType] = [
+            .keyDown,
+            .keyUp,
+            .flagsChanged,
+            .leftMouseDown,
+            .leftMouseUp,
+            .rightMouseDown,
+            .rightMouseUp,
+            .mouseMoved,
+            .leftMouseDragged,
+            .rightMouseDragged,
+            .scrollWheel
+        ]
+        var minElapsed = Double.greatestFiniteMagnitude
+        for type in eventTypes {
+            let elapsed = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: type)
+            if elapsed >= 0 && elapsed < minElapsed {
+                minElapsed = elapsed
+            }
+        }
+        return minElapsed == .greatestFiniteMagnitude ? 0 : minElapsed
+    }
+
+    public func syncIdleInactivityMonitoring() {
+        idleInactivityTimer?.invalidate()
+        idleInactivityTimer = nil
+        guard settings.idleAutoArmEnabled else {
+            idleEvaluator.reset()
+            return
+        }
+        idleInactivityTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.pollIdleInactivity()
+            }
+        }
+    }
+
+    public func pollIdleInactivity(idleSeconds: Double? = nil) {
+        let currentIdle = idleSeconds ?? hidIdleSecondsProvider()
+        let shouldArm = idleEvaluator.evaluate(
+            idleSeconds: currentIdle,
+            thresholdMinutes: settings.idleAutoArmMinutes,
+            state: state,
+            featureEnabled: settings.idleAutoArmEnabled
+        )
+        if shouldArm {
+            logEvent(
+                "Idle Auto-Arm",
+                detail: "No keyboard or mouse activity for \(settings.idleAutoArmMinutes)m. Auto-arming."
+            )
+            startArming()
+        }
+    }
+
     public func updatePin(newPin: String) throws {
         try KeychainManager.enrollPin(newPin)
         hasEnrolledPin = KeychainManager.hasEnrolledPin
@@ -505,6 +578,7 @@ public final class SecurityCoordinator {
     }
 
     private func performValidatedDisarm(method: String) {
+        idleEvaluator.suppressCurrentStreak()
         let wasAlarm = (state == .alarm)
         resetPinLockout()
         KeychainManager.cancelPendingAuthentication()
@@ -528,6 +602,8 @@ public final class SecurityCoordinator {
         stopArmedInputMonitoring()
         webPushManager.stopRemoteCommandListener()
         gazeDwellProgress = 0
+        networkSentinel.stopMonitoring()
+        powerMonitor.resetChargerFlapState()
         gazeAggregator.reset()
         motionAggregator.reset()
         tamperScorer.reset()
@@ -1359,7 +1435,14 @@ public final class SecurityCoordinator {
                 if self.state == .tamperPending,
                    (self.activeTamperSource == .chargerUnplugged || self.activeTamperSource == .cameraMotionDetected),
                    self.settings.revertTamperOnPowerRestored {
-                    self.revertTamperToArmed(reason: "Power adapter reconnected.")
+                    if self.powerMonitor.isChargerFlapping {
+                        self.logEvent(
+                            "Charger Flap Ignored",
+                            detail: "Rapid power cycling detected (≥3 transitions in 6s). Grace countdown remains active."
+                        )
+                    } else {
+                        self.revertTamperToArmed(reason: "Power adapter reconnected.")
+                    }
                 }
                 self.syncAdaptiveVisionFrameRate()
             case .lidOpened:
@@ -1432,6 +1515,43 @@ public final class SecurityCoordinator {
                   !self.settings.trustedBluetoothDeviceUUID.isEmpty,
                   self.state == .armed else { return }
             self.disarmFromTrustedProximity()
+        }
+
+        networkSentinel.onTransition = { [weak self] transition in
+            guard let self else { return }
+            guard self.isMonitoring, self.settings.networkDropMonitorEnabled else { return }
+            switch transition {
+            case .connectivityLost(let previous):
+                self.logEvent(
+                    "Network Drop Detected",
+                    detail: "\(previous.rawValue) connection lost while \(self.state.label)."
+                )
+                self.alertNotifier.send(AlertMessage(
+                    title: "Pupil Network Drop Advisory",
+                    body: "\(previous.rawValue) connection dropped while MacBook is \(self.state.label).",
+                    severity: "high",
+                    tag: "pupil-network"
+                ))
+                self.alertNotifier.flushPendingNow()
+            case .interfaceChanged(let from, let to):
+                self.logEvent(
+                    "Network Interface Changed",
+                    detail: "Primary interface switched from \(from.rawValue) to \(to.rawValue) while \(self.state.label)."
+                )
+                self.alertNotifier.send(AlertMessage(
+                    title: "Pupil Network Change Advisory",
+                    body: "Network switched from \(from.rawValue) to \(to.rawValue) while \(self.state.label).",
+                    severity: "normal",
+                    tag: "pupil-network"
+                ))
+                self.alertNotifier.flushPendingNow()
+            case .connectivityRestored(let current):
+                self.logEvent(
+                    "Network Restored",
+                    detail: "\(current.rawValue) connection restored while \(self.state.label). Flushing queued alerts."
+                )
+                self.alertNotifier.flushPendingNow()
+            }
         }
     }
 

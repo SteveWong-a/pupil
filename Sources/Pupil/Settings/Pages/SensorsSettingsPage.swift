@@ -55,6 +55,13 @@ public struct SensorsSettingsPage: View {
                 ) {
                     PupilToggle(isOn: $settings.revertTamperOnPowerRestored)
                 }
+                SettingsGroupDivider()
+                SettingsRowContent(
+                    title: "Monitor network drops",
+                    subtitle: "Logs an advisory event and flushes queued phone alerts if Wi-Fi drops while armed."
+                ) {
+                    PupilToggle(isOn: $settings.networkDropMonitorEnabled)
+                }
             }
 
             VStack(alignment: .leading, spacing: 8) {
