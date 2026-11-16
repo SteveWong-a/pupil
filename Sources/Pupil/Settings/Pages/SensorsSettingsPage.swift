@@ -55,6 +55,13 @@ public struct SensorsSettingsPage: View {
                 ) {
                     PupilToggle(isOn: $settings.revertTamperOnPowerRestored)
                 }
+                SettingsGroupDivider()
+                SettingsRowContent(
+                    title: "Trigger on external display unplug",
+                    subtitle: "Starts the tamper countdown if a connected external monitor is unplugged while armed."
+                ) {
+                    PupilToggle(isOn: $settings.displayUnplugTriggerEnabled)
+                }
             }
 
             VStack(alignment: .leading, spacing: 8) {

@@ -10,6 +10,7 @@
 
 import AppKit
 import CoreFoundation
+import CoreGraphics
 import Foundation
 import IOKit
 import IOKit.ps
@@ -22,6 +23,7 @@ public enum PowerHardwareEvent: Sendable, Equatable {
     case lidClosed
     case lidOpened
     case peripheralDisconnected
+    case externalDisplayUnplugged(removedCount: Int)
     case systemWillSleep
     case systemDidWake
 }
@@ -34,6 +36,8 @@ public final class PowerAndLidMonitor {
     public private(set) var isSleepAssertionActive: Bool = false
     public private(set) var connectedDisplayCount: Int = 0
     public private(set) var connectedUSBDeviceCount: Int = 0
+    public private(set) var connectedExternalDisplayIDs: Set<CGDirectDisplayID> = []
+    private var displayTopologyEvaluator = DisplayTopologyEvaluator()
 
     public var onHardwareEvent: ((PowerHardwareEvent) -> Void)?
 
@@ -56,6 +60,9 @@ public final class PowerAndLidMonitor {
         self.isLidClosed = Self.readClamshellClosedState()
         self.connectedDisplayCount = NSScreen.screens.count
         self.connectedUSBDeviceCount = Self.readUSBDeviceCount()
+        let initialTopology = Self.readActiveDisplayTopology()
+        self.connectedExternalDisplayIDs = initialTopology.externalDisplayIDs
+        self.displayTopologyEvaluator.latchBaseline(initialTopology)
         startMonitoring()
     }
 
@@ -170,10 +177,33 @@ public final class PowerAndLidMonitor {
             onHardwareEvent?(currentClamshell ? .lidClosed : .lidOpened)
         }
 
+        evaluateDisplayTopology(Self.readActiveDisplayTopology())
+
+        connectedDisplayCount = NSScreen.screens.count
         evaluatePeripheralCounts(
-            displayCount: NSScreen.screens.count,
+            displayCount: connectedDisplayCount,
             usbCount: Self.readUSBDeviceCount()
         )
+    }
+
+    public func evaluateDisplayTopology(_ snapshot: DisplayTopologySnapshot) {
+        connectedExternalDisplayIDs = snapshot.externalDisplayIDs
+        let event = displayTopologyEvaluator.evaluate(snapshot)
+        if case .externalDisplayDisconnected(let removedCount) = event {
+            onHardwareEvent?(.externalDisplayUnplugged(removedCount: removedCount))
+        }
+    }
+
+    nonisolated public static func readActiveDisplayTopology() -> DisplayTopologySnapshot {
+        var displayCount: UInt32 = 0
+        let maxDisplays: UInt32 = 32
+        var displays = [CGDirectDisplayID](repeating: 0, count: Int(maxDisplays))
+        let result = CGGetActiveDisplayList(maxDisplays, &displays, &displayCount)
+        if result == .success {
+            let activeIDs = Array(displays.prefix(Int(displayCount)))
+            return DisplayTopologySnapshot(allDisplayIDs: activeIDs)
+        }
+        return DisplayTopologySnapshot(allDisplayIDs: [])
     }
 
     /// Evaluates whether a connected external display or USB peripheral was unplugged since the last observation.
