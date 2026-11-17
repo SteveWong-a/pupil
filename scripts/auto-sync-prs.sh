@@ -12,9 +12,9 @@ LATEST_MAIN=$(git -C "$REPO_DIR" rev-parse pupil/main)
 echo "📍 Current main HEAD: $LATEST_MAIN"
 
 PAIRS=(
-  "preview-all:factory/preview-all"
-  "display:feat/display-hotplug-sentry"
-  "lockout:feat/pin-brute-force-lockout"
+  "siren:feat/siren-escalation-curve"
+  "usb:feat/usb-security-key"
+  "wifi:feat/trusted-wifi-boundary"
 )
 
 SYNCED_COUNT=0
@@ -47,5 +47,15 @@ for pair in "${PAIRS[@]}"; do
     fi
   fi
 done
+
+# Rebuild combined test.pupil.app automatically
+if [ -d "$WORKTREE_DIR/preview-wave3" ]; then
+  echo "🔨 Rebuilding combined dist/test.pupil.app from preview-wave3..."
+  cd "$WORKTREE_DIR/preview-wave3"
+  ./scripts/bundle-app.sh release >/dev/null 2>&1 || true
+  rm -rf "$REPO_DIR/dist/test.pupil.app"
+  cp -R "$WORKTREE_DIR/preview-wave3/dist/Pupil.app" "$REPO_DIR/dist/test.pupil.app"
+  echo "✨ dist/test.pupil.app refreshed and ready!"
+fi
 
 echo "🎉 Auto-sync complete! ($SYNCED_COUNT branches processed)"
