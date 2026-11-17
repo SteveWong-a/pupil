@@ -149,6 +149,13 @@ public final class SecurityCoordinator {
     public let bluetoothMonitor: BluetoothProximityMonitor
     public let journalStore: TamperJournalStore
     public let networkSentinel: NetworkPathSentinel
+    public let trustedNetworkMonitor: TrustedNetworkMonitor
+    public internal(set) var trustedNetworkEvaluator = TrustedNetworkEvaluator()
+    public private(set) var trustedNetworkPosture: TrustedNetworkPosture = .disabled
+    public var isUntrustedNetworkEscalationActive: Bool {
+        settings.trustedNetworkBaselineGazeSensitivity != nil
+    }
+    private var lastRecordedTrustedMatchEntryID: UUID?
     /// Injectable clock (epoch seconds) so corroboration windows are testable.
     public var clock: () -> TimeInterval = { Date().timeIntervalSince1970 }
     /// Injectable thermal state provider for deterministic testing.
@@ -202,6 +209,7 @@ public final class SecurityCoordinator {
         alertNotifier: AlertNotifier? = nil,
         bluetoothMonitor: BluetoothProximityMonitor? = nil,
         networkSentinel: NetworkPathSentinel? = nil,
+        trustedNetworkMonitor: TrustedNetworkMonitor? = nil,
         journalStore: TamperJournalStore? = nil
     ) {
         let resolvedJournalStore: TamperJournalStore
@@ -221,6 +229,7 @@ public final class SecurityCoordinator {
         self.cameraManager = cameraManager
         self.bluetoothMonitor = bluetoothMonitor ?? BluetoothProximityMonitor()
         self.networkSentinel = networkSentinel ?? NetworkPathSentinel()
+        self.trustedNetworkMonitor = trustedNetworkMonitor ?? TrustedNetworkMonitor()
         let pushManager = webPushManager ?? WebPushManager(settings: settings)
         self.webPushManager = pushManager
         self.alertNotifier = alertNotifier ?? AlertNotifier { message in
@@ -251,6 +260,7 @@ public final class SecurityCoordinator {
         bindSensors()
         syncBluetoothProximityMonitoring()
         syncIdleInactivityMonitoring()
+        syncTrustedNetworkMonitoring()
 
         NotificationCenter.default.addObserver(
             forName: .screenShieldSync,
@@ -265,6 +275,7 @@ public final class SecurityCoordinator {
                 self.syncCameraLifecycle()
                 self.syncBluetoothProximityMonitoring()
                 self.syncIdleInactivityMonitoring()
+                self.syncTrustedNetworkMonitoring()
                 if self.state == .armed {
                     if self.settings.lockOnInputWhenArmed {
                         self.startArmedInputMonitoring()
@@ -469,6 +480,7 @@ public final class SecurityCoordinator {
         stopArmedInputMonitoring()
         isInteractiveUnlockRequested = false
         idleEvaluator.suppressCurrentStreak()
+        trustedNetworkEvaluator.suppressCurrentUntrustedSession()
         performValidatedDisarm(method: "Exit Delay Cancel")
     }
 
@@ -556,6 +568,116 @@ public final class SecurityCoordinator {
         }
     }
 
+    public func syncTrustedNetworkMonitoring() {
+        if settings.trustedNetworkAutoArmEnabled {
+            if !trustedNetworkMonitor.isMonitoring {
+                trustedNetworkMonitor.startMonitoring()
+            } else if let snapshot = trustedNetworkMonitor.latestSnapshot {
+                handleTrustedNetworkSnapshot(snapshot)
+            }
+        } else {
+            trustedNetworkMonitor.stopMonitoring()
+            lastRecordedTrustedMatchEntryID = nil
+            if trustedNetworkPosture != .disabled || settings.trustedNetworkBaselineGazeSensitivity != nil {
+                let fallbackSnapshot = trustedNetworkMonitor.latestSnapshot ?? NetworkIdentitySnapshot(
+                    isSatisfied: false,
+                    primaryInterface: .none,
+                    interfaceName: nil,
+                    locationPermission: trustedNetworkMonitor.locationPermission,
+                    capturedAt: clock()
+                )
+                handleTrustedNetworkSnapshot(fallbackSnapshot)
+            }
+        }
+    }
+
+    public func handleTrustedNetworkSnapshot(
+        _ snapshot: NetworkIdentitySnapshot,
+        at timestamp: TimeInterval? = nil
+    ) {
+        let config = TrustedNetworkPolicyConfiguration(
+            isEnabled: settings.trustedNetworkAutoArmEnabled,
+            policyMode: settings.trustedNetworkPolicyMode,
+            armOnOfflineDisconnect: settings.trustedNetworkArmOnOfflineDisconnect
+        )
+
+        let output = trustedNetworkEvaluator.evaluate(
+            snapshot: snapshot,
+            enrolledNetworks: settings.trustedNetworks,
+            configuration: config,
+            securityState: state,
+            currentGazeSensitivity: settings.gazeSensitivity,
+            savedBaselineSensitivity: settings.trustedNetworkBaselineGazeSensitivity,
+            at: timestamp ?? clock()
+        )
+
+        trustedNetworkPosture = output.posture
+        trustedNetworkMonitor.applyPosture(output.posture)
+
+        if let baseline = output.newBaselineSensitivityToSave {
+            settings.trustedNetworkBaselineGazeSensitivity = baseline
+        }
+        if let nextSensitivity = output.updatedGazeSensitivity {
+            settings.gazeSensitivity = nextSensitivity
+        }
+        if output.shouldClearSavedBaseline {
+            settings.trustedNetworkBaselineGazeSensitivity = nil
+        }
+
+        if case .trusted(let entryID, _, _) = output.posture {
+            if lastRecordedTrustedMatchEntryID != entryID {
+                lastRecordedTrustedMatchEntryID = entryID
+                if let index = settings.trustedNetworks.firstIndex(where: { $0.id == entryID }) {
+                    settings.trustedNetworks[index].lastMatchedAt = Date()
+                }
+            }
+        } else {
+            lastRecordedTrustedMatchEntryID = nil
+        }
+
+        trustedNetworkMonitor.scheduleDebounceReevaluation(after: output.pendingReevaluationDelay)
+
+        if let event = output.event {
+            switch event {
+            case .enteredTrustedNetwork(_, let displayName, _, let restoredSensitivity):
+                let suffix = restoredSensitivity.map { " Restored gaze sensitivity to \($0.title)." } ?? ""
+                logEvent("Trusted Wi-Fi Connected", detail: "On trusted Wi-Fi (\(displayName)).\(suffix)")
+            case .leftTrustedForUntrusted(let displayLabel, let source, let armed, let escalated):
+                var actions: [String] = []
+                if escalated { actions.append("Sensitivity set to Strict.") }
+                if armed { actions.append("Auto-arming Pupil.") }
+                let actionSummary = actions.isEmpty ? "" : " " + actions.joined(separator: " ")
+                logEvent(
+                    "Untrusted Wi-Fi Policy",
+                    detail: "Connected to untrusted Wi-Fi via \(source.displayTitle) (\(displayLabel)).\(actionSummary)"
+                )
+            case .leftTrustedToOffline(let armed):
+                if armed {
+                    logEvent("Trusted Wi-Fi Left", detail: "Disconnected from trusted Wi-Fi. Auto-arming Pupil.")
+                }
+            case .enteredUnavailableIdentity(let permission):
+                logEvent(
+                    "Wi-Fi Identity Unavailable",
+                    detail: "Cannot verify trusted Wi-Fi (\(permission.rawValue)). Failing closed."
+                )
+            }
+        }
+
+        trustedNetworkMonitor.onEvaluationResult?(output)
+
+        if output.shouldAutoArm && state == .disarmed {
+            startArming()
+            if settings.relayEnabled {
+                alertNotifier.send(AlertMessage(
+                    title: "Pupil Network Boundary Auto-Arm",
+                    body: "Left trusted Wi-Fi network. Auto-arming protection.",
+                    severity: "normal",
+                    tag: "pupil-network"
+                ))
+            }
+        }
+    }
+
     public func updatePin(newPin: String) throws {
         try KeychainManager.enrollPin(newPin)
         hasEnrolledPin = KeychainManager.hasEnrolledPin
@@ -582,6 +704,7 @@ public final class SecurityCoordinator {
 
     private func performValidatedDisarm(method: String) {
         idleEvaluator.suppressCurrentStreak()
+        trustedNetworkEvaluator.suppressCurrentUntrustedSession()
         let wasAlarm = (state == .alarm)
         resetPinLockout()
         KeychainManager.cancelPendingAuthentication()
@@ -622,6 +745,11 @@ public final class SecurityCoordinator {
         logEvent("Disarmed", detail: "Session disarmed via \(method).")
         onStateChanged?(state)
         onNotchUpdateNeeded?()
+
+        if settings.trustedNetworkAutoArmEnabled,
+           let snapshot = trustedNetworkMonitor.latestSnapshot {
+            handleTrustedNetworkSnapshot(snapshot)
+        }
 
         if wasAlarm {
             alertNotifier.send(AlertMessage(
@@ -1586,6 +1714,10 @@ public final class SecurityCoordinator {
                 )
                 self.alertNotifier.flushPendingNow()
             }
+        }
+
+        trustedNetworkMonitor.onSnapshotUpdated = { [weak self] snapshot in
+            self?.handleTrustedNetworkSnapshot(snapshot)
         }
     }
 

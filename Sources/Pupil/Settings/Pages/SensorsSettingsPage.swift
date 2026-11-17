@@ -386,10 +386,15 @@ public struct SensorsSettingsPage: View {
                     }
                 }
             }
+
+            trustedWifiSection
         }
         .onAppear {
             if !coordinator.webPushManager.isPaired {
                 coordinator.webPushManager.startPairingListener()
+            }
+            if settings.trustedNetworkAutoArmEnabled {
+                coordinator.trustedNetworkMonitor.refreshCurrentNetwork()
             }
         }
         .onDisappear {
@@ -432,5 +437,220 @@ public struct SensorsSettingsPage: View {
                     .foregroundStyle(SettingsMetrics.textSecondary)
             }
         }
+    }
+
+    private var trustedWifiSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SettingsSectionTitle(text: "Trusted Wi-Fi")
+            SettingsGroup {
+                SettingsRowContent(
+                    title: "Auto-arm on untrusted Wi-Fi",
+                    subtitle: "Protects your Mac automatically when you leave a trusted network or join public Wi-Fi.",
+                    info: "Compares hashed Wi-Fi identifiers locally on your Mac. Never auto-disarms an armed session."
+                ) {
+                    PupilToggle(isOn: $settings.trustedNetworkAutoArmEnabled)
+                }
+
+                if settings.trustedNetworkAutoArmEnabled {
+                    SettingsGroupDivider()
+                    SettingsRowContent(title: "Untrusted Wi-Fi action") {
+                        SettingsMenuPickerPill(label: settings.trustedNetworkPolicyMode.title) {
+                            ForEach(TrustedNetworkPolicyMode.allCases) { mode in
+                                Button(mode.title) {
+                                    settings.trustedNetworkPolicyMode = mode
+                                }
+                            }
+                        }
+                    }
+
+                    SettingsGroupDivider()
+                    SettingsRowContent(
+                        title: "Arm when leaving trusted Wi-Fi",
+                        subtitle: "Also starts arming if Wi-Fi disconnects completely after leaving a trusted network."
+                    ) {
+                        PupilToggle(isOn: $settings.trustedNetworkArmOnOfflineDisconnect)
+                    }
+
+                    SettingsGroupDivider()
+                    SettingsRowContent(
+                        title: "Current network",
+                        subtitle: currentNetworkSubtitle
+                    ) {
+                        if isCurrentNetworkTrusted {
+                            HStack(spacing: 5) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(PupilTheme.armedGreen)
+                                Text("Trusted")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(PupilTheme.armedGreen)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(PupilTheme.armedGreen.opacity(0.12))
+                            .clipShape(Capsule())
+                        } else {
+                            PillActionButton(title: "Trust current Wi-Fi") {
+                                if let snapshot = coordinator.trustedNetworkMonitor.latestSnapshot {
+                                    settings.enrollTrustedSnapshot(snapshot)
+                                }
+                            }
+                            .disabled(!canEnrollCurrentNetwork)
+                            .opacity(canEnrollCurrentNetwork ? 1.0 : 0.45)
+                        }
+                    }
+
+                    if !settings.trustedNetworks.isEmpty {
+                        SettingsGroupDivider()
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Enrolled networks")
+                                .font(SettingsMetrics.sectionTitleFont)
+                                .foregroundStyle(SettingsMetrics.textSecondary)
+
+                            ForEach(settings.trustedNetworks) { entry in
+                                HStack(spacing: 8) {
+                                    Image(systemName: "checkmark.shield.fill")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(PupilTheme.armedGreen)
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(entry.displayName)
+                                            .font(SettingsMetrics.rowFont)
+                                            .foregroundStyle(SettingsMetrics.textPrimary)
+                                            .lineLimit(1)
+                                        Text(entry.enrolledSource.displayTitle)
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(SettingsMetrics.textTertiary)
+                                    }
+                                    Spacer()
+                                    PillActionButton(title: "Remove") {
+                                        settings.removeTrustedNetwork(id: entry.id)
+                                    }
+                                }
+                                .padding(.vertical, 3)
+                            }
+                        }
+                        .padding(.horizontal, SettingsMetrics.rowHorizontalInset)
+                        .padding(.vertical, 10)
+                    }
+
+                    if coordinator.trustedNetworkMonitor.locationPermission != .authorized {
+                        SettingsGroupDivider()
+                        locationPermissionAdvisoryRow
+                    }
+                }
+            }
+
+            SettingsCaption(text: trustedWifiCaptionText)
+        }
+    }
+
+    private var currentNetworkSubtitle: String {
+        guard let snapshot = coordinator.trustedNetworkMonitor.latestSnapshot else {
+            return "Checking Wi-Fi status…"
+        }
+        if !snapshot.isSatisfied || snapshot.primaryInterface == .none {
+            return "No Wi-Fi connected"
+        }
+        if snapshot.primaryInterface != .wifi {
+            return "\(snapshot.primaryInterface.rawValue) (Neutral)"
+        }
+        if snapshot.sessionFingerprintKey == nil {
+            return "Wi-Fi identity unavailable"
+        }
+        let label = snapshot.suggestedDisplayName ?? "Wi-Fi Network"
+        let sourceTitle = snapshot.activeFingerprintSource.displayTitle
+        switch coordinator.trustedNetworkPosture {
+        case .trusted(_, let displayName, let matchedBy):
+            return "\(displayName) (Trusted • \(matchedBy.displayTitle))"
+        case .untrusted(_, let source, let displayLabel):
+            return "\(displayLabel) (Untrusted • \(source.displayTitle))"
+        case .unconfigured:
+            return "\(label) (\(sourceTitle))"
+        default:
+            return "\(label) (\(sourceTitle))"
+        }
+    }
+
+    private var isCurrentNetworkTrusted: Bool {
+        if case .trusted = coordinator.trustedNetworkPosture {
+            return true
+        }
+        return false
+    }
+
+    private var canEnrollCurrentNetwork: Bool {
+        guard let snapshot = coordinator.trustedNetworkMonitor.latestSnapshot else { return false }
+        return snapshot.isSatisfied
+            && snapshot.primaryInterface == .wifi
+            && snapshot.sessionFingerprintKey != nil
+            && !isCurrentNetworkTrusted
+    }
+
+    private var locationPermissionAdvisoryRow: some View {
+        let permission = coordinator.trustedNetworkMonitor.locationPermission
+        let isUnavailable = coordinator.trustedNetworkMonitor.latestSnapshot?.activeFingerprintSource == .unavailable
+        let message: String
+        let buttonTitle: String
+        let isRequestAction: Bool
+
+        if isUnavailable && permission == .notDetermined {
+            message = "Network fingerprint unavailable in this environment. Grant Location permission so Pupil can verify trusted Wi-Fi networks."
+            buttonTitle = "Allow SSID access"
+            isRequestAction = true
+        } else if isUnavailable {
+            message = "Network fingerprint unavailable in this environment. Grant Location permission so Pupil can verify trusted Wi-Fi networks."
+            buttonTitle = "Open Location Settings…"
+            isRequestAction = false
+        } else {
+            switch permission {
+            case .notDetermined:
+                message = "Location access is optional. Without it, Pupil identifies trusted networks using your router's gateway MAC fingerprint."
+                buttonTitle = "Allow SSID access"
+                isRequestAction = true
+            case .denied, .restricted:
+                message = "Location permission denied. Using router gateway MAC fallback. Some mesh routers or strict sandboxes may require Location access for reliable matching."
+                buttonTitle = "Open Location Settings…"
+                isRequestAction = false
+            case .servicesDisabled:
+                message = "macOS Location Services are turned off. Using router gateway MAC fallback."
+                buttonTitle = "Open Location Settings…"
+                isRequestAction = false
+            case .unavailableInTest:
+                message = "Location access is unavailable in this test environment."
+                buttonTitle = "Open Location Settings…"
+                isRequestAction = false
+            case .authorized:
+                message = "Location authorized. Identifying networks by Wi-Fi SSID hash."
+                buttonTitle = "Allow SSID access"
+                isRequestAction = false
+            }
+        }
+
+        return HStack(alignment: .center, spacing: 10) {
+            Image(systemName: isUnavailable ? "exclamationmark.triangle.fill" : "info.circle.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(PupilTheme.warningAmber)
+            Text(message)
+                .font(.system(size: 11.5))
+                .foregroundStyle(SettingsMetrics.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            PillActionButton(title: buttonTitle) {
+                if isRequestAction {
+                    coordinator.trustedNetworkMonitor.requestLocationPermission()
+                } else if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+        }
+        .padding(.horizontal, SettingsMetrics.rowHorizontalInset)
+        .padding(.vertical, 10)
+    }
+
+    private var trustedWifiCaptionText: String {
+        if settings.trustedNetworkAutoArmEnabled && settings.trustedNetworks.isEmpty {
+            return "Enroll at least one trusted Wi-Fi network (such as home or office) before boundary auto-arm activates."
+        }
+        return "Trusted network hashes stay on-device. Returning to a trusted network restores gaze sensitivity when disarmed, but never bypasses an active lock or alarm."
     }
 }

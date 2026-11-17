@@ -63,6 +63,8 @@ cat > "${APP_BUNDLE}/Contents/Info.plist" <<'PLIST'
     <true/>
     <key>NSBluetoothAlwaysUsageDescription</key>
     <string>Pupil uses Bluetooth Low Energy signal strength optionally to auto-arm your MacBook when you walk away with your trusted device and auto-disarm when you return.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Pupil uses Location permission solely to read your current Wi-Fi network name (SSID) so it can recognize trusted networks. Your physical location coordinates are never collected, stored, or transmitted.</string>
 </dict>
 </plist>
 PLIST

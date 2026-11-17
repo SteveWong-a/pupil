@@ -26,7 +26,10 @@ let package = Package(
                 .linkedFramework("ServiceManagement"),
                 .linkedFramework("CryptoKit"),
                 .linkedFramework("CoreBluetooth"),
-                .linkedFramework("Network")
+                .linkedFramework("Network"),
+                .linkedFramework("CoreWLAN"),
+                .linkedFramework("CoreLocation"),
+                .linkedFramework("SystemConfiguration")
             ]
         ),
         .testTarget(
