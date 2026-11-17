@@ -22,15 +22,24 @@ public struct IdleInactivityEvaluator: Sendable, Equatable {
     ///   - thresholdMinutes: Configured inactivity threshold in minutes (e.g. 5, 10, 15, 30).
     ///   - state: Current `SecurityState` of `SecurityCoordinator`.
     ///   - featureEnabled: Whether `settings.idleAutoArmEnabled` is `true`.
+    ///   - isLidClosed: Whether the MacBook clamshell lid is currently closed.
+    ///   - isSystemSleeping: Whether macOS is currently in system sleep / dark wake.
     /// - Returns: `true` if and only if the system should transition from `.disarmed` into arming now.
     public mutating func evaluate(
         idleSeconds: Double,
         thresholdMinutes: Int,
         state: SecurityState,
-        featureEnabled: Bool
+        featureEnabled: Bool,
+        isLidClosed: Bool = false,
+        isSystemSleeping: Bool = false
     ) -> Bool {
         guard featureEnabled else {
             isSuppressedForCurrentStreak = false
+            return false
+        }
+
+        // Never auto-arm from idle inactivity while the lid is closed or the system is sleeping (e.g. Power Nap / dark wake)
+        guard !isLidClosed, !isSystemSleeping else {
             return false
         }
 

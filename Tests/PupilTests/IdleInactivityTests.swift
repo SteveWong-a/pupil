@@ -369,4 +369,84 @@ struct IdleInactivityTests {
         #expect(idle >= 0.0)
         #expect(idle.isFinite)
     }
+
+    @MainActor
+    @Test("Closing laptop lid or dark-wake sleep prevents idle auto-arm and resets idle baseline upon reopening")
+    func closedLidAndWakeResetIdleBaseline() {
+        let suiteName = "com.pupil.tests.idle.lidwake.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = PupilSettings(defaults: defaults)
+        settings.exitDelaySeconds = 0
+        settings.autoArmOnScreenLock = false
+        settings.idleAutoArmEnabled = true
+        settings.idleAutoArmMinutes = 15 // 900s
+
+        let powerMonitor = PowerAndLidMonitor(isOnACPower: true, batteryPercentage: 100, isLidClosed: true)
+        let coordinator = SecurityCoordinator(settings: settings, powerMonitor: powerMonitor)
+        defer {
+            settings.idleAutoArmEnabled = false
+            coordinator.syncIdleInactivityMonitoring()
+        }
+
+        var now: TimeInterval = 1_000_000
+        coordinator.clock = { now }
+        // Simulate 2 hours (7200s) of macOS HID idle time accumulated while the laptop was closed overnight
+        coordinator.hidIdleSecondsProvider = { 7200.0 }
+
+        // 1. Dark wake while lid is closed: must NOT auto-arm
+        coordinator.pollIdleInactivity()
+        #expect(coordinator.state == .disarmed)
+
+        // 2. User reopens lid at t = 1_000_000: transition resets open-lid idle baseline
+        let awakePowerMonitor = PowerAndLidMonitor(isOnACPower: true, batteryPercentage: 100, isLidClosed: false)
+        let awakeCoordinator = SecurityCoordinator(settings: settings, powerMonitor: awakePowerMonitor)
+        defer { awakeCoordinator.syncIdleInactivityMonitoring() }
+        awakeCoordinator.clock = { now }
+        awakeCoordinator.hidIdleSecondsProvider = { 7200.0 }
+        awakeCoordinator.recordIdleSleepWakeTransition(at: now)
+
+        // 3 seconds after reopening lid, raw HID idle is still 7200s (before user touches keyboard),
+        // but elapsed time since wake is only 3s -> must NOT auto-arm!
+        now += 3.0
+        awakeCoordinator.pollIdleInactivity()
+        #expect(awakeCoordinator.state == .disarmed)
+
+        // 16 minutes (960s) of genuinely leaving the laptop open & untouched after waking -> auto-arms
+        now += 960.0
+        awakeCoordinator.pollIdleInactivity()
+        #expect(awakeCoordinator.state == .armed)
+    }
+
+    @MainActor
+    @Test("Waking while armed starts grace countdown rather than immediate siren and ignores closed-lid dark wakes")
+    func wakeWhileArmedGrantsGraceCountdown() {
+        let suiteName = "com.pupil.tests.idle.wakegrace.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = PupilSettings(defaults: defaults)
+        settings.exitDelaySeconds = 0
+        settings.gracePeriodSeconds = 15
+
+        let closedMonitor = PowerAndLidMonitor(isOnACPower: true, batteryPercentage: 100, isLidClosed: true)
+        let closedCoordinator = SecurityCoordinator(settings: settings, powerMonitor: closedMonitor)
+        closedCoordinator.startArming(immediate: true)
+        #expect(closedCoordinator.state == .armed)
+
+        // Dark wake while lid is still closed: should NOT trigger wakeWhileArmed alarm
+        closedMonitor.onHardwareEvent?(.systemDidWake)
+        #expect(closedCoordinator.state == .armed)
+
+        // Wake when lid is open: starts grace countdown (.tamperPending), NOT immediate .alarm
+        let openMonitor = PowerAndLidMonitor(isOnACPower: true, batteryPercentage: 100, isLidClosed: false)
+        let openCoordinator = SecurityCoordinator(settings: settings, powerMonitor: openMonitor)
+        openCoordinator.startArming(immediate: true)
+        #expect(openCoordinator.state == .armed)
+
+        openMonitor.onHardwareEvent?(.systemDidWake)
+        #expect(openCoordinator.state == .tamperPending)
+        #expect(openCoordinator.activeTamperSource == .wakeWhileArmed)
+    }
 }

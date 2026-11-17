@@ -158,6 +158,7 @@ public final class SecurityCoordinator {
     public private(set) var currentSirenVolumeFactor: Float = 1.0
     public private(set) var idleEvaluator = IdleInactivityEvaluator()
     private var idleInactivityTimer: Timer?
+    private var lastSleepWakeOrLidTransitionTime: TimeInterval?
     /// Injectable HID idle seconds provider (defaults to CoreGraphics combined session HID idle time).
     public var hidIdleSecondsProvider: () -> Double = {
         SecurityCoordinator.readSystemHIDIdleSeconds()
@@ -185,6 +186,15 @@ public final class SecurityCoordinator {
     private var liveCalibrationTimer: Timer?
     private var pinLockoutTimer: Timer?
 
+    nonisolated private static var isRunningUnderTests: Bool {
+        let env = ProcessInfo.processInfo.environment
+        if env["XCTestConfigurationFilePath"] != nil || env["XCTestBundlePath"] != nil || env["SWIFT_TESTING_ENABLED"] != nil {
+            return true
+        }
+        let procName = ProcessInfo.processInfo.processName.lowercased()
+        return procName.contains("xctest") || procName.contains("testing-helper") || procName.hasSuffix("tests")
+    }
+
     public convenience init() {
         self.init(
             settings: .shared,
@@ -194,7 +204,7 @@ public final class SecurityCoordinator {
             webPushManager: nil,
             alertNotifier: nil,
             bluetoothMonitor: nil,
-            journalStore: .shared,
+            journalStore: nil,
             audioVolumeManager: nil
         )
     }
@@ -214,7 +224,7 @@ public final class SecurityCoordinator {
         let resolvedJournalStore: TamperJournalStore
         if let journalStore {
             resolvedJournalStore = journalStore
-        } else if settings === PupilSettings.shared {
+        } else if settings === PupilSettings.shared && !Self.isRunningUnderTests {
             resolvedJournalStore = .shared
         } else {
             let tempURL = FileManager.default.temporaryDirectory
@@ -547,13 +557,29 @@ public final class SecurityCoordinator {
         }
     }
 
+    /// Resets the open-lid idle baseline whenever the MacBook lid closes/opens or macOS sleeps/wakes,
+    /// ensuring wall-clock time spent asleep or closed never counts toward open-lid idle auto-arming.
+    public func recordIdleSleepWakeTransition(at timestamp: TimeInterval? = nil) {
+        lastSleepWakeOrLidTransitionTime = timestamp ?? clock()
+        idleEvaluator.reset()
+    }
+
     public func pollIdleInactivity(idleSeconds: Double? = nil) {
-        let currentIdle = idleSeconds ?? hidIdleSecondsProvider()
+        let rawIdle = idleSeconds ?? hidIdleSecondsProvider()
+        let currentIdle: Double
+        if let transitionTime = lastSleepWakeOrLidTransitionTime {
+            let elapsedSinceTransition = max(0, clock() - transitionTime)
+            currentIdle = min(rawIdle, elapsedSinceTransition)
+        } else {
+            currentIdle = rawIdle
+        }
         let shouldArm = idleEvaluator.evaluate(
             idleSeconds: currentIdle,
             thresholdMinutes: settings.idleAutoArmMinutes,
             state: state,
-            featureEnabled: settings.idleAutoArmEnabled
+            featureEnabled: settings.idleAutoArmEnabled,
+            isLidClosed: powerMonitor.isLidClosed,
+            isSystemSleeping: lockMonitor.isSleeping
         )
         if shouldArm {
             logEvent(
@@ -1565,11 +1591,13 @@ public final class SecurityCoordinator {
                 }
                 self.syncAdaptiveVisionFrameRate()
             case .lidClosed:
+                self.recordIdleSleepWakeTransition()
                 if self.settings.hardwareTriggers.contains(.lidClose) {
                     // Physical clamshell closed: trigger immediate siren before macOS cuts audio
                     self.triggerTamper(source: .lidClosed, immediateAlarm: true)
                 }
             case .systemWillSleep:
+                self.recordIdleSleepWakeTransition()
                 // System sleep: only treat as lid close if the physical clamshell is ACTUALLY closed
                 if PowerAndLidMonitor.readClamshellClosedState() {
                     if self.settings.hardwareTriggers.contains(.lidClose) {
@@ -1580,8 +1608,9 @@ public final class SecurityCoordinator {
                     self.powerMonitor.acquireSleepHoldAssertion(reason: "Pupil Armed Monitoring")
                 }
             case .systemDidWake:
-                if self.isMonitoring {
-                    self.triggerTamper(source: .wakeWhileArmed, immediateAlarm: true)
+                self.recordIdleSleepWakeTransition()
+                if self.state == .armed && !self.powerMonitor.isLidClosed {
+                    self.triggerTamper(source: .wakeWhileArmed, immediateAlarm: false)
                 }
             case .chargerPluggedIn:
                 if self.state == .tamperPending,
@@ -1598,6 +1627,7 @@ public final class SecurityCoordinator {
                 }
                 self.syncAdaptiveVisionFrameRate()
             case .lidOpened:
+                self.recordIdleSleepWakeTransition()
                 break
             case .peripheralDisconnected:
                 if self.settings.hardwareTriggers.contains(.peripheralDisconnect) {
@@ -1620,16 +1650,19 @@ public final class SecurityCoordinator {
                     self.triggerTamper(source: .screenLocked, immediateAlarm: false)
                 }
             case .willSleep:
+                self.recordIdleSleepWakeTransition()
                 if PowerAndLidMonitor.readClamshellClosedState() {
                     if self.settings.hardwareTriggers.contains(.lidClose) {
                         self.triggerTamper(source: .lidClosed, immediateAlarm: true)
                     }
                 }
             case .wake:
+                self.recordIdleSleepWakeTransition()
                 if self.isMonitoring && self.state == .alarm {
                     self.resumeAlarmAudioAtCurrentElapsedTime()
                 }
             case .screenUnlocked:
+                self.recordIdleSleepWakeTransition()
                 if self.settings.autoArmOnScreenLock {
                     if self.state == .arming {
                         self.cancelArmingDuringExitDelay()
