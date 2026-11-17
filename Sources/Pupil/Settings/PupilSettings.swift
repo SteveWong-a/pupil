@@ -454,6 +454,26 @@ public final class PupilSettings {
         didSet { defaults.set(bluetoothAutoDisarmEnabled, forKey: Keys.bluetoothAutoDisarmEnabled) }
     }
 
+    public var usbKeyDisarmEnabled: Bool {
+        didSet {
+            defaults.set(usbKeyDisarmEnabled, forKey: Keys.usbKeyDisarmEnabled)
+            NotificationCenter.default.post(name: .screenShieldSync, object: nil)
+        }
+    }
+
+    /// Non-sensitive UI display projection (never contains `serialNumber`).
+    /// Authoritative matching always reads `EnrolledUSBKeySignature` from `KeychainManager` / `USBKeyVault`.
+    public var enrolledUSBKeySummary: EnrolledUSBKeySummary? {
+        didSet {
+            if let enrolledUSBKeySummary,
+               let encoded = try? JSONEncoder().encode(enrolledUSBKeySummary) {
+                defaults.set(encoded, forKey: Keys.enrolledUSBKeySummary)
+            } else {
+                defaults.removeObject(forKey: Keys.enrolledUSBKeySummary)
+            }
+        }
+    }
+
     public var cameraRoi: CameraROI {
         didSet {
             if let encoded = try? JSONEncoder().encode(cameraRoi) {
@@ -606,6 +626,13 @@ public final class PupilSettings {
         self.trustedBluetoothDeviceUUID = defaults.string(forKey: Keys.trustedBluetoothDeviceUUID) ?? ""
         self.trustedBluetoothDeviceName = defaults.string(forKey: Keys.trustedBluetoothDeviceName) ?? ""
         self.bluetoothAutoDisarmEnabled = defaults.object(forKey: Keys.bluetoothAutoDisarmEnabled) as? Bool ?? false
+        self.usbKeyDisarmEnabled = defaults.object(forKey: Keys.usbKeyDisarmEnabled) as? Bool ?? false
+        if let summaryData = defaults.data(forKey: Keys.enrolledUSBKeySummary),
+           let summary = try? JSONDecoder().decode(EnrolledUSBKeySummary.self, from: summaryData) {
+            self.enrolledUSBKeySummary = summary
+        } else {
+            self.enrolledUSBKeySummary = nil
+        }
         if let roiData = defaults.data(forKey: Keys.cameraRoi),
            let decoded = try? JSONDecoder().decode(CameraROI.self, from: roiData) {
             self.cameraRoi = decoded
@@ -664,6 +691,8 @@ public final class PupilSettings {
         static let trustedBluetoothDeviceUUID = "pupil.trustedBluetoothDeviceUUID"
         static let trustedBluetoothDeviceName = "pupil.trustedBluetoothDeviceName"
         static let bluetoothAutoDisarmEnabled = "pupil.bluetoothAutoDisarmEnabled"
+        static let usbKeyDisarmEnabled = "pupil.usbKeyDisarmEnabled"
+        static let enrolledUSBKeySummary = "pupil.enrolledUSBKeySummary"
         static let cameraRoi = "pupil.cameraRoi"
     }
 }
