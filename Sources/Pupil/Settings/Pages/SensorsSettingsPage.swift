@@ -495,6 +495,7 @@ public struct SensorsSettingsPage: View {
                                     settings.enrollTrustedSnapshot(snapshot)
                                 }
                             }
+                            .fixedSize()
                             .disabled(!canEnrollCurrentNetwork)
                             .opacity(canEnrollCurrentNetwork ? 1.0 : 0.45)
                         }
@@ -539,6 +540,7 @@ public struct SensorsSettingsPage: View {
                     }
                 }
             }
+            .animation(SettingsMetrics.stateTransitionAnimation, value: settings.trustedNetworkAutoArmEnabled)
 
             SettingsCaption(text: trustedWifiCaptionText)
         }
@@ -552,18 +554,18 @@ public struct SensorsSettingsPage: View {
             return "No Wi-Fi connected"
         }
         if snapshot.primaryInterface != .wifi {
-            return "\(snapshot.primaryInterface.rawValue) (Neutral)"
+            return "\(snapshot.primaryInterface.rawValue) (neutral)"
         }
         if snapshot.sessionFingerprintKey == nil {
             return "Wi-Fi identity unavailable"
         }
-        let label = snapshot.suggestedDisplayName ?? "Wi-Fi Network"
+        let label = snapshot.suggestedDisplayName ?? "Wi-Fi network"
         let sourceTitle = snapshot.activeFingerprintSource.displayTitle
         switch coordinator.trustedNetworkPosture {
         case .trusted(_, let displayName, let matchedBy):
-            return "\(displayName) (Trusted • \(matchedBy.displayTitle))"
+            return "\(displayName) (trusted • \(matchedBy.displayTitle))"
         case .untrusted(_, let source, let displayLabel):
-            return "\(displayLabel) (Untrusted • \(source.displayTitle))"
+            return "\(displayLabel) (untrusted • \(source.displayTitle))"
         case .unconfigured:
             return "\(label) (\(sourceTitle))"
         default:
@@ -599,7 +601,7 @@ public struct SensorsSettingsPage: View {
             isRequestAction = true
         } else if isUnavailable {
             message = "Network fingerprint unavailable in this environment. Grant Location permission so Pupil can verify trusted Wi-Fi networks."
-            buttonTitle = "Open Location Settings…"
+            buttonTitle = "Open Location settings…"
             isRequestAction = false
         } else {
             switch permission {
@@ -609,15 +611,15 @@ public struct SensorsSettingsPage: View {
                 isRequestAction = true
             case .denied, .restricted:
                 message = "Location permission denied. Using router gateway MAC fallback. Some mesh routers or strict sandboxes may require Location access for reliable matching."
-                buttonTitle = "Open Location Settings…"
+                buttonTitle = "Open Location settings…"
                 isRequestAction = false
             case .servicesDisabled:
                 message = "macOS Location Services are turned off. Using router gateway MAC fallback."
-                buttonTitle = "Open Location Settings…"
+                buttonTitle = "Open Location settings…"
                 isRequestAction = false
             case .unavailableInTest:
                 message = "Location access is unavailable in this test environment."
-                buttonTitle = "Open Location Settings…"
+                buttonTitle = "Open Location settings…"
                 isRequestAction = false
             case .authorized:
                 message = "Location authorized. Identifying networks by Wi-Fi SSID hash."
@@ -642,6 +644,7 @@ public struct SensorsSettingsPage: View {
                     NSWorkspace.shared.open(url)
                 }
             }
+            .fixedSize()
         }
         .padding(.horizontal, SettingsMetrics.rowHorizontalInset)
         .padding(.vertical, 10)
