@@ -3,1149 +3,704 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="color-scheme" content="dark">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#050608">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Pupil">
-  <meta name="theme-color" content="#000000">
-  <title>Pupil Sentinel Companion</title>
+  <meta
+    name="description"
+    content="Pupil turns your MacBook notch into a zero-cloud hardware & Apple Vision security sentinel for college libraries, coffee shops, and coworking spaces."
+  >
+  <title>Pupil — Notch-Native MacBook Security Sentinel</title>
   <link rel="manifest" href="./manifest.json">
   <link rel="apple-touch-icon" href="./apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
   <link rel="icon" type="image/png" sizes="32x32" href="./icon-32.png">
   <link rel="shortcut icon" href="./favicon.ico">
-  <style>
-    :root {
-      --bg: #000000;
-      --surface: #141414;
-      --row-bg: rgba(255, 255, 255, 0.06);
-      --row-border: rgba(255, 255, 255, 0.10);
-      --row-radius: 10px;
-      --row-inset: 14px;
-      --text-primary: #EEEEEE;
-      --text-secondary: #BFBFBF;
-      --text-tertiary: #999999;
-      --accent: #0A84FF;
-      --armed-green: #30D158;
-      --warning-amber: #FF9F0A;
-      --alarm-red: #FF453A;
-      --neutral-btn: rgba(255, 255, 255, 0.08);
-
-      color-scheme: dark;
-      accent-color: var(--accent);
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    body {
-      min-height: 100dvh;
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, sans-serif;
-      background-color: var(--bg);
-      color: var(--text-primary);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: calc(env(safe-area-inset-top, 16px) + 12px) 16px calc(env(safe-area-inset-bottom, 20px) + 16px);
-      -webkit-font-smoothing: antialiased;
-    }
-
-    header, main, footer {
-      width: 100%;
-      max-width: 460px;
-    }
-
-    header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 4px 2px 16px;
-    }
-
-    .header-identity {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      min-width: 0;
-    }
-
-    .app-icon-wrap {
-      width: 36px;
-      height: 36px;
-      border-radius: 8px;
-      border: 1px solid var(--row-border);
-      overflow: hidden;
-      background-color: var(--surface);
-      flex-shrink: 0;
-    }
-
-    .app-icon {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-    }
-
-    .header-titles {
-      min-width: 0;
-    }
-
-    h1 {
-      font-size: 16px;
-      font-weight: 600;
-      letter-spacing: -0.015em;
-      color: var(--text-primary);
-      line-height: 1.2;
-    }
-
-    .subtitle {
-      font-size: 11px;
-      color: var(--text-tertiary);
-      line-height: 1.3;
-    }
-
-    /* macOS HeaderStatusButton Pill */
-    .header-status-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      height: 28px;
-      padding: 0 11px;
-      border-radius: 9999px;
-      font-size: 12px;
-      font-weight: 500;
-      background-color: var(--row-bg);
-      border: 1px solid var(--row-border);
-      color: var(--text-secondary);
-      flex-shrink: 0;
-    }
-
-    .header-status-pill.ready {
-      border-color: rgba(48, 209, 88, 0.30);
-      background-color: rgba(48, 209, 88, 0.12);
-      color: var(--armed-green);
-    }
-
-    .status-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background-color: var(--text-tertiary);
-    }
-
-    .header-status-pill.ready .status-dot {
-      background-color: var(--armed-green);
-    }
-
-    /* SettingsSectionTitle */
-    .section-title {
-      font-size: 12px;
-      font-weight: 500;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      color: var(--text-tertiary);
-      padding: 4px 0 6px 10px;
-      margin-top: 14px;
-    }
-
-    .section-title:first-child {
-      margin-top: 0;
-    }
-
-    /* SettingsGroup */
-    .settings-group {
-      background-color: var(--row-bg);
-      border: 1px solid var(--row-border);
-      border-radius: var(--row-radius);
-      overflow: hidden;
-    }
-
-    .group-row {
-      min-height: 44px;
-      padding: 10px var(--row-inset);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-
-    .group-row + .group-row {
-      border-top: 1px solid var(--row-border);
-    }
-
-    .row-leading {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      min-width: 0;
-      flex: 1;
-    }
-
-    .row-icon-wrap {
-      width: 28px;
-      height: 28px;
-      border-radius: 7px;
-      background-color: var(--surface);
-      border: 1px solid var(--row-border);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      color: var(--accent);
-    }
-
-    .row-text {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .row-title {
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--text-primary);
-      line-height: 1.3;
-    }
-
-    .row-caption {
-      font-size: 11px;
-      color: var(--text-tertiary);
-      line-height: 1.35;
-      margin-top: 2px;
-    }
-
-    .group-body {
-      padding: 12px var(--row-inset);
-    }
-
-    /* Buttons (SettingsPrimaryButton, PillActionButton, SettingsActionRowContent) */
-    button {
-      font-family: inherit;
-      cursor: pointer;
-      border: none;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      transition: opacity 0.15s ease;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    button:active:not(:disabled) {
-      opacity: 0.78;
-    }
-
-    button:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
-
-    .btn-primary {
-      width: 100%;
-      min-height: 36px;
-      padding: 7px 16px;
-      border-radius: 9999px;
-      background-color: var(--accent);
-      color: #FFFFFF;
-      font-size: 12px;
-      font-weight: 600;
-    }
-
-    .btn-pill {
-      min-height: 28px;
-      padding: 6px 14px;
-      border-radius: 9999px;
-      background-color: var(--neutral-btn);
-      border: 1px solid var(--row-border);
-      color: var(--text-primary);
-      font-size: 12px;
-      font-weight: 500;
-      flex-shrink: 0;
-    }
-
-    .btn-destructive {
-      min-height: 28px;
-      padding: 6px 14px;
-      border-radius: 9999px;
-      background-color: rgba(255, 69, 58, 0.88);
-      color: #FFFFFF;
-      font-size: 12px;
-      font-weight: 600;
-      flex-shrink: 0;
-    }
-
-    .btn-row {
-      display: flex;
-      gap: 8px;
-      margin-top: 10px;
-    }
-
-    .btn-row .btn-pill {
-      flex: 1;
-    }
-
-    :where(a:any-link, button):focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 2px;
-    }
-
-    /* Status Banner */
-    .status-banner {
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      padding: 9px 11px;
-      border-radius: 8px;
-      font-size: 11px;
-      line-height: 1.4;
-      background-color: var(--surface);
-      border: 1px solid var(--row-border);
-      color: var(--text-secondary);
-      margin-top: 10px;
-    }
-
-    .status-banner-icon {
-      flex-shrink: 0;
-      margin-top: 1px;
-      color: var(--accent);
-    }
-
-    /* Verification Snapshot Viewer */
-    .snapshot-frame-wrap {
-      width: 100%;
-      aspect-ratio: 16 / 10;
-      border-radius: 8px;
-      background-color: var(--surface);
-      border: 1px solid var(--row-border);
-      overflow: hidden;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-top: 10px;
-    }
-
-    .snapshot-frame-img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-    }
-
-    .snapshot-empty {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 6px;
-      color: var(--text-tertiary);
-      font-size: 11px;
-      text-align: center;
-      padding: 16px;
-    }
-
-    .snapshot-meta {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      margin-top: 8px;
-      font-size: 11px;
-      color: var(--text-tertiary);
-    }
-
-    /* Security Alert List */
-    .alert-log {
-      list-style: none;
-    }
-
-    .alert-log li {
-      padding: 10px var(--row-inset);
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-    }
-
-    .alert-log li + li {
-      border-top: 1px solid var(--row-border);
-    }
-
-    .alert-badge {
-      width: 26px;
-      height: 26px;
-      border-radius: 7px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      margin-top: 1px;
-    }
-
-    .alert-badge.armed {
-      background-color: rgba(48, 209, 88, 0.14);
-      color: var(--armed-green);
-    }
-
-    .alert-badge.warning {
-      background-color: rgba(255, 159, 10, 0.14);
-      color: var(--warning-amber);
-    }
-
-    .alert-badge.alarm {
-      background-color: rgba(255, 69, 58, 0.16);
-      color: var(--alarm-red);
-    }
-
-    .alert-badge.info {
-      background-color: rgba(10, 132, 255, 0.14);
-      color: var(--accent);
-    }
-
-    .alert-content {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .alert-title-row {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 8px;
-      margin-bottom: 2px;
-    }
-
-    .alert-title {
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--text-primary);
-    }
-
-    .alert-time {
-      font-size: 11px;
-      color: var(--text-tertiary);
-      font-variant-numeric: tabular-nums;
-      flex-shrink: 0;
-    }
-
-    .alert-body {
-      font-size: 11px;
-      color: var(--text-secondary);
-      line-height: 1.35;
-    }
-
-    footer {
-      text-align: center;
-      margin-top: 18px;
-      font-size: 11px;
-      color: var(--text-tertiary);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 5px;
-    }
-
-    .sf-icon {
-      display: inline-block;
-      vertical-align: middle;
-      flex-shrink: 0;
-    }
-
-    [hidden] {
-      display: none !important;
-    }
-  </style>
-</head>
-<body>
-  <svg style="display: none;" aria-hidden="true">
-    <defs>
-      <g id="sf-shield">
-        <path fill-rule="evenodd" d="M12 2.25a.75.75 0 0 1 .34.08c3.2 1.6 6.8 2.3 8.4 2.5a.75.75 0 0 1 .66.75v5.5c0 6.2-4.1 10.4-8.8 11.85a.75.75 0 0 1-.4 0C7.5 21.48 3.4 17.28 3.4 11.08v-5.5a.75.75 0 0 1 .66-.75c1.6-.2 5.2-.9 8.4-2.5a.75.75 0 0 1 .34-.08z"/>
-      </g>
-      <g id="sf-lock">
-        <path fill-rule="evenodd" d="M12 2a4.5 4.5 0 0 0-4.5 4.5V9H6.5A2.5 2.5 0 0 0 4 11.5v8A2.5 2.5 0 0 0 6.5 22h11a2.5 2.5 0 0 0 2.5-2.5v-8A2.5 2.5 0 0 0 17.5 9h-1V6.5A4.5 4.5 0 0 0 12 2zm-3 4.5a3 3 0 1 1 6 0V9H9V6.5zm3 7a1.5 1.5 0 0 0-1 2.62V18a1 1 0 1 0 2 0v-1.88A1.5 1.5 0 0 0 12 13.5z"/>
-      </g>
-      <g id="sf-lock-open">
-        <path fill-rule="evenodd" d="M12 2a4.5 4.5 0 0 0-4.5 4.5V8a.75.75 0 0 0 1.5 0V6.5a3 3 0 1 1 6 0V9H6.5A2.5 2.5 0 0 0 4 11.5v8A2.5 2.5 0 0 0 6.5 22h11a2.5 2.5 0 0 0 2.5-2.5v-8A2.5 2.5 0 0 0 17.5 9H13.5V6.5A4.5 4.5 0 0 0 12 2zM12 13.5a1.5 1.5 0 0 0-1 2.62V18a1 1 0 1 0 2 0v-1.88A1.5 1.5 0 0 0 12 13.5z"/>
-      </g>
-      <g id="sf-triangle">
-        <path fill-rule="evenodd" d="M10.74 3.46a1.45 1.45 0 0 1 2.52 0l8.7 15.06A1.45 1.45 0 0 1 20.7 20.7H3.3a1.45 1.45 0 0 1-1.26-2.18l8.7-15.06zM12 8a.75.75 0 0 0-.75.75v4.5a.75.75 0 0 0 1.5 0v-4.5A.75.75 0 0 0 12 8zm0 8a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/>
-      </g>
-      <g id="sf-bell">
-        <path d="M12 2a1.75 1.75 0 0 0-1.75 1.75v.55A7 7 0 0 0 4.5 11v3.38l-1.32 1.98A1.25 1.25 0 0 0 4.22 18h15.56a1.25 1.25 0 0 0 1.04-1.94L19.5 14.38V11a7 7 0 0 0-5.75-6.7V3.75A1.75 1.75 0 0 0 12 2zm-2.5 17a2.5 2.5 0 0 0 5 0h-5z"/>
-      </g>
-      <g id="sf-camera">
-        <path d="M9.17 4a1.5 1.5 0 0 0-1.25.67L6.86 6.25H4.5A2.5 2.5 0 0 0 2 8.75v9A2.5 2.5 0 0 0 4.5 20.25h15a2.5 2.5 0 0 0 2.5-2.5v-9a2.5 2.5 0 0 0-2.5-2.5h-2.36l-1.06-1.58A1.5 1.5 0 0 0 14.83 4H9.17zM12 9.25a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm0 1.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/>
-      </g>
-      <g id="sf-share">
-        <path d="M12 2.5a.75.75 0 0 1 .75.75v8.5a.75.75 0 0 1-1.5 0v-8.5A.75.75 0 0 1 12 2.5z"/>
-        <path d="M8.22 6.28a.75.75 0 0 1 1.06-1.06L12 7.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L8.22 6.28z"/>
-        <path d="M4 10.75A2.75 2.75 0 0 1 6.75 8h2a.75.75 0 0 1 0 1.5h-2A1.25 1.25 0 0 0 5.5 10.75v7.5c0 .69.56 1.25 1.25 1.25h10.5c.69 0 1.25-.56 1.25-1.25v-7.5c0-.69-.56-1.25-1.25-1.25h-2a.75.75 0 0 1 0-1.5h2A2.75 2.75 0 0 1 20 10.75v7.5A2.75 2.75 0 0 1 17.25 21H6.75A2.75 2.75 0 0 1 4 18.25v-7.5z"/>
-      </g>
-      <g id="sf-plus-app">
-        <path d="M5.5 3A2.5 2.5 0 0 0 3 5.5v13A2.5 2.5 0 0 0 5.5 21h13a2.5 2.5 0 0 0 2.5-2.5v-13A2.5 2.5 0 0 0 18.5 3h-13zm0 1.5h13A1 1 0 0 1 19.5 5.5v13a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1zm6.5 3a.75.75 0 0 0-.75.75v3h-3a.75.75 0 0 0 0 1.5h3v3a.75.75 0 0 0 1.5 0v-3h3a.75.75 0 0 0 0-1.5h-3v-3A.75.75 0 0 0 12 7.5z"/>
-      </g>
-      <g id="sf-iphone">
-        <path d="M7.5 2A2.5 2.5 0 0 0 5 4.5v15A2.5 2.5 0 0 0 7.5 22h9a2.5 2.5 0 0 0 2.5-2.5v-15A2.5 2.5 0 0 0 16.5 2h-9zm0 1.5h9c.55 0 1 .45 1 1v15c0 .55-.45 1-1 1h-9c-.55 0-1-.45-1-1v-15c0-.55.45-1 1-1zm3 15.5h3a.75.75 0 0 1 0 1.5h-3a.75.75 0 0 1 0-1.5z"/>
-      </g>
-      <g id="sf-clipboard">
-        <path d="M7.5 3A1.5 1.5 0 0 0 6 4.5v12A1.5 1.5 0 0 0 7.5 18h7a1.5 1.5 0 0 0 1.5-1.5v-12A1.5 1.5 0 0 0 14.5 3h-7zm0 1.5h7a.5.5 0 0 1 .5.5v12a.5.5 0 0 1-.5.5h-7a.5.5 0 0 1-.5-.5v-12a.5.5 0 0 1 .5-.5z"/>
-        <path d="M10 2a1 1 0 0 0-.96.73h3.92A1 1 0 0 0 10 2zm6.5 4.5a.75.75 0 0 1 .75.75v12.25a2 2 0 0 1-2 2H7.75a.75.75 0 0 1 0-1.5h7.5a.5.5 0 0 0 .5-.5V7.25a.75.75 0 0 1 .75-.75z"/>
-      </g>
-      <g id="sf-checkmark-circle">
-        <path fill-rule="evenodd" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.53 7.53a.75.75 0 0 0-1.06-1.06L10.5 13.44l-1.97-1.97a.75.75 0 0 0-1.06 1.06l2.5 2.5a.75.75 0 0 0 1.06 0l5.5-5.5z"/>
-      </g>
-      <g id="sf-info">
-        <path fill-rule="evenodd" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 5a1.25 1.25 0 1 0 0 2.5A1.25 1.25 0 0 0 12 7zm-1.25 4.5a.75.75 0 0 1 1.5 0v5a.75.75 0 0 1-1.5 0v-5z"/>
-      </g>
-    </defs>
-  </svg>
-
-  <header>
-    <div class="header-identity">
-      <div class="app-icon-wrap">
-        <img src="./apple-touch-icon.png" alt="Pupil app icon" class="app-icon">
-      </div>
-      <div class="header-titles">
-        <h1>Pupil</h1>
-        <p class="subtitle">Mobile Sentinel Companion</p>
-      </div>
-    </div>
-
-    <div id="header-status-pill" class="header-status-pill">
-      <span class="status-dot"></span>
-      <svg class="sf-icon" viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true">
-        <use id="header-status-icon" href="#sf-lock-open"/>
-      </svg>
-      <span id="header-status-label">Ready to Pair</span>
-    </div>
-  </header>
-
-  <main>
-    <!-- Home Screen Install Guide (Safari iOS only) -->
-    <div id="install-guide-card" hidden>
-      <div class="section-title">Home Screen Setup</div>
-      <div class="settings-group">
-        <div class="group-row">
-          <div class="row-leading">
-            <div class="row-icon-wrap">
-              <svg class="sf-icon" viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true">
-                <use href="#sf-share"/>
-              </svg>
-            </div>
-            <div class="row-text">
-              <div class="row-title">1. Tap Share in Safari</div>
-              <div class="row-caption">In the bottom toolbar of Safari on your iPhone.</div>
-            </div>
-          </div>
-        </div>
-        <div class="group-row">
-          <div class="row-leading">
-            <div class="row-icon-wrap">
-              <svg class="sf-icon" viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true">
-                <use href="#sf-plus-app"/>
-              </svg>
-            </div>
-            <div class="row-text">
-              <div class="row-title">2. Add to Home Screen</div>
-              <div class="row-caption">Scroll down the share sheet and tap Add to Home Screen.</div>
-            </div>
-          </div>
-        </div>
-        <div class="group-row">
-          <div class="row-leading">
-            <div class="row-icon-wrap">
-              <svg class="sf-icon" viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true">
-                <use href="#sf-iphone"/>
-              </svg>
-            </div>
-            <div class="row-text">
-              <div class="row-title">3. Open from Home Screen</div>
-              <div class="row-caption">Pairing parameters persist automatically.</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Pairing & Push Alerts -->
-    <div class="section-title">Lock-Screen Push Alerts</div>
-    <div class="settings-group">
-      <div class="group-body">
-        <div class="row-title">Direct Apple APNs Delivery</div>
-        <div class="row-caption">
-          End-to-end encrypted alerts wake your locked phone whenever your Mac detects tamper, movement, or alarm triggers.
-        </div>
-
-        <div style="margin-top: 12px;">
-          <button type="button" id="pair-btn" class="btn-primary">
-            <svg class="sf-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
-              <use href="#sf-shield"/>
-            </svg>
-            <span id="pair-btn-text">Pair &amp; Enable Lock-Screen Alerts</span>
-          </button>
-
-          <div class="btn-row" id="paired-utility-row" hidden>
-            <button type="button" id="copy-token-btn" class="btn-pill" hidden>
-              <svg class="sf-icon" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">
-                <use href="#sf-clipboard"/>
-              </svg>
-              <span>Copy Code</span>
-            </button>
-            <button type="button" id="test-local-btn" class="btn-pill" hidden>
-              <svg class="sf-icon" viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">
-                <use href="#sf-bell"/>
-              </svg>
-              <span>Test Alert</span>
-            </button>
-          </div>
-        </div>
-
-        <div id="live-status" class="status-banner" role="status" aria-live="polite">
-          <svg class="sf-icon status-banner-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
-            <use id="status-icon-symbol" href="#sf-info"/>
-          </svg>
-          <span id="live-status-text">Scan the QR code once in Pupil Settings on your Mac to pair.</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Verification Snapshot & Remote Disarm -->
-    <div class="section-title">Verification &amp; Remote Control</div>
-    <div class="settings-group">
-      <div class="group-body">
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-          <div>
-            <div class="row-title">Verification Snapshot</div>
-            <div class="row-caption">Inspect the captured frame before disarming a false alarm.</div>
-          </div>
-          <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-            <button type="button" id="ping-snapshot-btn" class="btn-pill" disabled>Refresh Photo</button>
-            <button type="button" id="refresh-snapshot-btn" class="btn-pill" disabled>Refresh</button>
-          </div>
-        </div>
-
-        <div class="snapshot-frame-wrap" id="snapshot-frame-wrap">
-          <img id="verification-snapshot-img" class="snapshot-frame-img" alt="Verification snapshot from Mac" hidden>
-          <div id="snapshot-empty-state" class="snapshot-empty">
-            <svg class="sf-icon" viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
-              <use href="#sf-camera"/>
-            </svg>
-            <span>No verification frame received yet.</span>
-          </div>
-        </div>
-
-        <div class="snapshot-meta" id="snapshot-meta" hidden>
-          <span id="snapshot-reason-label">Alert frame</span>
-          <span id="snapshot-time-label"></span>
-        </div>
-      </div>
-
-      <div class="group-row">
-        <div class="row-text">
-          <div class="row-title">Remote Disarm</div>
-          <div class="row-caption">Send an authenticated disarm command if this was a false alarm.</div>
-        </div>
-        <button type="button" id="remote-disarm-btn" class="btn-destructive" disabled>
-          Disarm Mac (False Alarm)
-        </button>
-      </div>
-    </div>
-
-    <!-- Recent Alerts -->
-    <div id="recent-alerts-card" hidden>
-      <div class="section-title">Recent Security Alerts</div>
-      <div class="settings-group">
-        <ul class="alert-log" id="alert-log-list" role="list"></ul>
-      </div>
-    </div>
-  </main>
-
-  <footer>
-    <svg class="sf-icon" viewBox="0 0 24 24" width="11" height="11" fill="currentColor" aria-hidden="true">
-      <use href="#sf-lock"/>
-    </svg>
-    <span>End-to-End Encrypted Web Push (RFC 8291 + VAPID)</span>
-  </footer>
-
   <script>
+    /* Preserve 100% QR pairing & iOS Home Screen PWA compatibility */
     (function () {
-      const STORAGE_KEY_VAPID = 'pupil.vapidPublicKey';
-      const STORAGE_KEY_CHANNEL = 'pupil.pairingChannel';
-      const STORAGE_KEY_PAIRED_TOKEN = 'pupil.lastPairingToken';
-      const STORAGE_KEY_SNAPSHOT = 'pupil.lastSnapshot';
+      try {
+        var params = new URLSearchParams(window.location.search);
+        var v = params.get('v');
+        var c = params.get('c');
+        var companionFlag = params.get('companion') === '1';
+        var isStandalone = window.navigator.standalone === true ||
+          (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
 
-      const params = new URLSearchParams(window.location.search);
-      const urlVapid = params.get('v');
-      const urlChannel = params.get('c');
+        if (v) localStorage.setItem('pupil.vapidPublicKey', v);
+        if (c) localStorage.setItem('pupil.pairingChannel', c);
 
-      if (urlVapid) localStorage.setItem(STORAGE_KEY_VAPID, urlVapid);
-      if (urlChannel) localStorage.setItem(STORAGE_KEY_CHANNEL, urlChannel);
-
-      const vapidPublicKey = urlVapid || localStorage.getItem(STORAGE_KEY_VAPID) || '';
-      const pairingChannel = urlChannel || localStorage.getItem(STORAGE_KEY_CHANNEL) || '';
-
-      if (vapidPublicKey || pairingChannel) {
-        if ('caches' in window) {
-          caches.open('pupil-pairing-v1').then((cache) => {
-            cache.put(
+        if ((v || c) && 'caches' in window) {
+          caches.open('pupil-pairing-v1').then(function (cache) {
+            return cache.put(
               new Request('./pairing-config.json'),
-              new Response(JSON.stringify({ v: vapidPublicKey, c: pairingChannel }), {
-                headers: { 'Content-Type': 'application/json' }
-              })
+              new Response(JSON.stringify({
+                v: v || localStorage.getItem('pupil.vapidPublicKey') || '',
+                c: c || localStorage.getItem('pupil.pairingChannel') || ''
+              }), { headers: { 'Content-Type': 'application/json' } })
             );
-          }).catch(() => {});
-        }
-      }
-
-      const installGuideCard = document.getElementById('install-guide-card');
-      const headerStatusPill = document.getElementById('header-status-pill');
-      const headerStatusIcon = document.getElementById('header-status-icon');
-      const headerStatusLabel = document.getElementById('header-status-label');
-      const pairBtn = document.getElementById('pair-btn');
-      const pairBtnText = document.getElementById('pair-btn-text');
-      const pairedUtilityRow = document.getElementById('paired-utility-row');
-      const copyTokenBtn = document.getElementById('copy-token-btn');
-      const testLocalBtn = document.getElementById('test-local-btn');
-      const liveStatusText = document.getElementById('live-status-text');
-      const statusIconSymbol = document.getElementById('status-icon-symbol');
-      const refreshSnapshotBtn = document.getElementById('refresh-snapshot-btn');
-      const pingSnapshotBtn = document.getElementById('ping-snapshot-btn');
-      const snapshotImg = document.getElementById('verification-snapshot-img');
-      const snapshotEmptyState = document.getElementById('snapshot-empty-state');
-      const snapshotMeta = document.getElementById('snapshot-meta');
-      const snapshotReasonLabel = document.getElementById('snapshot-reason-label');
-      const snapshotTimeLabel = document.getElementById('snapshot-time-label');
-      const remoteDisarmBtn = document.getElementById('remote-disarm-btn');
-      const recentAlertsCard = document.getElementById('recent-alerts-card');
-      const alertLogList = document.getElementById('alert-log-list');
-
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      const isStandalone = window.navigator.standalone === true ||
-        window.matchMedia('(display-mode: standalone)').matches;
-
-      if (isIOS && !isStandalone) {
-        installGuideCard.hidden = false;
-      }
-
-      function setStatus(message, isPaired) {
-        liveStatusText.textContent = message;
-        if (isPaired) {
-          headerStatusPill.className = 'header-status-pill ready';
-          headerStatusIcon.setAttribute('href', '#sf-lock');
-          headerStatusLabel.textContent = 'Paired with Mac';
-          statusIconSymbol.setAttribute('href', '#sf-checkmark-circle');
-          pairBtnText.textContent = 'Re-Sync Pairing with Mac';
-          pairedUtilityRow.hidden = false;
-          testLocalBtn.hidden = false;
-          remoteDisarmBtn.disabled = false;
-          pingSnapshotBtn.disabled = false;
-          refreshSnapshotBtn.disabled = false;
-        } else {
-          headerStatusPill.className = 'header-status-pill';
-          headerStatusIcon.setAttribute('href', '#sf-lock-open');
-          headerStatusLabel.textContent = 'Ready to Pair';
-          statusIconSymbol.setAttribute('href', '#sf-info');
-          remoteDisarmBtn.disabled = true;
-          pingSnapshotBtn.disabled = true;
-          refreshSnapshotBtn.disabled = !pairingChannel;
-        }
-      }
-
-      function urlBase64ToUint8Array(base64String) {
-        const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-        const rawData = window.atob(base64);
-        const outputArray = new Uint8Array(rawData.length);
-        for (let i = 0; i < rawData.length; ++i) {
-          outputArray[i] = rawData.charCodeAt(i);
-        }
-        return outputArray;
-      }
-
-      function arrayBufferToBase64Url(buffer) {
-        const bytes = new Uint8Array(buffer);
-        let binary = '';
-        for (let i = 0; i < bytes.byteLength; i++) {
-          binary += String.fromCharCode(bytes[i]);
-        }
-        return window.btoa(binary)
-          .replace(/\+/g, '-')
-          .replace(/\//g, '_')
-          .replace(/=+$/, '');
-      }
-
-      function toBase64Url(str) {
-        return window.btoa(unescape(encodeURIComponent(str)))
-          .replace(/\+/g, '-')
-          .replace(/\//g, '_')
-          .replace(/=+$/, '');
-      }
-
-      function fromBase64Url(b64url) {
-        const padding = '='.repeat((4 - (b64url.length % 4)) % 4);
-        const b64 = (b64url + padding).replace(/-/g, '+').replace(/_/g, '/');
-        return decodeURIComponent(escape(window.atob(b64)));
-      }
-
-      async function loadConfigFromCacheIfNeeded() {
-        let v = vapidPublicKey;
-        let c = pairingChannel;
-        if ((!v || !c) && 'caches' in window) {
-          try {
-            const cache = await caches.open('pupil-pairing-v1');
-            const resp = await cache.match('./pairing-config.json');
-            if (resp) {
-              const data = await resp.json();
-              if (!v && data.v) v = data.v;
-              if (!c && data.c) c = data.c;
-            }
-          } catch {}
-        }
-        return { v, c };
-      }
-
-      function renderVerificationSnapshot(payload) {
-        if (!payload || !payload.snapshotBase64) return;
-        const src = payload.snapshotBase64.startsWith('data:')
-          ? payload.snapshotBase64
-          : 'data:image/jpeg;base64,' + payload.snapshotBase64;
-        snapshotImg.src = src;
-        snapshotImg.hidden = false;
-        snapshotEmptyState.hidden = true;
-        snapshotMeta.hidden = false;
-        snapshotReasonLabel.textContent = payload.title || 'Verification frame';
-        const ts = new Date(payload.timestamp || Date.now());
-        snapshotTimeLabel.textContent = ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-        try {
-          localStorage.setItem(STORAGE_KEY_SNAPSHOT, JSON.stringify({
-            title: payload.title || 'Verification frame',
-            timestamp: payload.timestamp || Date.now(),
-            snapshotBase64: payload.snapshotBase64
-          }));
-        } catch {}
-      }
-
-      async function restoreCachedSnapshot() {
-        if ('caches' in window) {
-          try {
-            const cache = await caches.open('pupil-snapshots-v1');
-            const resp = await cache.match('./latest-snapshot.json');
-            if (resp) {
-              const data = await resp.json();
-              if (data && data.snapshotBase64) {
-                renderVerificationSnapshot(data);
-                return;
-              }
-            }
-          } catch {}
-        }
-        try {
-          const raw = localStorage.getItem(STORAGE_KEY_SNAPSHOT);
-          if (raw) {
-            renderVerificationSnapshot(JSON.parse(raw));
-          }
-        } catch {}
-      }
-
-      async function fetchLatestSnapshotFromChannel() {
-        const { c } = await loadConfigFromCacheIfNeeded();
-        if (!c) return;
-        try {
-          const resp = await fetch('https://ntfy.sh/' + encodeURIComponent(c) + '/json?poll=1&since=15m');
-          if (!resp.ok) return;
-          const text = await resp.text();
-          if (!text) return;
-          const lines = text.trim().split('\n').reverse();
-          for (const line of lines) {
-            try {
-              const envelope = JSON.parse(line);
-              const msg = envelope.message || '';
-              if (msg.startsWith('pupilalert://')) {
-                const jsonStr = fromBase64Url(msg.slice('pupilalert://'.length));
-                const alertPayload = JSON.parse(jsonStr);
-                if (alertPayload && alertPayload.snapshotBase64) {
-                  renderVerificationSnapshot(alertPayload);
-                  return;
-                }
-              }
-            } catch {}
-          }
-        } catch {}
-      }
-
-      async function makeSignedCommandToken(channel, vapidKey, extraFields, prefix) {
-        const timestamp = Date.now();
-        const nonceBytes = new Uint8Array(12);
-        crypto.getRandomValues(nonceBytes);
-        const nonce = arrayBufferToBase64Url(nonceBytes.buffer);
-
-        const keyMaterial = new TextEncoder().encode(channel + ':' + vapidKey);
-        const keyHash = await crypto.subtle.digest('SHA-256', keyMaterial);
-        const cryptoKey = await crypto.subtle.importKey(
-          'raw',
-          keyHash,
-          { name: 'HMAC', hash: 'SHA-256' },
-          false,
-          ['sign']
-        );
-        const signingInput = new TextEncoder().encode(channel + ':' + timestamp + ':' + nonce);
-        const sigBuf = await crypto.subtle.sign('HMAC', cryptoKey, signingInput);
-        const sig = arrayBufferToBase64Url(sigBuf);
-
-        const payload = Object.assign({
-          channel,
-          timestamp,
-          nonce,
-          sig
-        }, extraFields);
-        return prefix + toBase64Url(JSON.stringify(payload));
-      }
-
-      async function makeSignedDisarmToken(channel, vapidKey) {
-        return makeSignedCommandToken(channel, vapidKey, { type: 'pupil-remote-disarm' }, 'pupildisarm://');
-      }
-
-      async function publishRemoteCommand(channel, body) {
-        return fetch('https://ntfy.sh/' + encodeURIComponent(channel), {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body
-        });
-      }
-
-      let latestPairingToken = localStorage.getItem(STORAGE_KEY_PAIRED_TOKEN) || '';
-      if (latestPairingToken) {
-        pairedUtilityRow.hidden = false;
-        copyTokenBtn.hidden = false;
-        setStatus('Paired and active. Lock-screen alerts will wake your iPhone.', true);
-      }
-
-      async function pairAndSubscribe() {
-        try {
-          if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-            if (isIOS && !isStandalone) {
-              setStatus('Add Pupil to your Home Screen first, then open it from there.', false);
-              return;
-            }
-            setStatus('Web Push is not available in this browser window.', false);
-            return;
-          }
-
-          setStatus('Requesting notification permission...', false);
-          const { v, c } = await loadConfigFromCacheIfNeeded();
-          if (!v) {
-            setStatus('Missing Mac pairing key. Scan the QR code in Pupil Settings on your Mac.', false);
-            return;
-          }
-
-          const registration = await navigator.serviceWorker.register('./sw.js');
-          await navigator.serviceWorker.ready;
-
-          const permission = await Notification.requestPermission();
-          if (permission !== 'granted') {
-            setStatus('Notification permission not granted. Enable Notifications in iOS Settings.', false);
-            return;
-          }
-
-          setStatus('Registering Apple Push Notification endpoint...', false);
-          const existingSub = await registration.pushManager.getSubscription();
-          if (existingSub) {
-            try { await existingSub.unsubscribe(); } catch {}
-          }
-
-          const subscription = await registration.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(v)
-          });
-
-          const subJson = subscription.toJSON();
-          const deviceLabel = isIOS ? 'iPhone' : 'Mobile Companion';
-          const pairingPayload = {
-            type: 'pupil-webpush-pair',
-            deviceName: deviceLabel,
-            endpoint: subJson.endpoint,
-            p256dh: (subJson.keys && subJson.keys.p256dh) || '',
-            auth: (subJson.keys && subJson.keys.auth) || '',
-            timestamp: Date.now()
-          };
-
-          const encodedToken = 'pupilpair://' + toBase64Url(JSON.stringify(pairingPayload));
-          latestPairingToken = encodedToken;
-          localStorage.setItem(STORAGE_KEY_PAIRED_TOKEN, encodedToken);
-          pairedUtilityRow.hidden = false;
-          copyTokenBtn.hidden = false;
-
-          try {
-            await navigator.clipboard.writeText(encodedToken);
-          } catch {}
-
-          let autoSynced = false;
-          if (c) {
-            try {
-              const resp = await fetch('https://ntfy.sh/' + encodeURIComponent(c), {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: encodedToken
-              });
-              autoSynced = resp.ok;
-            } catch {}
-          }
-
-          if (autoSynced) {
-            setStatus('Paired automatically with your Mac.', true);
-          } else {
-            setStatus('Pairing code copied. Click "Paste Pairing Code" in Pupil Settings on your Mac.', true);
-          }
-        } catch (err) {
-          setStatus('Pairing error: ' + (err && err.message ? err.message : String(err)), false);
-        }
-      }
-
-      pairBtn.addEventListener('click', pairAndSubscribe);
-
-      copyTokenBtn.addEventListener('click', async () => {
-        if (!latestPairingToken) return;
-        try {
-          await navigator.clipboard.writeText(latestPairingToken);
-          setStatus('Pairing code copied to Universal Clipboard.', true);
-        } catch {
-          setStatus('Pairing code: ' + latestPairingToken, true);
-        }
-      });
-
-      testLocalBtn.addEventListener('click', async () => {
-        if (!('serviceWorker' in navigator)) return;
-        const reg = await navigator.serviceWorker.ready;
-        await reg.showNotification('Pupil Test Alert', {
-          body: 'Lock-screen notifications are active for your MacBook.',
-          icon: './icon-192.png',
-          badge: './icon-192.png',
-          tag: 'pupil-local-test'
-        });
-      });
-
-      refreshSnapshotBtn.addEventListener('click', async () => {
-        refreshSnapshotBtn.disabled = true;
-        await fetchLatestSnapshotFromChannel();
-        refreshSnapshotBtn.disabled = false;
-      });
-
-      pingSnapshotBtn.addEventListener('click', async () => {
-        const { v, c } = await loadConfigFromCacheIfNeeded();
-        if (!c || !v) {
-          setStatus('Missing pairing channel or key. Re-scan QR code in Pupil Settings.', false);
-          return;
-        }
-        pingSnapshotBtn.disabled = true;
-        try {
-          const snapshotToken = await makeSignedCommandToken(
-            c,
-            v,
-            { type: 'pupil-remote-snapshot', command: 'PING_SNAPSHOT' },
-            'pupilsnapshot://'
-          );
-          const resp = await publishRemoteCommand(c, snapshotToken);
-          if (resp.ok) {
-            setStatus('Snapshot request sent to your Mac.', true);
-            setTimeout(() => { fetchLatestSnapshotFromChannel(); }, 2500);
-          } else {
-            setStatus('Failed to send snapshot request (HTTP ' + resp.status + ').', true);
-          }
-        } catch (err) {
-          setStatus('Snapshot request error: ' + (err && err.message ? err.message : String(err)), true);
-        } finally {
-          pingSnapshotBtn.disabled = false;
-        }
-      });
-
-      remoteDisarmBtn.addEventListener('click', async () => {
-        const { v, c } = await loadConfigFromCacheIfNeeded();
-        if (!c || !v) {
-          setStatus('Missing pairing channel or key. Re-scan QR code in Pupil Settings.', false);
-          return;
-        }
-        remoteDisarmBtn.disabled = true;
-        try {
-          const disarmToken = await makeSignedDisarmToken(c, v);
-          const resp = await publishRemoteCommand(c, disarmToken);
-          if (resp.ok) {
-            setStatus('Authenticated remote disarm command sent to your Mac.', true);
-          } else {
-            setStatus('Failed to send disarm command (HTTP ' + resp.status + ').', true);
-          }
-        } catch (err) {
-          setStatus('Remote disarm error: ' + (err && err.message ? err.message : String(err)), true);
-        } finally {
-          remoteDisarmBtn.disabled = false;
-        }
-      });
-
-      function addAlertToLog(p) {
-        recentAlertsCard.hidden = false;
-        const li = document.createElement('li');
-
-        let badgeType = 'info';
-        let iconSymbol = '#sf-bell';
-
-        if (p.severity === 'critical') {
-          badgeType = 'alarm';
-          iconSymbol = '#sf-bell';
-        } else if (p.tag === 'pupil-tamper') {
-          badgeType = 'warning';
-          iconSymbol = '#sf-triangle';
-        } else if (p.tag === 'pupil-input-lock') {
-          badgeType = 'armed';
-          iconSymbol = '#sf-shield';
+          }).catch(function () {});
         }
 
-        const date = new Date(p.timestamp || Date.now());
-        const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-        li.innerHTML = `
-          <div class="alert-badge ${badgeType}">
-            <svg class="sf-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
-              <use href="${iconSymbol}"/>
-            </svg>
-          </div>
-          <div class="alert-content">
-            <div class="alert-title-row">
-              <span class="alert-title">${p.title || 'Pupil Security Alert'}</span>
-              <span class="alert-time">${timeStr}</span>
-            </div>
-            <div class="alert-body">${p.body || ''}</div>
-          </div>
-        `;
-        alertLogList.prepend(li);
-
-        if (p.snapshotBase64) {
-          renderVerificationSnapshot(p);
-        } else if (p.hasSnapshot) {
-          fetchLatestSnapshotFromChannel();
+        if (v || c || companionFlag || isStandalone) {
+          window.location.replace('./companion.html' + window.location.search);
         }
-      }
-
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('./sw.js').catch(() => {});
-        navigator.serviceWorker.addEventListener('message', (event) => {
-          if (event.data && event.data.type === 'PUPIL_PUSH_RECEIVED') {
-            addAlertToLog(event.data.payload);
-          }
-        });
-      }
-
-      restoreCachedSnapshot();
-      if (pairingChannel) {
-        fetchLatestSnapshotFromChannel();
-      }
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
-          fetchLatestSnapshotFromChannel();
-        }
-      });
+      } catch (_) {}
     })();
   </script>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+  <div class="ambient-canvas" aria-hidden="true"></div>
+
+  <!-- Floating Glassmorphic Top Navigation Pill -->
+  <div class="top-nav-wrap">
+    <nav class="top-nav" aria-label="Primary navigation">
+      <a href="#top" class="nav-brand">
+        <img src="./icon-192.png" alt="Pupil app icon" class="nav-icon" width="30" height="30">
+        <div class="nav-brand-text">
+          <span class="nav-title">Pupil</span>
+          <span class="nav-status-pill">
+            <span class="live-dot" aria-hidden="true"></span>
+            <span>Pupil for macOS 14+ • Apple Silicon &amp; Intel</span>
+          </span>
+        </div>
+      </a>
+
+      <ul class="nav-links">
+        <li><a href="#simulator">Interactive Demo</a></li>
+        <li><a href="#sensors">Sensors &amp; AI</a></li>
+        <li><a href="#scenarios">Student &amp; Cafe</a></li>
+        <li><a href="#screenshots">App Tour</a></li>
+        <li><a href="#waitlist">Waitlist</a></li>
+      </ul>
+
+      <div class="nav-actions">
+        <a href="./companion.html" class="nav-companion-link">iPhone Companion PWA</a>
+        <a href="#waitlist" class="btn-primary-pill">Join Waitlist</a>
+      </div>
+    </nav>
+  </div>
+
+  <main id="main-content">
+    <!-- Hero + Interactive "Test Pupil Live" MacBook Notch & Companion Simulator -->
+    <section id="simulator" class="hero-section">
+      <div class="container">
+        <header id="top" class="hero-header">
+          <div class="hero-kicker">
+            <span class="hero-kicker-badge">100% Native Swift 6</span>
+            <span>Zero cloud • Zero accounts • Lives in your MacBook notch</span>
+          </div>
+
+          <h1 class="hero-title trim-display">Step away without packing up.</h1>
+
+          <p class="hero-subtitle">
+            Pupil turns your MacBook’s physical notch, Apple Vision Neural Engine, and hardware power sensors
+            into a silent campus &amp; coffee-shop bodyguard. Stop shoulder surfers on-device and catch cable
+            unplugs or lid-slam thefts before anyone walks away with your laptop.
+          </p>
+
+          <div class="hero-cta-row">
+            <a href="#waitlist" class="btn-primary-pill">Get Early Access &amp; Build Locally</a>
+            <a href="#screenshots" class="btn-secondary-pill">Inspect Real App UI</a>
+          </div>
+
+          <div class="hero-metrics-strip tabular" aria-label="Architecture telemetry">
+            <span class="hero-metric-item"><strong class="hero-metric-value">~18 MB</strong> RAM footprint</span>
+            <span class="hero-metric-item"><strong class="hero-metric-value">10 FPS</strong> Apple Vision ANE</span>
+            <span class="hero-metric-item"><strong class="hero-metric-value">0 Bytes</strong> camera frames saved</span>
+            <span class="hero-metric-item"><strong class="hero-metric-value">RFC 8291</strong> encrypted iPhone push</span>
+          </div>
+        </header>
+
+        <!-- Interactive Dual-Device Simulator Stage -->
+        <div class="glass-card simulator-shell" aria-label="Interactive Pupil security simulator">
+          <div class="simulator-topbar">
+            <div class="simulator-title-group">
+              <span class="simulator-badge">Test Pupil Live</span>
+              <h2 class="simulator-heading">Interactive MacBook Notch &amp; iPhone Push Simulator</h2>
+            </div>
+
+            <button
+              type="button"
+              id="btn-sim-audio-toggle"
+              class="simulator-audio-btn"
+              aria-pressed="false"
+            >
+              <span aria-hidden="true">🔇</span>
+              <span id="sim-audio-label">Audio Preview: Off</span>
+            </button>
+          </div>
+
+          <div class="simulator-controls" role="toolbar" aria-label="Simulate Pupil security scenarios">
+            <button type="button" id="btn-sim-arm" class="sim-pill is-active" data-scenario="arm" data-tone="green">
+              <span class="sim-pill-dot" aria-hidden="true"></span>
+              <span>1. Arm System (⌃⌥⌘L)</span>
+            </button>
+            <button type="button" id="btn-sim-gaze" class="sim-pill" data-scenario="gaze" data-tone="amber">
+              <span class="sim-pill-dot" aria-hidden="true"></span>
+              <span>2. Shoulder Surfer Gaze</span>
+            </button>
+            <button type="button" id="btn-sim-magsafe" class="sim-pill" data-scenario="magsafe" data-tone="amber">
+              <span class="sim-pill-dot" aria-hidden="true"></span>
+              <span>3. Unplug MagSafe</span>
+            </button>
+            <button type="button" id="btn-sim-monitor" class="sim-pill" data-scenario="monitor" data-tone="amber">
+              <span class="sim-pill-dot" aria-hidden="true"></span>
+              <span>4. Unplug Library Monitor</span>
+            </button>
+            <button type="button" id="btn-sim-yubikey" class="sim-pill" data-scenario="yubikey" data-tone="green">
+              <span class="sim-pill-dot" aria-hidden="true"></span>
+              <span>5. Insert YubiKey / Touch ID</span>
+            </button>
+            <button type="button" id="btn-sim-siren" class="sim-pill" data-scenario="siren" data-tone="red">
+              <span class="sim-pill-dot" aria-hidden="true"></span>
+              <span>6. Trigger Progressive Siren</span>
+            </button>
+          </div>
+
+          <div class="simulator-stage-grid">
+            <!-- MacBook Pro 16" Hardware Stage -->
+            <div id="sim-macbook" class="macbook-stage" data-sim-state="armed" data-blurred="false">
+              <div class="macbook-screen">
+                <!-- Physical Notch + Dynamic Pupil Wings -->
+                <div class="sim-notch-anchor">
+                  <div id="sim-notch" class="sim-notch" data-expanded="true" data-tone="green">
+                    <div id="sim-notch-left" class="sim-notch-left notch-wing-green">
+                      <span class="notch-status-dot" aria-hidden="true"></span>
+                      <span id="sim-notch-left-text">Armed</span>
+                    </div>
+                    <div class="sim-notch-camera" title="FaceTime HD Camera"></div>
+                    <div id="sim-notch-right" class="sim-notch-right notch-wing-green tabular">
+                      <span id="sim-notch-right-text">10.0 FPS</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- macOS Menu Bar -->
+                <div class="mac-menubar" aria-hidden="true">
+                  <div class="mac-menubar-left">
+                    <span class="mac-menubar-brand"></span>
+                    <span class="mac-menubar-app">Xcode</span>
+                  </div>
+                  <div class="mac-menubar-right tabular">
+                    <span class="mac-menubar-power-wrap" id="sim-menubar-power">MagSafe AC</span>
+                    <span id="sim-menubar-clock">14:22</span>
+                  </div>
+                </div>
+
+                <!-- Simulated Student / Developer Workspace -->
+                <div class="mac-workspace">
+                  <div class="mac-app-window">
+                    <div class="mac-win-chrome">
+                      <div class="traffic-lights" aria-hidden="true">
+                        <span class="tl-red"></span>
+                        <span class="tl-amber"></span>
+                        <span class="tl-green"></span>
+                      </div>
+                      <span class="mac-win-title">SecurityCoordinator.swift</span>
+                    </div>
+                    <pre class="mac-code-body"><code><span class="code-cm">// On-device gaze + hardware sentry</span>
+<span class="code-kw">func</span> <span class="code-fn">evaluateGaze</span>(score: Double) {
+  <span class="code-kw">guard</span> score >= cone.threshold <span class="code-kw">else</span> { <span class="code-kw">return</span> }
+  screenShield.<span class="code-fn">activatePrivacyBlur</span>()
+  notch.<span class="code-fn">expandWings</span>(state: .gazeWarning)
+}</code></pre>
+                  </div>
+
+                  <div class="mac-notes-card">
+                    <h3 class="mac-notes-title">CS 4410 · Midterm Study Notes</h3>
+                    <p class="mac-notes-body">
+                      Dining hall table #4. MagSafe brick connected. Leaving seat for 3 minutes—Pupil guards
+                      power, external USB-C display, and lid clamshell state.
+                    </p>
+                    <div class="mac-notes-tags tabular">
+                      <span class="mac-tag" id="sim-badge-wifi">Wi-Fi: Cafe_Guest</span>
+                      <span class="mac-tag" id="sim-badge-flap">Flap Guard: Ready</span>
+                      <span class="mac-tag" id="sim-badge-sleep">Sleep Hold: Standby</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Frosted Screen Shield / Gaze Privacy Blur Overlay -->
+                <div id="sim-shield-overlay" class="sim-shield-overlay" aria-live="polite">
+                  <div class="sim-shield-modal">
+                    <div class="sim-shield-icon-box" id="sim-shield-icon">👁️</div>
+                    <h3 class="sim-shield-title" id="sim-shield-title">Privacy Shield Active</h3>
+                    <p class="sim-shield-detail" id="sim-shield-detail">
+                      Unauthorized gaze detected in peripheral camera ROI.
+                    </p>
+
+                    <div id="sim-siren-meter" class="sim-siren-meter" hidden>
+                      <div class="sim-siren-meter-row tabular">
+                        <span id="sim-siren-env-label">Cafe Preset (80% max)</span>
+                        <span id="sim-siren-pct">30%</span>
+                      </div>
+                      <div class="sim-siren-bar-track">
+                        <div id="sim-siren-bar-fill" class="sim-siren-bar-fill"></div>
+                      </div>
+                    </div>
+
+                    <div id="sim-env-pills" class="sim-env-pills" hidden>
+                      <button type="button" class="sim-env-pill" data-env="library" data-cap="45">Quiet Library · 45%</button>
+                      <button type="button" class="sim-env-pill is-active" data-env="cafe" data-cap="80">Cafe · 80%</button>
+                      <button type="button" class="sim-env-pill" data-env="park" data-cap="100">Busy Park · 100%</button>
+                    </div>
+
+                    <div class="sim-shield-actions">
+                      <button type="button" id="btn-sim-modal-unlock" class="sim-unlock-btn">
+                        Unlock via Touch ID / YubiKey
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Live Telemetry Readouts -->
+                <div class="mac-telemetry-bar tabular">
+                  <div class="telemetry-cell">
+                    <span class="telemetry-label">State</span>
+                    <span class="telemetry-value" id="tel-state">ARMED</span>
+                  </div>
+                  <div class="telemetry-cell">
+                    <span class="telemetry-label">Vision ANE</span>
+                    <span class="telemetry-value" id="tel-vision">10.0 FPS · 0B disk</span>
+                  </div>
+                  <div class="telemetry-cell">
+                    <span class="telemetry-label">Trigger / Auth</span>
+                    <span class="telemetry-value" id="tel-trigger">Monitoring 4 sensors</span>
+                  </div>
+                  <div class="telemetry-cell">
+                    <span class="telemetry-label">Siren Output</span>
+                    <span class="telemetry-value" id="tel-siren">0% (Cafe 80% cap)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Paired iPhone 16 Pro Web Push Companion Card -->
+            <aside id="sim-iphone" class="iphone-stage" aria-label="Paired iPhone Web Push companion simulation">
+              <div class="iphone-island-row tabular">
+                <span>9:41</span>
+                <div class="iphone-dynamic-island" aria-hidden="true"></div>
+                <span>5G · 🔒</span>
+              </div>
+
+              <div id="sim-iphone-banner" class="iphone-push-banner" data-severity="safe">
+                <div class="iphone-push-header">
+                  <span>PUPIL COMPANION · APNs</span>
+                  <span class="tabular" id="sim-iphone-time">now</span>
+                </div>
+                <h3 class="iphone-push-title" id="sim-iphone-title">Armed Sentinel Active</h3>
+                <p class="iphone-push-body" id="sim-iphone-body">
+                  MacBook Pro is guarded. Lock-screen alerts will wake this iPhone over Wi-Fi or 5G.
+                </p>
+              </div>
+
+              <div class="iphone-snapshot-box">
+                <div id="sim-iphone-snapshot-empty" class="iphone-snapshot-placeholder">
+                  Tap <strong>Ping Camera Snapshot</strong> to verify a tamper alert before disarming.
+                </div>
+                <div id="sim-iphone-snapshot-preview" class="iphone-snapshot-preview" hidden>
+                  <div class="iphone-snapshot-frame tabular">
+                    <div>
+                      <strong>LIVE VERIFICATION FRAME</strong><br>
+                      <span>ROI: Empty seat · No intruder</span>
+                    </div>
+                    <span>[JPEG 14 KB]</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="iphone-actions">
+                <button type="button" id="btn-iphone-snapshot" class="iphone-btn">
+                  Ping Camera Snapshot
+                </button>
+                <button type="button" id="btn-iphone-disarm" class="iphone-btn iphone-btn-danger">
+                  Remote Disarm
+                </button>
+              </div>
+
+              <div class="iphone-crypto-foot tabular">
+                RFC 8291 ECDH P-256 + AES-128-GCM · HMAC-SHA256 Disarm
+              </div>
+            </aside>
+          </div>
+
+          <div class="sim-journal-strip" aria-live="polite">
+            <div class="sim-journal-latest">
+              <span class="sim-journal-tag tabular" id="sim-journal-code">SystemArmed</span>
+              <span id="sim-journal-text">Monitoring active. MagSafe AC, External Display, Clamshell Lid, and Vision Gaze armed.</span>
+            </div>
+            <span class="mac-menubar-muted tabular">AES-GCM Ring Buffer (200 events max)</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sensors & AI Bento Grid -->
+    <section id="sensors" class="section">
+      <div class="container">
+        <header class="section-header reveal-on-scroll">
+          <span class="section-eyebrow">Engineering &amp; Sensors</span>
+          <h2 class="section-title trim-display">Built on Apple frameworks. Zero Electron bloat.</h2>
+          <p class="section-subtitle">
+            Every sensor in Pupil runs directly against IOKit, CoreAudio, Apple Vision, LocalAuthentication,
+            and CryptoKit—keeping memory near 18 MB while blocking hardware workarounds.
+          </p>
+        </header>
+
+        <div class="bento-grid">
+          <article class="glass-card bento-card bento-span-7 reveal-on-scroll">
+            <div>
+              <div class="bento-chip-row">
+                <span class="bento-chip">VisionGazeDetector + ScreenShieldView</span>
+                <span class="bento-stat tabular">10 FPS · ≤350ms blink filter</span>
+              </div>
+              <h3 class="bento-title">On-Device Shoulder-Surfer Gaze Blur</h3>
+              <p class="bento-copy">
+                Apple Vision inspects eye and pupil yaw/pitch vectors in memory—never writing a single frame to
+                disk. Choose from four detection cones (<strong>Relaxed 0.75</strong> to <strong>Ultra 0.40</strong>
+                with a 90% peripheral ROI) and configurable dwell (<code>0.5s–3.0s</code>). Walk-bys and natural blinks are
+                filtered out; sustained peeking instantly blurs your workspace.
+              </p>
+            </div>
+            <div class="bento-spec-list tabular">
+              <div class="bento-spec-pill">
+                <span class="bento-spec-label">Adaptive Governor</span>
+                <span class="bento-spec-val">10 → 5 → 2 FPS on &lt;30% battery</span>
+              </div>
+              <div class="bento-spec-pill">
+                <span class="bento-spec-label">Walk-By Rejection</span>
+                <span class="bento-spec-val">&gt; 0.18 L2 delta suppressed</span>
+              </div>
+              <div class="bento-spec-pill">
+                <span class="bento-spec-label">Privacy Guarantee</span>
+                <span class="bento-spec-val">0 Bytes stored to disk</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="glass-card bento-card bento-span-5 reveal-on-scroll">
+            <div>
+              <div class="bento-chip-row">
+                <span class="bento-chip">PowerAndLidMonitor</span>
+                <span class="bento-stat tabular">150ms IOKit polling</span>
+              </div>
+              <h3 class="bento-title">Anti-Flap Power &amp; Display Tripwires</h3>
+              <p class="bento-copy">
+                Monitors <code>IOPSCopyPowerSourcesInfo</code> every 150ms. <strong>ChargerFlapDetector</strong>
+                locks out power-restore cancellation if a thief jiggles your cable (≥3 transitions in 6s). Also
+                latches external <code>CGDirectDisplayID</code>s and blocks sleep via <code>IOPMAssertion</code> on
+                clamshell slam.
+              </p>
+            </div>
+            <div class="bento-spec-list tabular">
+              <div class="bento-spec-pill">
+                <span class="bento-spec-label">External Monitor</span>
+                <span class="bento-spec-val">DisplayTopologyEvaluator</span>
+              </div>
+              <div class="bento-spec-pill">
+                <span class="bento-spec-label">Lid Slam</span>
+                <span class="bento-spec-val">Immediate Siren + Sleep Hold</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="glass-card bento-card bento-span-6 reveal-on-scroll">
+            <div>
+              <div class="bento-chip-row">
+                <span class="bento-chip">USBKeyDisarmEvaluator + PinAttemptLimiter</span>
+                <span class="bento-stat tabular">VID:PID + Serial Pinned</span>
+              </div>
+              <h3 class="bento-title">YubiKey, Touch ID &amp; Brute-Force Lockout</h3>
+              <p class="bento-copy">
+                Disarm in under a second with Touch ID, Bluetooth Proximity return, or inserting your enrolled
+                YubiKey / Titan / Nitrokey USB token. Wrong PIN attempts trigger exponential lockout (15s at 5,
+                60s at 8, 300s + immediate siren escalation at 10).
+              </p>
+            </div>
+          </article>
+
+          <article class="glass-card bento-card bento-span-6 reveal-on-scroll">
+            <div>
+              <div class="bento-chip-row">
+                <span class="bento-chip">TrustedNetworkEvaluator + SirenEscalation</span>
+                <span class="bento-stat tabular">30% → 100% over 8.0s</span>
+              </div>
+              <h3 class="bento-title">Trusted Wi-Fi Sentinel &amp; Library-Safe Siren</h3>
+              <p class="bento-copy">
+                SHA-256 fingerprints your dorm/home SSID and router gateway L2 MAC (with Evil Twin protection) to
+                auto-arm and switch gaze sensitivity to <code>Strict</code> on public Wi-Fi. Progressive 880/660 Hz
+                siren starts at 30% of your Quiet Library (45%) or Cafe (80%) cap and forces built-in speakers.
+              </p>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Target Audience Storytelling: College Students & Solo Workers -->
+    <section id="scenarios" class="section">
+      <div class="container">
+        <header class="section-header reveal-on-scroll">
+          <span class="section-eyebrow">Built for Campus &amp; Cafe Life</span>
+          <h2 class="section-title trim-display">Protection that fits how you actually study and work.</h2>
+          <p class="section-subtitle">
+            Designed around the three moments when laptops are most vulnerable—and least convenient to pack up.
+          </p>
+        </header>
+
+        <div class="scenarios-grid">
+          <article class="glass-card scenario-card reveal-on-scroll">
+            <div>
+              <div class="scenario-icon-badge" aria-hidden="true">📚</div>
+              <div class="scenario-audience" style="margin-top: 14px;">College Libraries &amp; Dining Halls</div>
+              <h3 class="scenario-title">The Library Restroom Run</h3>
+              <p class="scenario-problem">
+                Packing a 16" MacBook Pro, iPad, MagSafe brick, and monitor cable just for a 3-minute coffee
+                refill or restroom trip loses your desk and breaks your study flow.
+              </p>
+              <p class="scenario-solution">
+                Tap <strong>⌃⌥⌘L</strong> or walk away with your paired iPhone via Bluetooth Proximity. Pupil
+                guards MagSafe, external USB-C monitors, lid close, and keyboard/mouse input—waking your locked
+                iPhone via RFC 8291 push if anyone touches your seat.
+              </p>
+            </div>
+            <div class="scenario-footer-pill">Sensors: Power Unplug + Display Hot-Unplug + Remote Snapshot</div>
+          </article>
+
+          <article class="glass-card scenario-card reveal-on-scroll">
+            <div>
+              <div class="scenario-icon-badge" aria-hidden="true">☕</div>
+              <div class="scenario-audience" style="margin-top: 14px;">Coffee Shops &amp; Flights</div>
+              <h3 class="scenario-title">The Crowded Coffee Shop Table</h3>
+              <p class="scenario-problem">
+                Communal cafe tables and tight lecture rows put strangers right behind your shoulder while you
+                work on private code, exams, or banking.
+              </p>
+              <p class="scenario-solution">
+                <strong>On-Device Apple Vision Gaze Detection</strong> (<code>Ultra</code> 90% peripheral cone)
+                catches sustained peeking in 0.5–2.0s and drops an instant frosted privacy blur—clearing
+                automatically the moment they look away.
+              </p>
+            </div>
+            <div class="scenario-footer-pill">Privacy: 100% RAM-only Vision inference · 0 frames saved</div>
+          </article>
+
+          <article class="glass-card scenario-card reveal-on-scroll">
+            <div>
+              <div class="scenario-icon-badge" aria-hidden="true">📶</div>
+              <div class="scenario-audience" style="margin-top: 14px;">Zero-Config Context Awareness</div>
+              <h3 class="scenario-title">The Dorm-to-Cafe Wi-Fi Boundary</h3>
+              <p class="scenario-problem">
+                Forgetting to arm in public—or fearing a cable bump will blast a full-volume siren across a
+                silent reading floor.
+              </p>
+              <p class="scenario-solution">
+                <strong>Trusted Wi-Fi Boundary</strong> automatically arms Pupil and raises gaze sensitivity to
+                <code>Strict</code> when you leave home/dorm Wi-Fi. And <strong>Quiet Library (45%) +
+                8s Progressive Escalation</strong> starts alarms at 30% so you can disarm cleanly via Touch ID or
+                YubiKey.
+              </p>
+            </div>
+            <div class="scenario-footer-pill">Safety: SHA-256 Gateway MAC + 30%→100% Ramp</div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Interactive App Screenshot Showcase with Feature Hotspots -->
+    <section id="screenshots" class="section">
+      <div class="container">
+        <header class="section-header reveal-on-scroll">
+          <span class="section-eyebrow">Native SwiftUI &amp; AppKit Tour</span>
+          <h2 class="section-title trim-display">Every control, photographed live from Pupil.</h2>
+          <p class="section-subtitle">
+            Switch tabs and click any numbered hotspot pin inside the macOS window to inspect how each setting
+            works under the hood.
+          </p>
+        </header>
+
+        <div class="showcase-tabs" role="tablist" aria-label="Pupil app screenshots">
+          <button type="button" role="tab" aria-selected="true" class="showcase-tab is-active" data-tab="general">General</button>
+          <button type="button" role="tab" aria-selected="false" class="showcase-tab" data-tab="gaze">Gaze &amp; AI</button>
+          <button type="button" role="tab" aria-selected="false" class="showcase-tab" data-tab="sensors">Sensors &amp; Keys</button>
+          <button type="button" role="tab" aria-selected="false" class="showcase-tab" data-tab="alarm">Alarm &amp; Log</button>
+          <button type="button" role="tab" aria-selected="false" class="showcase-tab" data-tab="menubar">Menu Bar</button>
+          <button type="button" role="tab" aria-selected="false" class="showcase-tab" data-tab="shield">Screen Shield</button>
+        </div>
+
+        <div class="showcase-grid">
+          <div class="glass-card showcase-frame">
+            <div class="showcase-viewport" id="showcase-viewport">
+              <div class="showcase-image-stage" id="showcase-image-stage" data-wide="false">
+                <img
+                  id="showcase-img"
+                  class="showcase-img"
+                  src="./assets/screenshots/settings-general.png"
+                  alt="Pupil General Settings window showing auto-arm, OS hardware lockdown, and stepped timers"
+                  width="1000"
+                  height="2214"
+                  loading="eager"
+                >
+                <button type="button" class="hotspot-pin is-active" data-hotspot="0" style="left: 78%; top: 24%;" aria-label="Hotspot 1">1</button>
+                <button type="button" class="hotspot-pin" data-hotspot="1" style="left: 78%; top: 48%;" aria-label="Hotspot 2">2</button>
+                <button type="button" class="hotspot-pin" data-hotspot="2" style="left: 68%; top: 72%;" aria-label="Hotspot 3">3</button>
+              </div>
+            </div>
+          </div>
+
+          <aside class="glass-card inspector-card" aria-live="polite">
+            <div>
+              <span class="inspector-meta" id="inspector-meta">GeneralSettingsPage.swift · Hotspot 1 of 3</span>
+              <h3 class="inspector-title" id="inspector-title">Idle Inactivity Auto-Arm (5–30 min)</h3>
+              <p class="inspector-desc" id="inspector-desc">
+                Polls CGEventSource HID idle duration with streak suppression and closed-lid sleep immunity—so
+                Pupil never false-arms overnight or during Power Nap.
+              </p>
+            </div>
+
+            <div class="inspector-hotspot-list" id="inspector-hotspot-list">
+              <!-- Populated dynamically by app.js -->
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- Waitlist & 30-Second Local Build Section -->
+    <section id="waitlist" class="section">
+      <div class="container">
+        <header class="section-header reveal-on-scroll">
+          <span class="section-eyebrow">Early Access &amp; Source Build</span>
+          <h2 class="section-title trim-display">Join the beta waitlist—or build Pupil in 30 seconds.</h2>
+          <p class="section-subtitle">
+            Reserve your spot for signed notarized macOS builds, or clone the open-source Swift repository and run
+            Pupil on your MacBook today.
+          </p>
+        </header>
+
+        <div class="waitlist-grid">
+          <!-- Accessible Waitlist Form -->
+          <div class="glass-card waitlist-card">
+            <form id="waitlist-form" class="waitlist-form" novalidate>
+              <div class="form-field">
+                <label for="waitlist-email" class="form-label">University or work email</label>
+                <input
+                  type="email"
+                  id="waitlist-email"
+                  name="email"
+                  class="form-input"
+                  placeholder="you@university.edu"
+                  autocomplete="email"
+                  autocorrect="off"
+                  autocapitalize="none"
+                  spellcheck="false"
+                  enterkeyhint="done"
+                  aria-describedby="waitlist-hint waitlist-error"
+                  required
+                >
+                <p id="waitlist-hint" class="form-hint">
+                  Used only for Pupil beta release notes &amp; signed <code>.dmg</code> notifications. Zero spam.
+                </p>
+                <p id="waitlist-error" class="form-error" hidden></p>
+              </div>
+
+              <fieldset class="persona-fieldset">
+                <legend class="form-label">Where will you use Pupil most?</legend>
+                <div class="persona-pills">
+                  <label class="persona-pill">
+                    <input type="radio" name="persona" value="College student" checked>
+                    <span>🎓 College student (Library / Dining hall)</span>
+                  </label>
+                  <label class="persona-pill">
+                    <input type="radio" name="persona" value="Cafe / remote worker">
+                    <span>☕ Cafe / remote worker</span>
+                  </label>
+                  <label class="persona-pill">
+                    <input type="radio" name="persona" value="Developer / security enthusiast">
+                    <span>🔐 Developer / security enthusiast</span>
+                  </label>
+                </div>
+              </fieldset>
+
+              <button type="submit" id="waitlist-submit-btn" class="btn-primary-pill" style="padding: 12px 20px; font-size: 14.5px;">
+                Request Early Access Pass
+              </button>
+
+              <div id="waitlist-status" class="waitlist-status" role="status" aria-live="polite"></div>
+            </form>
+
+            <!-- Instant Early Access Pass Confirmation -->
+            <div id="waitlist-pass-card" class="early-access-pass" hidden>
+              <div class="pass-header">
+                <span class="pass-number tabular" id="pass-number-badge">PASS #0418</span>
+                <span style="font-size: 12px; font-weight: 600; color: var(--armed-green);">Registered Locally</span>
+              </div>
+              <h3 class="pass-title">Pupil Early Access Pass</h3>
+              <p class="pass-meta" id="pass-meta-text">
+                Reserved for you@university.edu · College student
+              </p>
+              <div class="pass-actions">
+                <button type="button" id="btn-copy-pass" class="btn-secondary-pill">Copy Pass Summary</button>
+                <a
+                  href="https://github.com/stevewong-a/pupil/releases"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="btn-primary-pill"
+                >
+                  GitHub Releases
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <!-- 30-Second Local Build Card -->
+          <div class="glass-card build-card">
+            <div>
+              <span class="simulator-badge" style="margin-bottom: 12px; display: inline-block;">Test Locally Now</span>
+              <h3 class="bento-title" style="font-size: 22px;">Clone &amp; Build in 30 Seconds</h3>
+              <p class="bento-copy" style="margin-bottom: 16px;">
+                Pupil builds cleanly with Swift Package Manager and Xcode Command Line Tools—no external
+                dependencies, CocoaPods, or Homebrew packages required.
+              </p>
+
+              <div class="terminal-box">
+                <div class="terminal-header">
+                  <span>zsh — macOS 14+ (Apple Silicon &amp; Intel)</span>
+                  <button type="button" id="btn-copy-build-cmd" class="copy-cmd-btn">Copy</button>
+                </div>
+                <pre class="terminal-code" id="build-cmd-code"><code>git clone https://github.com/stevewong-a/pupil.git &amp;&amp; cd pupil
+./scripts/build-dmg.sh &amp;&amp; open ./dist/Pupil.app</code></pre>
+              </div>
+            </div>
+
+            <ul class="requirements-list">
+              <li><strong>macOS 14 Sonoma or later</strong> (Apple Silicon &amp; Intel universal build)</li>
+              <li><strong>Permissions:</strong> Camera (Vision gaze, RAM-only) &amp; Accessibility (optional OS lockdown)</li>
+              <li><strong>Phone Companion:</strong> Scan the in-app QR code on iOS 16.4+ Safari &amp; Add to Home Screen</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-row">
+      <span>Pupil for macOS — 100% Native Swift 6 · Zero Cloud · Open Source</span>
+      <div class="footer-links">
+        <a href="#simulator">Interactive Demo</a>
+        <a href="#screenshots">App Tour</a>
+        <a href="./companion.html">iPhone Companion PWA</a>
+        <a href="https://github.com/stevewong-a/pupil" target="_blank" rel="noopener noreferrer">GitHub</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="./app.js" defer></script>
 </body>
 </html>
