@@ -149,6 +149,12 @@ public final class SecurityCoordinator {
     public let bluetoothMonitor: BluetoothProximityMonitor
     public let journalStore: TamperJournalStore
     public let networkSentinel: NetworkPathSentinel
+    public let usbMonitor: USBKeyMonitor
+    public let usbKeyVault: USBKeyVault
+    public internal(set) var usbKeyEvaluator = USBKeyDisarmEvaluator()
+    public private(set) var enrolledUSBKey: EnrolledUSBKeySignature?
+    public var hasEnrolledUSBKey: Bool { enrolledUSBKey != nil }
+    public private(set) var availableUSBDevicesForEnrollment: [USBDeviceDescriptor] = []
     /// Injectable clock (epoch seconds) so corroboration windows are testable.
     public var clock: () -> TimeInterval = { Date().timeIntervalSince1970 }
     /// Injectable thermal state provider for deterministic testing.
@@ -202,7 +208,9 @@ public final class SecurityCoordinator {
         alertNotifier: AlertNotifier? = nil,
         bluetoothMonitor: BluetoothProximityMonitor? = nil,
         networkSentinel: NetworkPathSentinel? = nil,
-        journalStore: TamperJournalStore? = nil
+        journalStore: TamperJournalStore? = nil,
+        usbMonitor: USBKeyMonitor? = nil,
+        usbKeyVault: USBKeyVault? = nil
     ) {
         let resolvedJournalStore: TamperJournalStore
         if let journalStore {
@@ -214,13 +222,25 @@ public final class SecurityCoordinator {
                 .appendingPathComponent("pupil-test-journal-\(UUID().uuidString).enc.json")
             resolvedJournalStore = TamperJournalStore(fileURL: tempURL, symmetricKey: SymmetricKey(size: .bits256))
         }
+        let resolvedUSBKeyVault: USBKeyVault
+        if let usbKeyVault {
+            resolvedUSBKeyVault = usbKeyVault
+        } else if settings === PupilSettings.shared {
+            resolvedUSBKeyVault = .shared
+        } else {
+            let tempUSBURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("pupil-test-usb-key-\(UUID().uuidString).record")
+            resolvedUSBKeyVault = USBKeyVault(fileURL: tempUSBURL, symmetricKey: SymmetricKey(size: .bits256))
+        }
         self.journalStore = resolvedJournalStore
+        self.usbKeyVault = resolvedUSBKeyVault
         self.settings = settings
         self.powerMonitor = powerMonitor
         self.lockMonitor = lockMonitor
         self.cameraManager = cameraManager
         self.bluetoothMonitor = bluetoothMonitor ?? BluetoothProximityMonitor()
         self.networkSentinel = networkSentinel ?? NetworkPathSentinel()
+        self.usbMonitor = usbMonitor ?? USBKeyMonitor(startImmediately: false)
         let pushManager = webPushManager ?? WebPushManager(settings: settings)
         self.webPushManager = pushManager
         self.alertNotifier = alertNotifier ?? AlertNotifier { message in
@@ -248,9 +268,14 @@ public final class SecurityCoordinator {
             self.hasEnrolledPin = true
         }
 
+        let loadedUSBKey = KeychainManager.loadEnrolledUSBKey(vault: resolvedUSBKeyVault)
+        self.enrolledUSBKey = loadedUSBKey
+        settings.enrolledUSBKeySummary = loadedUSBKey?.summary
+
         bindSensors()
         syncBluetoothProximityMonitoring()
         syncIdleInactivityMonitoring()
+        syncUSBKeyMonitoring()
 
         NotificationCenter.default.addObserver(
             forName: .screenShieldSync,
@@ -265,6 +290,7 @@ public final class SecurityCoordinator {
                 self.syncCameraLifecycle()
                 self.syncBluetoothProximityMonitoring()
                 self.syncIdleInactivityMonitoring()
+                self.syncUSBKeyMonitoring()
                 if self.state == .armed {
                     if self.settings.lockOnInputWhenArmed {
                         self.startArmedInputMonitoring()
@@ -317,6 +343,7 @@ public final class SecurityCoordinator {
         activeTamperTime = nil
         activeAlarmTime = nil
         armedDisplayTopologyEvaluator.latchBaseline(PowerAndLidMonitor.readActiveDisplayTopology())
+        usbKeyEvaluator.latchBaseline(usbMonitor.connectedDevicesProvider())
 
         if settings.holdSleepOnLidClose {
             powerMonitor.acquireSleepHoldAssertion()
@@ -357,6 +384,7 @@ public final class SecurityCoordinator {
         continuousMotionSeconds = 0
         motionAnchorDepthMeters = nil
         armedDisplayTopologyEvaluator.latchBaseline(PowerAndLidMonitor.readActiveDisplayTopology())
+        usbKeyEvaluator.latchBaseline(usbMonitor.connectedDevicesProvider())
         state = .armed
         cameraManager.shouldReanchorOnFaceAcquisition = false
         if let profile = roomProfiler.finalizeCalibration() {
@@ -501,6 +529,95 @@ public final class SecurityCoordinator {
         }
     }
 
+    // MARK: - USB Security Key Fast Disarm
+
+    public func syncUSBKeyMonitoring() {
+        if settings.usbKeyDisarmEnabled && hasEnrolledUSBKey {
+            usbMonitor.startMonitoring()
+        } else {
+            usbMonitor.stopMonitoring()
+            usbKeyEvaluator.reset()
+        }
+    }
+
+    public func handleUSBKeyEvent(_ event: USBDeviceEvent) {
+        let decision = usbKeyEvaluator.evaluate(
+            event: event,
+            enrolledSignature: enrolledUSBKey,
+            featureEnabled: settings.usbKeyDisarmEnabled,
+            securityState: state,
+            at: clock()
+        )
+        if case .disarm(_, let signature) = decision {
+            performValidatedDisarm(method: "USB Security Key (\(signature.displayName))")
+        }
+    }
+
+    @discardableResult
+    public func refreshEnrollableUSBDevices() -> [USBDeviceDescriptor] {
+        let candidates = usbMonitor.connectedDevicesProvider()
+            .filter(\.isEligibleForEnrollment)
+            .sorted { lhs, rhs in
+                if lhs.isKnownSecurityTokenVendor != rhs.isKnownSecurityTokenVendor {
+                    return lhs.isKnownSecurityTokenVendor && !rhs.isKnownSecurityTokenVendor
+                }
+                let cmp = lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName)
+                if cmp != .orderedSame {
+                    return cmp == .orderedAscending
+                }
+                return lhs.id < rhs.id
+            }
+        availableUSBDevicesForEnrollment = candidates
+        return candidates
+    }
+
+    @discardableResult
+    public func enrollCurrentUSBKey() -> USBEnrollmentOutcome {
+        let candidates = refreshEnrollableUSBDevices()
+        if candidates.isEmpty {
+            return .noDeviceFound
+        }
+        if candidates.count == 1 {
+            do {
+                let signature = try enrollUSBKey(candidates[0])
+                return .enrolled(signature)
+            } catch {
+                return .failed(error.localizedDescription)
+            }
+        }
+        return .requiresSelection(candidates)
+    }
+
+    @discardableResult
+    public func enrollUSBKey(_ device: USBDeviceDescriptor) throws -> EnrolledUSBKeySignature {
+        let signature = try KeychainManager.enrollUSBKey(device, vault: usbKeyVault)
+        enrolledUSBKey = signature
+        settings.enrolledUSBKeySummary = signature.summary
+        settings.usbKeyDisarmEnabled = true
+        usbKeyEvaluator.latchBaseline(usbMonitor.connectedDevicesProvider())
+        syncUSBKeyMonitoring()
+        let matchMode = signature.isSerialPinned ? "serial-pinned" : "model-matched"
+        logEvent(
+            "USB Key Enrolled",
+            detail: "\(signature.displayName) (\(signature.formattedVIDPID), \(matchMode)) enrolled for fast disarm."
+        )
+        return signature
+    }
+
+    public func removeEnrolledUSBKey() {
+        let previousName = enrolledUSBKey?.displayName ?? settings.enrolledUSBKeySummary?.displayName
+        KeychainManager.clearEnrolledUSBKey(vault: usbKeyVault)
+        enrolledUSBKey = nil
+        settings.enrolledUSBKeySummary = nil
+        settings.usbKeyDisarmEnabled = false
+        syncUSBKeyMonitoring()
+        if let previousName {
+            logEvent("USB Key Removed", detail: "\(previousName) removed from fast disarm.")
+        } else {
+            logEvent("USB Key Removed", detail: "Enrolled USB security key removed.")
+        }
+    }
+
     nonisolated public static func readSystemHIDIdleSeconds() -> Double {
         let eventTypes: [CGEventType] = [
             .keyDown,
@@ -611,6 +728,7 @@ public final class SecurityCoordinator {
         motionAggregator.reset()
         tamperScorer.reset()
         armedDisplayTopologyEvaluator.reset()
+        usbKeyEvaluator.reset()
         cameraManager.shouldReanchorOnFaceAcquisition = true
         cameraManager.resetMotionAnchor()
         hasMotionAnchor = false
@@ -622,6 +740,7 @@ public final class SecurityCoordinator {
         logEvent("Disarmed", detail: "Session disarmed via \(method).")
         onStateChanged?(state)
         onNotchUpdateNeeded?()
+        NotificationCenter.default.post(name: .screenShieldSync, object: nil)
 
         if wasAlarm {
             alertNotifier.send(AlertMessage(
@@ -1549,6 +1668,10 @@ public final class SecurityCoordinator {
                   !self.settings.trustedBluetoothDeviceUUID.isEmpty,
                   self.state == .armed else { return }
             self.disarmFromTrustedProximity()
+        }
+
+        usbMonitor.onUSBEvent = { [weak self] event in
+            self?.handleUSBKeyEvent(event)
         }
 
         networkSentinel.onTransition = { [weak self] transition in

@@ -11,6 +11,10 @@ import SwiftUI
 public struct SensorsSettingsPage: View {
     @Bindable var coordinator: SecurityCoordinator
     @Bindable private var settings = PupilSettings.shared
+    @State private var usbStatusMessage: String?
+    @State private var usbStatusIsPositive: Bool = true
+    @State private var showUSBDeviceChooser: Bool = false
+    @State private var usbChooserCandidates: [USBDeviceDescriptor] = []
 
     public init(coordinator: SecurityCoordinator) {
         self.coordinator = coordinator
@@ -386,6 +390,58 @@ public struct SensorsSettingsPage: View {
                     }
                 }
             }
+
+            VStack(alignment: .leading, spacing: 8) {
+                SettingsSectionTitle(text: "USB security key")
+                SettingsGroup {
+                    SettingsRowContent(
+                        title: "Disarm with USB key",
+                        subtitle: "Automatically and silently disarms Pupil when your enrolled USB security key is inserted.",
+                        info: "Matches your enrolled key by USB vendor ID, product ID, and serial number (when exposed by the token) via native IOKit hotplug events."
+                    ) {
+                        PupilToggle(isOn: $settings.usbKeyDisarmEnabled)
+                    }
+
+                    SettingsGroupDivider()
+
+                    SettingsRowContent(
+                        title: "Enrolled key",
+                        subtitle: enrolledUSBKeySubtitle
+                    ) {
+                        HStack(spacing: 8) {
+                            if coordinator.hasEnrolledUSBKey {
+                                PillActionButton(title: "Remove") {
+                                    coordinator.removeEnrolledUSBKey()
+                                    usbStatusIsPositive = true
+                                    usbStatusMessage = "Removed enrolled USB key."
+                                }
+                            }
+
+                            PillActionButton(title: "Enroll current USB key") {
+                                handleEnrollCurrentUSBKey()
+                            }
+                            .popover(isPresented: $showUSBDeviceChooser, arrowEdge: .bottom) {
+                                usbDeviceChooserPopover
+                            }
+                        }
+                    }
+
+                    if let status = usbStatusMessage, !status.isEmpty {
+                        SettingsGroupDivider()
+                        HStack(spacing: 6) {
+                            Image(systemName: usbStatusIsPositive ? "checkmark.circle.fill" : "info.circle.fill")
+                                .font(.system(size: 11))
+                                .foregroundStyle(usbStatusIsPositive ? PupilTheme.armedGreen : PupilTheme.warningAmber)
+                            Text(status)
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(SettingsMetrics.textSecondary)
+                            Spacer()
+                        }
+                        .padding(.horizontal, SettingsMetrics.rowHorizontalInset)
+                        .padding(.vertical, 8)
+                    }
+                }
+            }
         }
         .onAppear {
             if !coordinator.webPushManager.isPaired {
@@ -410,6 +466,87 @@ public struct SensorsSettingsPage: View {
             return "\(name) • \(Int(rssi.rounded())) dBm (\(status))"
         }
         return name
+    }
+
+    private var enrolledUSBKeySubtitle: String {
+        if let enrolled = coordinator.enrolledUSBKey {
+            let matchLabel = enrolled.isSerialPinned ? "Serial pinned" : "Model match"
+            return "\(enrolled.displayName) · \(enrolled.formattedVIDPID) · \(matchLabel)"
+        }
+        if let summary = settings.enrolledUSBKeySummary {
+            return "\(summary.displayName) · \(summary.formattedVIDPID)"
+        }
+        return "No USB key enrolled. Plug in your YubiKey, Nitrokey, or USB token."
+    }
+
+    private func handleEnrollCurrentUSBKey() {
+        switch coordinator.enrollCurrentUSBKey() {
+        case .enrolled(let signature):
+            showUSBDeviceChooser = false
+            usbStatusIsPositive = true
+            usbStatusMessage = "Enrolled \(signature.displayName)."
+        case .noDeviceFound:
+            showUSBDeviceChooser = false
+            usbStatusIsPositive = false
+            usbStatusMessage = "No external USB key detected. Insert your USB key and try again."
+        case .requiresSelection(let devices):
+            usbChooserCandidates = devices
+            usbStatusMessage = nil
+            showUSBDeviceChooser = true
+        case .failed(let message):
+            showUSBDeviceChooser = false
+            usbStatusIsPositive = false
+            usbStatusMessage = message
+        }
+    }
+
+    private var usbDeviceChooserPopover: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Choose USB key")
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(SettingsMetrics.textPrimary)
+
+            ForEach(usbChooserCandidates) { device in
+                Button {
+                    do {
+                        let signature = try coordinator.enrollUSBKey(device)
+                        showUSBDeviceChooser = false
+                        usbStatusIsPositive = true
+                        usbStatusMessage = "Enrolled \(signature.displayName)."
+                    } catch {
+                        showUSBDeviceChooser = false
+                        usbStatusIsPositive = false
+                        usbStatusMessage = error.localizedDescription
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(device.displayName)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(SettingsMetrics.textPrimary)
+                                .lineLimit(1)
+                            Text(device.formattedVIDPID)
+                                .font(.system(size: 10.5, design: .monospaced))
+                                .foregroundStyle(SettingsMetrics.textSecondary)
+                        }
+                        Spacer(minLength: 10)
+                        Text(device.serialNumber != nil ? "Serial available" : "No serial")
+                            .font(.system(size: 10.5, weight: .medium))
+                            .foregroundStyle(device.serialNumber != nil ? PupilTheme.armedGreen : SettingsMetrics.textTertiary)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(SettingsMetrics.neutralButtonFill)
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(12)
+        .frame(width: 280)
     }
 
     private func toggleTrigger(_ trigger: HardwareTrigger, isSelected: Bool) {
