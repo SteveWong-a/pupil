@@ -3,20 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="color-scheme" content="dark light">
-  <meta name="theme-color" content="#050608">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#FFFFFF">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Pupil">
   <meta
     name="description"
-    content="Pupil turns your MacBook notch into a zero-cloud hardware & Apple Vision security sentinel for college libraries, coffee shops, and coworking spaces."
+    content="On-device gaze blur and hardware tripwires built into your MacBook notch."
   >
   <title>Pupil — Notch-Native MacBook Security Sentinel</title>
   <link rel="manifest" href="./manifest.json">
-  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+  <link rel="apple-touch-icon" href="./assets/pupil-icon.png">
+  <link rel="icon" type="image/png" href="./assets/pupil-icon.png">
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
-  <link rel="icon" type="image/png" sizes="32x32" href="./icon-32.png">
   <link rel="shortcut icon" href="./favicon.ico">
   <script>
     /* Preserve 100% QR pairing & iOS Home Screen PWA compatibility */
@@ -54,65 +54,64 @@
 </head>
 <body>
   <a href="#main-content" class="skip-link">Skip to main content</a>
-  <div class="ambient-canvas" aria-hidden="true"></div>
+  <div class="scroll-progress-bar" aria-hidden="true"></div>
 
-  <!-- Floating Glassmorphic Top Navigation Pill -->
+  <!-- Top Navigation Bar -->
   <div class="top-nav-wrap">
     <nav class="top-nav" aria-label="Primary navigation">
       <a href="#top" class="nav-brand">
-        <img src="./icon-192.png" alt="Pupil app icon" class="nav-icon" width="30" height="30">
+        <img src="./assets/pupil-icon.png" alt="Pupil app icon" class="nav-icon brand-icon" width="28" height="28">
         <div class="nav-brand-text">
           <span class="nav-title">Pupil</span>
           <span class="nav-status-pill">
             <span class="live-dot" aria-hidden="true"></span>
-            <span>Pupil for macOS 14+ • Apple Silicon &amp; Intel</span>
+            <span>macOS 14+ · Native Swift 6</span>
           </span>
         </div>
       </a>
 
       <ul class="nav-links">
-        <li><a href="#simulator">Interactive Demo</a></li>
-        <li><a href="#sensors">Sensors &amp; AI</a></li>
-        <li><a href="#scenarios">Student &amp; Cafe</a></li>
+        <li><a href="#simulator">Simulator</a></li>
+        <li><a href="#scroll-story">Defense Sequence</a></li>
+        <li><a href="#sensors">Architecture</a></li>
+        <li><a href="#scenarios">Scenarios</a></li>
         <li><a href="#screenshots">App Tour</a></li>
         <li><a href="#waitlist">Waitlist</a></li>
       </ul>
 
       <div class="nav-actions">
-        <a href="./companion.html" class="nav-companion-link">iPhone Companion PWA</a>
+        <a href="./companion.html" class="nav-companion-link">iPhone Companion</a>
         <a href="#waitlist" class="btn-primary-pill">Join Waitlist</a>
       </div>
     </nav>
   </div>
 
   <main id="main-content">
-    <!-- Hero + Interactive "Test Pupil Live" MacBook Notch & Companion Simulator -->
+    <!-- Hero + Interactive MacBook Notch & iPhone Companion Simulator -->
     <section id="simulator" class="hero-section">
       <div class="container">
         <header id="top" class="hero-header">
           <div class="hero-kicker">
-            <span class="hero-kicker-badge">100% Native Swift 6</span>
-            <span>Zero cloud • Zero accounts • Lives in your MacBook notch</span>
+            <span class="hero-kicker-badge">Swift 6 Native</span>
+            <span>Zero cloud · Notch hardware sentinel</span>
           </div>
 
           <h1 class="hero-title trim-display">Step away without packing up.</h1>
 
           <p class="hero-subtitle">
-            Pupil turns your MacBook’s physical notch, Apple Vision Neural Engine, and hardware power sensors
-            into a silent campus &amp; coffee-shop bodyguard. Stop shoulder surfers on-device and catch cable
-            unplugs or lid-slam thefts before anyone walks away with your laptop.
+            On-device gaze blur and hardware tripwires built into your MacBook notch.
           </p>
 
           <div class="hero-cta-row">
-            <a href="#waitlist" class="btn-primary-pill">Get Early Access &amp; Build Locally</a>
+            <a href="#waitlist" class="btn-primary-pill">Get Early Access</a>
             <a href="#screenshots" class="btn-secondary-pill">Inspect Real App UI</a>
           </div>
 
           <div class="hero-metrics-strip tabular" aria-label="Architecture telemetry">
-            <span class="hero-metric-item"><strong class="hero-metric-value">~18 MB</strong> RAM footprint</span>
-            <span class="hero-metric-item"><strong class="hero-metric-value">10 FPS</strong> Apple Vision ANE</span>
-            <span class="hero-metric-item"><strong class="hero-metric-value">0 Bytes</strong> camera frames saved</span>
-            <span class="hero-metric-item"><strong class="hero-metric-value">RFC 8291</strong> encrypted iPhone push</span>
+            <span class="hero-metric-item"><strong class="hero-metric-value">~18 MB</strong> RAM</span>
+            <span class="hero-metric-item"><strong class="hero-metric-value">10 FPS</strong> Vision ANE</span>
+            <span class="hero-metric-item"><strong class="hero-metric-value">0 Bytes</strong> saved to disk</span>
+            <span class="hero-metric-item"><strong class="hero-metric-value">RFC 8291</strong> encrypted push</span>
           </div>
         </header>
 
@@ -120,8 +119,8 @@
         <div class="glass-card simulator-shell" aria-label="Interactive Pupil security simulator">
           <div class="simulator-topbar">
             <div class="simulator-title-group">
-              <span class="simulator-badge">Test Pupil Live</span>
-              <h2 class="simulator-heading">Interactive MacBook Notch &amp; iPhone Push Simulator</h2>
+              <span class="simulator-badge">Interactive Demo</span>
+              <h2 class="simulator-heading">MacBook Notch &amp; iPhone Simulator</h2>
             </div>
 
             <button
@@ -130,35 +129,37 @@
               class="simulator-audio-btn"
               aria-pressed="false"
             >
-              <span aria-hidden="true">🔇</span>
+              <span id="sim-audio-icon" class="icon-wrap" aria-hidden="true">
+                <svg class="icon-svg" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+              </span>
               <span id="sim-audio-label">Audio Preview: Off</span>
             </button>
           </div>
 
           <div class="simulator-controls" role="toolbar" aria-label="Simulate Pupil security scenarios">
             <button type="button" id="btn-sim-arm" class="sim-pill is-active" data-scenario="arm" data-tone="green">
-              <span class="sim-pill-dot" aria-hidden="true"></span>
+              <svg class="icon-svg icon-svg-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
               <span>1. Arm System (⌃⌥⌘L)</span>
             </button>
             <button type="button" id="btn-sim-gaze" class="sim-pill" data-scenario="gaze" data-tone="amber">
-              <span class="sim-pill-dot" aria-hidden="true"></span>
+              <svg class="icon-svg icon-svg-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
               <span>2. Shoulder Surfer Gaze</span>
             </button>
             <button type="button" id="btn-sim-magsafe" class="sim-pill" data-scenario="magsafe" data-tone="amber">
-              <span class="sim-pill-dot" aria-hidden="true"></span>
+              <svg class="icon-svg icon-svg-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
               <span>3. Unplug MagSafe</span>
             </button>
             <button type="button" id="btn-sim-monitor" class="sim-pill" data-scenario="monitor" data-tone="amber">
-              <span class="sim-pill-dot" aria-hidden="true"></span>
-              <span>4. Unplug Library Monitor</span>
+              <svg class="icon-svg icon-svg-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              <span>4. Unplug Monitor</span>
             </button>
-            <button type="button" id="btn-sim-yubikey" class="sim-pill" data-scenario="yubikey" data-tone="green">
-              <span class="sim-pill-dot" aria-hidden="true"></span>
-              <span>5. Insert YubiKey / Touch ID</span>
+            <button type="button" id="btn-sim-touchid" class="sim-pill" data-scenario="touchid" data-tone="green">
+              <svg class="icon-svg icon-svg-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 11c0 3.5-1.5 6.5-4 8.5"/><path d="M16 11a4 4 0 0 0-8 0c0 2.5-.8 5-2.5 7"/><path d="M20 11a8 8 0 0 0-16 0c0 2-.5 4-1.5 5.5"/><path d="M12 11v6"/></svg>
+              <span>5. Touch ID / Proximity Disarm</span>
             </button>
             <button type="button" id="btn-sim-siren" class="sim-pill" data-scenario="siren" data-tone="red">
-              <span class="sim-pill-dot" aria-hidden="true"></span>
-              <span>6. Trigger Progressive Siren</span>
+              <svg class="icon-svg icon-svg-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="M20 12h2"/><path d="m19.07 4.93-1.41 1.41"/><path d="M2 12h2"/><path d="M7 18v-5a5 5 0 0 1 10 0v5"/><rect x="5" y="18" width="14" height="4" rx="1"/></svg>
+              <span>6. Progressive Siren</span>
             </button>
           </div>
 
@@ -166,6 +167,15 @@
             <!-- MacBook Pro 16" Hardware Stage -->
             <div id="sim-macbook" class="macbook-stage" data-sim-state="armed" data-blurred="false">
               <div class="macbook-screen">
+                <!-- Standard macOS Desktop Wallpaper -->
+                <img
+                  src="./assets/macos-wallpaper.jpg"
+                  alt="Standard macOS desktop wallpaper"
+                  class="mac-wallpaper-img"
+                  width="1280"
+                  height="800"
+                >
+
                 <!-- Physical Notch + Dynamic Pupil Wings -->
                 <div class="sim-notch-anchor">
                   <div id="sim-notch" class="sim-notch" data-expanded="true" data-tone="green">
@@ -183,44 +193,38 @@
                 <!-- macOS Menu Bar -->
                 <div class="mac-menubar" aria-hidden="true">
                   <div class="mac-menubar-left">
-                    <span class="mac-menubar-brand"></span>
-                    <span class="mac-menubar-app">Xcode</span>
+                    <span class="mac-menubar-brand">
+                      <svg class="icon-svg icon-svg-sm" viewBox="0 0 24 24"><path d="M12 3L4 7v6c0 5.5 3.4 9.7 8 11 4.6-1.3 8-5.5 8-11V7l-8-4z"/></svg>
+                    </span>
+                    <span class="mac-menubar-app">Finder</span>
+                    <span class="mac-menubar-menu">File</span>
+                    <span class="mac-menubar-menu">Edit</span>
+                    <span class="mac-menubar-menu">View</span>
                   </div>
                   <div class="mac-menubar-right tabular">
                     <span class="mac-menubar-power-wrap" id="sim-menubar-power">MagSafe AC</span>
-                    <span id="sim-menubar-clock">14:22</span>
+                    <span id="sim-menubar-clock">9:41 AM</span>
                   </div>
                 </div>
 
-                <!-- Simulated Student / Developer Workspace -->
-                <div class="mac-workspace">
-                  <div class="mac-app-window">
-                    <div class="mac-win-chrome">
-                      <div class="traffic-lights" aria-hidden="true">
-                        <span class="tl-red"></span>
-                        <span class="tl-amber"></span>
-                        <span class="tl-green"></span>
-                      </div>
-                      <span class="mac-win-title">SecurityCoordinator.swift</span>
+                <!-- Clean macOS Desktop Canvas & Dock -->
+                <div class="mac-desktop-space" aria-hidden="true">
+                  <div class="mac-dock">
+                    <div class="mac-dock-item" title="Finder">
+                      <svg class="icon-svg" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 10v1"/><path d="M15 10v1"/><path d="M8.5 15c1 .8 2.2 1.2 3.5 1.2s2.5-.4 3.5-1.2"/></svg>
                     </div>
-                    <pre class="mac-code-body"><code><span class="code-cm">// On-device gaze + hardware sentry</span>
-<span class="code-kw">func</span> <span class="code-fn">evaluateGaze</span>(score: Double) {
-  <span class="code-kw">guard</span> score >= cone.threshold <span class="code-kw">else</span> { <span class="code-kw">return</span> }
-  screenShield.<span class="code-fn">activatePrivacyBlur</span>()
-  notch.<span class="code-fn">expandWings</span>(state: .gazeWarning)
-}</code></pre>
-                  </div>
-
-                  <div class="mac-notes-card">
-                    <h3 class="mac-notes-title">CS 4410 · Midterm Study Notes</h3>
-                    <p class="mac-notes-body">
-                      Dining hall table #4. MagSafe brick connected. Leaving seat for 3 minutes—Pupil guards
-                      power, external USB-C display, and lid clamshell state.
-                    </p>
-                    <div class="mac-notes-tags tabular">
-                      <span class="mac-tag" id="sim-badge-wifi">Wi-Fi: Cafe_Guest</span>
-                      <span class="mac-tag" id="sim-badge-flap">Flap Guard: Ready</span>
-                      <span class="mac-tag" id="sim-badge-sleep">Sleep Hold: Standby</span>
+                    <div class="mac-dock-item" title="Safari">
+                      <svg class="icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polygon points="15 9 13 13 9 15 11 11 15 9"/></svg>
+                    </div>
+                    <div class="mac-dock-item" title="Notes">
+                      <svg class="icon-svg" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    </div>
+                    <div class="mac-dock-item" title="Terminal">
+                      <svg class="icon-svg" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                    </div>
+                    <div class="mac-dock-divider"></div>
+                    <div class="mac-dock-item mac-dock-pupil" title="Pupil">
+                      <img src="./assets/pupil-icon.png" alt="" width="24" height="24">
                     </div>
                   </div>
                 </div>
@@ -228,10 +232,12 @@
                 <!-- Frosted Screen Shield / Gaze Privacy Blur Overlay -->
                 <div id="sim-shield-overlay" class="sim-shield-overlay" aria-live="polite">
                   <div class="sim-shield-modal">
-                    <div class="sim-shield-icon-box" id="sim-shield-icon">👁️</div>
+                    <div class="sim-shield-icon-box" id="sim-shield-icon" aria-hidden="true">
+                      <svg class="icon-svg icon-svg-lg" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </div>
                     <h3 class="sim-shield-title" id="sim-shield-title">Privacy Shield Active</h3>
                     <p class="sim-shield-detail" id="sim-shield-detail">
-                      Unauthorized gaze detected in peripheral camera ROI.
+                      Peripheral gaze detected. Auto-clears on look-away.
                     </p>
 
                     <div id="sim-siren-meter" class="sim-siren-meter" hidden>
@@ -245,78 +251,81 @@
                     </div>
 
                     <div id="sim-env-pills" class="sim-env-pills" hidden>
-                      <button type="button" class="sim-env-pill" data-env="library" data-cap="45">Quiet Library · 45%</button>
+                      <button type="button" class="sim-env-pill" data-env="library" data-cap="45">Library · 45%</button>
                       <button type="button" class="sim-env-pill is-active" data-env="cafe" data-cap="80">Cafe · 80%</button>
-                      <button type="button" class="sim-env-pill" data-env="park" data-cap="100">Busy Park · 100%</button>
+                      <button type="button" class="sim-env-pill" data-env="park" data-cap="100">Park · 100%</button>
                     </div>
 
                     <div class="sim-shield-actions">
                       <button type="button" id="btn-sim-modal-unlock" class="sim-unlock-btn">
-                        Unlock via Touch ID / YubiKey
+                        Unlock via Touch ID / PIN
                       </button>
                     </div>
                   </div>
                 </div>
 
-                <!-- Live Telemetry Readouts -->
+                <!-- Compact Telemetry Strip -->
                 <div class="mac-telemetry-bar tabular">
                   <div class="telemetry-cell">
                     <span class="telemetry-label">State</span>
                     <span class="telemetry-value" id="tel-state">ARMED</span>
                   </div>
                   <div class="telemetry-cell">
-                    <span class="telemetry-label">Vision ANE</span>
-                    <span class="telemetry-value" id="tel-vision">10.0 FPS · 0B disk</span>
+                    <span class="telemetry-label">Vision</span>
+                    <span class="telemetry-value" id="tel-vision">10.0 FPS</span>
                   </div>
                   <div class="telemetry-cell">
-                    <span class="telemetry-label">Trigger / Auth</span>
-                    <span class="telemetry-value" id="tel-trigger">Monitoring 4 sensors</span>
+                    <span class="telemetry-label">Sensors</span>
+                    <span class="telemetry-value" id="tel-trigger">4 active</span>
                   </div>
                   <div class="telemetry-cell">
-                    <span class="telemetry-label">Siren Output</span>
-                    <span class="telemetry-value" id="tel-siren">0% (Cafe 80% cap)</span>
+                    <span class="telemetry-label">Siren</span>
+                    <span class="telemetry-value" id="tel-siren">0% (Cafe 80%)</span>
                   </div>
                 </div>
               </div>
             </div>
 
-            <!-- Paired iPhone 16 Pro Web Push Companion Card -->
+            <!-- Paired iPhone Web Push Companion Card -->
             <aside id="sim-iphone" class="iphone-stage" aria-label="Paired iPhone Web Push companion simulation">
               <div class="iphone-island-row tabular">
                 <span>9:41</span>
                 <div class="iphone-dynamic-island" aria-hidden="true"></div>
-                <span>5G · 🔒</span>
+                <span class="iphone-status-icons">
+                  <span>5G</span>
+                  <svg class="icon-svg icon-svg-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+                </span>
               </div>
 
               <div id="sim-iphone-banner" class="iphone-push-banner" data-severity="safe">
                 <div class="iphone-push-header">
-                  <span>PUPIL COMPANION · APNs</span>
+                  <span>PUPIL · APNs</span>
                   <span class="tabular" id="sim-iphone-time">now</span>
                 </div>
                 <h3 class="iphone-push-title" id="sim-iphone-title">Armed Sentinel Active</h3>
                 <p class="iphone-push-body" id="sim-iphone-body">
-                  MacBook Pro is guarded. Lock-screen alerts will wake this iPhone over Wi-Fi or 5G.
+                  Instant APNs alerts over Wi-Fi or 5G.
                 </p>
               </div>
 
               <div class="iphone-snapshot-box">
                 <div id="sim-iphone-snapshot-empty" class="iphone-snapshot-placeholder">
-                  Tap <strong>Ping Camera Snapshot</strong> to verify a tamper alert before disarming.
+                  Tap <strong>Ping Snapshot</strong> to verify before disarming.
                 </div>
                 <div id="sim-iphone-snapshot-preview" class="iphone-snapshot-preview" hidden>
                   <div class="iphone-snapshot-frame tabular">
                     <div>
-                      <strong>LIVE VERIFICATION FRAME</strong><br>
-                      <span>ROI: Empty seat · No intruder</span>
+                      <strong>VERIFICATION FRAME</strong><br>
+                      <span>ROI: Empty seat</span>
                     </div>
-                    <span>[JPEG 14 KB]</span>
+                    <span>14 KB</span>
                   </div>
                 </div>
               </div>
 
               <div class="iphone-actions">
                 <button type="button" id="btn-iphone-snapshot" class="iphone-btn">
-                  Ping Camera Snapshot
+                  Ping Snapshot
                 </button>
                 <button type="button" id="btn-iphone-disarm" class="iphone-btn iphone-btn-danger">
                   Remote Disarm
@@ -324,7 +333,7 @@
               </div>
 
               <div class="iphone-crypto-foot tabular">
-                RFC 8291 ECDH P-256 + AES-128-GCM · HMAC-SHA256 Disarm
+                RFC 8291 · HMAC-SHA256 Disarm
               </div>
             </aside>
           </div>
@@ -332,109 +341,237 @@
           <div class="sim-journal-strip" aria-live="polite">
             <div class="sim-journal-latest">
               <span class="sim-journal-tag tabular" id="sim-journal-code">SystemArmed</span>
-              <span id="sim-journal-text">Monitoring active. MagSafe AC, External Display, Clamshell Lid, and Vision Gaze armed.</span>
+              <span id="sim-journal-text">MagSafe, Display, Lid, and Gaze armed.</span>
             </div>
-            <span class="mac-menubar-muted tabular">AES-GCM Ring Buffer (200 events max)</span>
+            <span class="mac-menubar-muted tabular">AES-GCM Journal</span>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Sensors & AI Bento Grid -->
+    <!-- Sticky Scrollytelling Section (#scroll-story) -->
+    <section id="scroll-story" class="scroll-story-section section-alt" aria-label="Pupil four-stage defense sequence">
+      <div class="container">
+        <header class="section-header reveal-on-scroll">
+          <span class="section-eyebrow">Defense Sequence</span>
+          <h2 class="section-title trim-display">Four layers of hardware deterrence.</h2>
+          <p class="section-subtitle">
+            Scroll to step through Pupil's automated response pipeline.
+          </p>
+        </header>
+      </div>
+
+      <div class="scroll-story-track" id="scroll-story-track">
+        <div class="scroll-story-sticky">
+          <div class="container">
+            <div class="story-stage-frame">
+              <!-- Left Column: Scrubbed Chapter Rail -->
+              <div class="story-chapters-col">
+                <div class="story-rail" aria-hidden="true">
+                  <div class="story-rail-fill" id="story-rail-fill"></div>
+                </div>
+
+                <div class="story-chapters-list">
+                  <button type="button" class="story-chapter is-active" data-chapter="0" aria-pressed="true">
+                    <span class="story-chapter-code tabular">01 / GAZE SHIELD</span>
+                    <strong class="story-chapter-title">Peripheral Gaze Blur</strong>
+                    <span class="story-chapter-phrase">10 FPS Vision ANE blurs your screen on 2s dwell.</span>
+                  </button>
+
+                  <button type="button" class="story-chapter" data-chapter="1" aria-pressed="false">
+                    <span class="story-chapter-code tabular">02 / HARDWARE TRIPWIRE</span>
+                    <strong class="story-chapter-title">Cable &amp; Monitor Lock</strong>
+                    <span class="story-chapter-phrase">150ms power and display polling catches unplugs instantly.</span>
+                  </button>
+
+                  <button type="button" class="story-chapter" data-chapter="2" aria-pressed="false">
+                    <span class="story-chapter-code tabular">03 / OWNER DISARM</span>
+                    <strong class="story-chapter-title">Touch ID &amp; Proximity Disarm</strong>
+                    <span class="story-chapter-phrase">Unlock instantly via Touch ID, PIN, or iPhone proximity.</span>
+                  </button>
+
+                  <button type="button" class="story-chapter" data-chapter="3" aria-pressed="false">
+                    <span class="story-chapter-code tabular">04 / LIBRARY SIREN</span>
+                    <strong class="story-chapter-title">30% → 100% Escalation</strong>
+                    <span class="story-chapter-phrase">Forces built-in speakers over a smooth 8-second ramp.</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Right Column: Scrubbed Precision Hardware Schematic HUD -->
+              <div class="story-visual-col">
+                <div class="story-hud-stage" id="story-hud-stage" data-active-chapter="0">
+                  <div class="story-hud-topbar tabular">
+                    <div class="story-hud-status">
+                      <span class="story-hud-dot" aria-hidden="true"></span>
+                      <span id="story-active-module">VisionGazeDetector</span>
+                    </div>
+                    <div class="story-hud-progress">
+                      <span>SEQUENCE</span>
+                      <strong id="story-progress-pct">0%</strong>
+                      <span class="story-state-badge" id="story-state-badge">OPTICAL LOCK</span>
+                    </div>
+                  </div>
+
+                  <div class="story-schematic-wrap">
+                    <svg class="story-schematic-svg" viewBox="0 0 520 320" aria-hidden="true">
+                      <!-- Architectural Grid -->
+                      <g class="svg-grid-lines">
+                        <line x1="0" y1="80" x2="520" y2="80"/>
+                        <line x1="0" y1="160" x2="520" y2="160"/>
+                        <line x1="0" y1="240" x2="520" y2="240"/>
+                        <line x1="130" y1="0" x2="130" y2="320"/>
+                        <line x1="260" y1="0" x2="260" y2="320"/>
+                        <line x1="390" y1="0" x2="390" y2="320"/>
+                      </g>
+
+                      <!-- MacBook Chassis & Display Wireframe -->
+                      <g class="svg-mac-chassis">
+                        <rect x="96" y="42" width="328" height="206" rx="8"/>
+                        <rect x="106" y="52" width="308" height="186" rx="4"/>
+                        <!-- Physical Notch -->
+                        <path d="M224 52h72v12a4 4 0 0 1-4 4h-64a4 4 0 0 1-4-4V52z" class="svg-notch-fill"/>
+                        <circle cx="260" cy="60" r="2.5" class="svg-camera-dot"/>
+                        <!-- MacBook Lower Deck -->
+                        <rect x="74" y="252" width="372" height="14" rx="4"/>
+                        <rect x="226" y="252" width="68" height="5" rx="2"/>
+                      </g>
+
+                      <!-- Layer 0: Gaze Cone & Peripheral Reticle -->
+                      <g class="svg-layer svg-layer-gaze">
+                        <path class="svg-draw-path" d="M260 66 L144 196"/>
+                        <path class="svg-draw-path" d="M260 66 L376 196"/>
+                        <path class="svg-draw-path" d="M260 66 L260 212"/>
+                        <path class="svg-draw-arc" d="M164 174 A118 118 0 0 0 356 174"/>
+                        <path class="svg-draw-arc" d="M196 138 A76 76 0 0 0 324 138"/>
+                        <circle cx="260" cy="148" r="24" class="svg-reticle-ring"/>
+                        <circle cx="338" cy="126" r="10" class="svg-target-node"/>
+                      </g>
+
+                      <!-- Layer 1: MagSafe & Display Tripwire Pulses -->
+                      <g class="svg-layer svg-layer-tripwire">
+                        <path class="svg-draw-path" d="M26 200 L74 200"/>
+                        <rect x="52" y="191" width="22" height="18" rx="3" class="svg-connector-box"/>
+                        <path class="svg-draw-path" d="M446 150 L494 150"/>
+                        <rect x="446" y="138" width="18" height="24" rx="3" class="svg-connector-box"/>
+                        <rect x="476" y="114" width="34" height="72" rx="4" class="svg-ext-display"/>
+                        <path class="svg-draw-path" d="M106 200 L210 200 L210 148"/>
+                        <path class="svg-draw-path" d="M414 150 L310 150 L310 200"/>
+                      </g>
+
+                      <!-- Layer 2: Touch ID & iPhone Proximity Handshake -->
+                      <g class="svg-layer svg-layer-auth">
+                        <!-- Touch ID Sensor Ring -->
+                        <circle cx="170" cy="145" r="22" class="svg-auth-ring"/>
+                        <path class="svg-draw-path" d="M162 145a8 8 0 0 1 16 0"/>
+                        <path class="svg-draw-path" d="M166 145a4 4 0 0 1 8 0"/>
+                        <!-- Signal Link to Paired iPhone -->
+                        <path class="svg-draw-path" d="M192 145 L434 145"/>
+                        <circle cx="260" cy="145" r="28" class="svg-auth-ring"/>
+                        <!-- Paired iPhone Silhouette -->
+                        <rect x="434" y="96" width="58" height="110" rx="8" class="svg-phone-body"/>
+                        <rect x="451" y="103" width="24" height="5" rx="2" class="svg-camera-dot"/>
+                      </g>
+
+                      <!-- Layer 3: Acoustic Siren Waves & Escalation Bars -->
+                      <g class="svg-layer svg-layer-siren">
+                        <circle cx="260" cy="148" r="28" class="svg-siren-ring svg-siren-ring-1"/>
+                        <circle cx="260" cy="148" r="54" class="svg-siren-ring svg-siren-ring-2"/>
+                        <circle cx="260" cy="148" r="82" class="svg-siren-ring svg-siren-ring-3"/>
+                        <rect x="196" y="198" width="10" height="18" rx="2" class="svg-eq-bar"/>
+                        <rect x="212" y="192" width="10" height="24" rx="2" class="svg-eq-bar"/>
+                        <rect x="228" y="186" width="10" height="30" rx="2" class="svg-eq-bar"/>
+                        <rect x="244" y="180" width="10" height="36" rx="2" class="svg-eq-bar"/>
+                        <rect x="260" y="174" width="10" height="42" rx="2" class="svg-eq-bar"/>
+                        <rect x="276" y="168" width="10" height="48" rx="2" class="svg-eq-bar"/>
+                        <rect x="292" y="162" width="10" height="54" rx="2" class="svg-eq-bar"/>
+                        <rect x="308" y="156" width="10" height="60" rx="2" class="svg-eq-bar"/>
+                      </g>
+                    </svg>
+                  </div>
+
+                  <div class="story-hud-metrics tabular">
+                    <div class="story-metric-cell">
+                      <span class="story-metric-label">Pipeline</span>
+                      <span class="story-metric-val" id="story-metric-1">10.0 FPS ANE</span>
+                    </div>
+                    <div class="story-metric-cell">
+                      <span class="story-metric-label">Threshold</span>
+                      <span class="story-metric-val" id="story-metric-2">2.0s Dwell</span>
+                    </div>
+                    <div class="story-metric-cell">
+                      <span class="story-metric-label">Response</span>
+                      <span class="story-metric-val" id="story-metric-3">Instant Blur</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Sensors & AI Bento Grid (Minimalist, Visual-First) -->
     <section id="sensors" class="section">
       <div class="container">
         <header class="section-header reveal-on-scroll">
-          <span class="section-eyebrow">Engineering &amp; Sensors</span>
-          <h2 class="section-title trim-display">Built on Apple frameworks. Zero Electron bloat.</h2>
+          <span class="section-eyebrow">Native Architecture</span>
+          <h2 class="section-title trim-display">Built on Apple silicon.</h2>
           <p class="section-subtitle">
-            Every sensor in Pupil runs directly against IOKit, CoreAudio, Apple Vision, LocalAuthentication,
-            and CryptoKit—keeping memory near 18 MB while blocking hardware workarounds.
+            Direct IOKit, Vision, CoreAudio, and CryptoKit pipelines.
           </p>
         </header>
 
         <div class="bento-grid">
-          <article class="glass-card bento-card bento-span-7 reveal-on-scroll">
+          <article class="glass-card bento-card bento-span-7 scroll-card reveal-on-scroll">
             <div>
               <div class="bento-chip-row">
-                <span class="bento-chip">VisionGazeDetector + ScreenShieldView</span>
-                <span class="bento-stat tabular">10 FPS · ≤350ms blink filter</span>
+                <span class="bento-chip">Vision ANE</span>
+                <span class="bento-stat tabular">10 FPS · 0B disk</span>
               </div>
-              <h3 class="bento-title">On-Device Shoulder-Surfer Gaze Blur</h3>
+              <h3 class="bento-title">On-Device Gaze Blur</h3>
               <p class="bento-copy">
-                Apple Vision inspects eye and pupil yaw/pitch vectors in memory—never writing a single frame to
-                disk. Choose from four detection cones (<strong>Relaxed 0.75</strong> to <strong>Ultra 0.40</strong>
-                with a 90% peripheral ROI) and configurable dwell (<code>0.5s–3.0s</code>). Walk-bys and natural blinks are
-                filtered out; sustained peeking instantly blurs your workspace.
-              </p>
-            </div>
-            <div class="bento-spec-list tabular">
-              <div class="bento-spec-pill">
-                <span class="bento-spec-label">Adaptive Governor</span>
-                <span class="bento-spec-val">10 → 5 → 2 FPS on &lt;30% battery</span>
-              </div>
-              <div class="bento-spec-pill">
-                <span class="bento-spec-label">Walk-By Rejection</span>
-                <span class="bento-spec-val">&gt; 0.18 L2 delta suppressed</span>
-              </div>
-              <div class="bento-spec-pill">
-                <span class="bento-spec-label">Privacy Guarantee</span>
-                <span class="bento-spec-val">0 Bytes stored to disk</span>
-              </div>
-            </div>
-          </article>
-
-          <article class="glass-card bento-card bento-span-5 reveal-on-scroll">
-            <div>
-              <div class="bento-chip-row">
-                <span class="bento-chip">PowerAndLidMonitor</span>
-                <span class="bento-stat tabular">150ms IOKit polling</span>
-              </div>
-              <h3 class="bento-title">Anti-Flap Power &amp; Display Tripwires</h3>
-              <p class="bento-copy">
-                Monitors <code>IOPSCopyPowerSourcesInfo</code> every 150ms. <strong>ChargerFlapDetector</strong>
-                locks out power-restore cancellation if a thief jiggles your cable (≥3 transitions in 6s). Also
-                latches external <code>CGDirectDisplayID</code>s and blocks sleep via <code>IOPMAssertion</code> on
-                clamshell slam.
-              </p>
-            </div>
-            <div class="bento-spec-list tabular">
-              <div class="bento-spec-pill">
-                <span class="bento-spec-label">External Monitor</span>
-                <span class="bento-spec-val">DisplayTopologyEvaluator</span>
-              </div>
-              <div class="bento-spec-pill">
-                <span class="bento-spec-label">Lid Slam</span>
-                <span class="bento-spec-val">Immediate Siren + Sleep Hold</span>
-              </div>
-            </div>
-          </article>
-
-          <article class="glass-card bento-card bento-span-6 reveal-on-scroll">
-            <div>
-              <div class="bento-chip-row">
-                <span class="bento-chip">USBKeyDisarmEvaluator + PinAttemptLimiter</span>
-                <span class="bento-stat tabular">VID:PID + Serial Pinned</span>
-              </div>
-              <h3 class="bento-title">YubiKey, Touch ID &amp; Brute-Force Lockout</h3>
-              <p class="bento-copy">
-                Disarm in under a second with Touch ID, Bluetooth Proximity return, or inserting your enrolled
-                YubiKey / Titan / Nitrokey USB token. Wrong PIN attempts trigger exponential lockout (15s at 5,
-                60s at 8, 300s + immediate siren escalation at 10).
+                Blurs your workspace in memory when someone peeks.
               </p>
             </div>
           </article>
 
-          <article class="glass-card bento-card bento-span-6 reveal-on-scroll">
+          <article class="glass-card bento-card bento-span-5 scroll-card reveal-on-scroll">
             <div>
               <div class="bento-chip-row">
-                <span class="bento-chip">TrustedNetworkEvaluator + SirenEscalation</span>
-                <span class="bento-stat tabular">30% → 100% over 8.0s</span>
+                <span class="bento-chip">IOKit Sentry</span>
+                <span class="bento-stat tabular">150ms polling</span>
               </div>
-              <h3 class="bento-title">Trusted Wi-Fi Sentinel &amp; Library-Safe Siren</h3>
+              <h3 class="bento-title">Cable &amp; Lid Tripwires</h3>
               <p class="bento-copy">
-                SHA-256 fingerprints your dorm/home SSID and router gateway L2 MAC (with Evil Twin protection) to
-                auto-arm and switch gaze sensitivity to <code>Strict</code> on public Wi-Fi. Progressive 880/660 Hz
-                siren starts at 30% of your Quiet Library (45%) or Cafe (80%) cap and forces built-in speakers.
+                Catches MagSafe unplugs, display disconnects, and lid slams.
+              </p>
+            </div>
+          </article>
+
+          <article class="glass-card bento-card bento-span-6 scroll-card reveal-on-scroll">
+            <div>
+              <div class="bento-chip-row">
+                <span class="bento-chip">LocalAuth &amp; BLE</span>
+                <span class="bento-stat tabular">&lt; 0.5s unlock</span>
+              </div>
+              <h3 class="bento-title">Touch ID, PIN &amp; Proximity</h3>
+              <p class="bento-copy">
+                Unlock via Touch ID, PIN backoff, or iPhone return.
+              </p>
+            </div>
+          </article>
+
+          <article class="glass-card bento-card bento-span-6 scroll-card reveal-on-scroll">
+            <div>
+              <div class="bento-chip-row">
+                <span class="bento-chip">CoreAudio + Wi-Fi</span>
+                <span class="bento-stat tabular">30% → 100% / 8s</span>
+              </div>
+              <h3 class="bento-title">Trusted Wi-Fi &amp; Library Siren</h3>
+              <p class="bento-copy">
+                Auto-arms off home Wi-Fi with library-safe volume ramps.
               </p>
             </div>
           </article>
@@ -442,71 +579,58 @@
       </div>
     </section>
 
-    <!-- Target Audience Storytelling: College Students & Solo Workers -->
-    <section id="scenarios" class="section">
+    <!-- Target Audience Scenarios: Libraries, Cafes, Wi-Fi Boundaries -->
+    <section id="scenarios" class="section section-alt">
       <div class="container">
         <header class="section-header reveal-on-scroll">
-          <span class="section-eyebrow">Built for Campus &amp; Cafe Life</span>
-          <h2 class="section-title trim-display">Protection that fits how you actually study and work.</h2>
+          <span class="section-eyebrow">Field Deployment</span>
+          <h2 class="section-title trim-display">Built for libraries, cafes, and flights.</h2>
           <p class="section-subtitle">
-            Designed around the three moments when laptops are most vulnerable—and least convenient to pack up.
+            Instant protection whenever you step away.
           </p>
         </header>
 
         <div class="scenarios-grid">
-          <article class="glass-card scenario-card reveal-on-scroll">
+          <article class="glass-card scenario-card scroll-card reveal-on-scroll">
             <div>
-              <div class="scenario-icon-badge" aria-hidden="true">📚</div>
-              <div class="scenario-audience" style="margin-top: 14px;">College Libraries &amp; Dining Halls</div>
-              <h3 class="scenario-title">The Library Restroom Run</h3>
-              <p class="scenario-problem">
-                Packing a 16" MacBook Pro, iPad, MagSafe brick, and monitor cable just for a 3-minute coffee
-                refill or restroom trip loses your desk and breaks your study flow.
-              </p>
+              <div class="scenario-icon-badge" aria-hidden="true">
+                <svg class="icon-svg icon-svg-lg" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+              </div>
+              <div class="scenario-audience">Campus Libraries</div>
+              <h3 class="scenario-title">The 3-Minute Restroom Run</h3>
               <p class="scenario-solution">
-                Tap <strong>⌃⌥⌘L</strong> or walk away with your paired iPhone via Bluetooth Proximity. Pupil
-                guards MagSafe, external USB-C monitors, lid close, and keyboard/mouse input—waking your locked
-                iPhone via RFC 8291 push if anyone touches your seat.
+                Lock with ⌃⌥⌘L. Unplugs or lid slams wake your iPhone.
               </p>
             </div>
-            <div class="scenario-footer-pill">Sensors: Power Unplug + Display Hot-Unplug + Remote Snapshot</div>
+            <div class="scenario-footer-pill tabular">Power + Display + APNs Push</div>
           </article>
 
-          <article class="glass-card scenario-card reveal-on-scroll">
+          <article class="glass-card scenario-card scroll-card reveal-on-scroll">
             <div>
-              <div class="scenario-icon-badge" aria-hidden="true">☕</div>
-              <div class="scenario-audience" style="margin-top: 14px;">Coffee Shops &amp; Flights</div>
-              <h3 class="scenario-title">The Crowded Coffee Shop Table</h3>
-              <p class="scenario-problem">
-                Communal cafe tables and tight lecture rows put strangers right behind your shoulder while you
-                work on private code, exams, or banking.
-              </p>
+              <div class="scenario-icon-badge" aria-hidden="true">
+                <svg class="icon-svg icon-svg-lg" viewBox="0 0 24 24"><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v7a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/></svg>
+              </div>
+              <div class="scenario-audience">Coffee Shops &amp; Flights</div>
+              <h3 class="scenario-title">The Crowded Communal Table</h3>
               <p class="scenario-solution">
-                <strong>On-Device Apple Vision Gaze Detection</strong> (<code>Ultra</code> 90% peripheral cone)
-                catches sustained peeking in 0.5–2.0s and drops an instant frosted privacy blur—clearing
-                automatically the moment they look away.
+                Peripheral gaze tracking blurs private code in 0.5 seconds.
               </p>
             </div>
-            <div class="scenario-footer-pill">Privacy: 100% RAM-only Vision inference · 0 frames saved</div>
+            <div class="scenario-footer-pill tabular">Ultra 90% ROI · 0B Saved</div>
           </article>
 
-          <article class="glass-card scenario-card reveal-on-scroll">
+          <article class="glass-card scenario-card scroll-card reveal-on-scroll">
             <div>
-              <div class="scenario-icon-badge" aria-hidden="true">📶</div>
-              <div class="scenario-audience" style="margin-top: 14px;">Zero-Config Context Awareness</div>
-              <h3 class="scenario-title">The Dorm-to-Cafe Wi-Fi Boundary</h3>
-              <p class="scenario-problem">
-                Forgetting to arm in public—or fearing a cable bump will blast a full-volume siren across a
-                silent reading floor.
-              </p>
+              <div class="scenario-icon-badge" aria-hidden="true">
+                <svg class="icon-svg icon-svg-lg" viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1"/></svg>
+              </div>
+              <div class="scenario-audience">Zero-Config Context</div>
+              <h3 class="scenario-title">Dorm-to-Cafe Wi-Fi Boundary</h3>
               <p class="scenario-solution">
-                <strong>Trusted Wi-Fi Boundary</strong> automatically arms Pupil and raises gaze sensitivity to
-                <code>Strict</code> when you leave home/dorm Wi-Fi. And <strong>Quiet Library (45%) +
-                8s Progressive Escalation</strong> starts alarms at 30% so you can disarm cleanly via Touch ID or
-                YubiKey.
+                Auto-arms on public Wi-Fi with a 30% siren start.
               </p>
             </div>
-            <div class="scenario-footer-pill">Safety: SHA-256 Gateway MAC + 30%→100% Ramp</div>
+            <div class="scenario-footer-pill tabular">Gateway MAC Pin + 8s Ramp</div>
           </article>
         </div>
       </div>
@@ -516,25 +640,24 @@
     <section id="screenshots" class="section">
       <div class="container">
         <header class="section-header reveal-on-scroll">
-          <span class="section-eyebrow">Native SwiftUI &amp; AppKit Tour</span>
-          <h2 class="section-title trim-display">Every control, photographed live from Pupil.</h2>
+          <span class="section-eyebrow">Native SwiftUI Tour</span>
+          <h2 class="section-title trim-display">Every control, photographed from macOS.</h2>
           <p class="section-subtitle">
-            Switch tabs and click any numbered hotspot pin inside the macOS window to inspect how each setting
-            works under the hood.
+            Select any tab or numbered pin to inspect.
           </p>
         </header>
 
         <div class="showcase-tabs" role="tablist" aria-label="Pupil app screenshots">
           <button type="button" role="tab" aria-selected="true" class="showcase-tab is-active" data-tab="general">General</button>
           <button type="button" role="tab" aria-selected="false" class="showcase-tab" data-tab="gaze">Gaze &amp; AI</button>
-          <button type="button" role="tab" aria-selected="false" class="showcase-tab" data-tab="sensors">Sensors &amp; Keys</button>
+          <button type="button" role="tab" aria-selected="false" class="showcase-tab" data-tab="sensors">Sensors &amp; Proximity</button>
           <button type="button" role="tab" aria-selected="false" class="showcase-tab" data-tab="alarm">Alarm &amp; Log</button>
           <button type="button" role="tab" aria-selected="false" class="showcase-tab" data-tab="menubar">Menu Bar</button>
           <button type="button" role="tab" aria-selected="false" class="showcase-tab" data-tab="shield">Screen Shield</button>
         </div>
 
         <div class="showcase-grid">
-          <div class="glass-card showcase-frame">
+          <div class="glass-card showcase-frame scroll-card">
             <div class="showcase-viewport" id="showcase-viewport">
               <div class="showcase-image-stage" id="showcase-image-stage" data-wide="false">
                 <img
@@ -553,13 +676,12 @@
             </div>
           </div>
 
-          <aside class="glass-card inspector-card" aria-live="polite">
+          <aside class="glass-card inspector-card scroll-card" aria-live="polite">
             <div>
               <span class="inspector-meta" id="inspector-meta">GeneralSettingsPage.swift · Hotspot 1 of 3</span>
-              <h3 class="inspector-title" id="inspector-title">Idle Inactivity Auto-Arm (5–30 min)</h3>
+              <h3 class="inspector-title" id="inspector-title">Idle Auto-Arm (5–30m)</h3>
               <p class="inspector-desc" id="inspector-desc">
-                Polls CGEventSource HID idle duration with streak suppression and closed-lid sleep immunity—so
-                Pupil never false-arms overnight or during Power Nap.
+                Arms after HID inactivity; ignores closed-lid sleep.
               </p>
             </div>
 
@@ -572,20 +694,19 @@
     </section>
 
     <!-- Waitlist & 30-Second Local Build Section -->
-    <section id="waitlist" class="section">
+    <section id="waitlist" class="section section-alt">
       <div class="container">
         <header class="section-header reveal-on-scroll">
-          <span class="section-eyebrow">Early Access &amp; Source Build</span>
-          <h2 class="section-title trim-display">Join the beta waitlist—or build Pupil in 30 seconds.</h2>
+          <span class="section-eyebrow">Early Access &amp; Source</span>
+          <h2 class="section-title trim-display">Get beta builds or compile locally.</h2>
           <p class="section-subtitle">
-            Reserve your spot for signed notarized macOS builds, or clone the open-source Swift repository and run
-            Pupil on your MacBook today.
+            Signed macOS releases or zero-dependency Swift build.
           </p>
         </header>
 
         <div class="waitlist-grid">
           <!-- Accessible Waitlist Form -->
-          <div class="glass-card waitlist-card">
+          <div class="glass-card waitlist-card scroll-card">
             <form id="waitlist-form" class="waitlist-form" novalidate>
               <div class="form-field">
                 <label for="waitlist-email" class="form-label">University or work email</label>
@@ -604,7 +725,7 @@
                   required
                 >
                 <p id="waitlist-hint" class="form-hint">
-                  Used only for Pupil beta release notes &amp; signed <code>.dmg</code> notifications. Zero spam.
+                  Signed <code>.dmg</code> updates only. Zero spam.
                 </p>
                 <p id="waitlist-error" class="form-error" hidden></p>
               </div>
@@ -614,20 +735,23 @@
                 <div class="persona-pills">
                   <label class="persona-pill">
                     <input type="radio" name="persona" value="College student" checked>
-                    <span>🎓 College student (Library / Dining hall)</span>
+                    <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg>
+                    <span>College student (Library / Dining hall)</span>
                   </label>
                   <label class="persona-pill">
                     <input type="radio" name="persona" value="Cafe / remote worker">
-                    <span>☕ Cafe / remote worker</span>
+                    <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v7a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V8z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/></svg>
+                    <span>Cafe / remote worker</span>
                   </label>
                   <label class="persona-pill">
                     <input type="radio" name="persona" value="Developer / security enthusiast">
-                    <span>🔐 Developer / security enthusiast</span>
+                    <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                    <span>Developer / security enthusiast</span>
                   </label>
                 </div>
               </fieldset>
 
-              <button type="submit" id="waitlist-submit-btn" class="btn-primary-pill" style="padding: 12px 20px; font-size: 14.5px;">
+              <button type="submit" id="waitlist-submit-btn" class="btn-primary-pill btn-submit-lg">
                 Request Early Access Pass
               </button>
 
@@ -638,7 +762,7 @@
             <div id="waitlist-pass-card" class="early-access-pass" hidden>
               <div class="pass-header">
                 <span class="pass-number tabular" id="pass-number-badge">PASS #0418</span>
-                <span style="font-size: 12px; font-weight: 600; color: var(--armed-green);">Registered Locally</span>
+                <span class="pass-registered-tag">Registered Locally</span>
               </div>
               <h3 class="pass-title">Pupil Early Access Pass</h3>
               <p class="pass-meta" id="pass-meta-text">
@@ -659,18 +783,17 @@
           </div>
 
           <!-- 30-Second Local Build Card -->
-          <div class="glass-card build-card">
+          <div class="glass-card build-card scroll-card">
             <div>
-              <span class="simulator-badge" style="margin-bottom: 12px; display: inline-block;">Test Locally Now</span>
-              <h3 class="bento-title" style="font-size: 22px;">Clone &amp; Build in 30 Seconds</h3>
-              <p class="bento-copy" style="margin-bottom: 16px;">
-                Pupil builds cleanly with Swift Package Manager and Xcode Command Line Tools—no external
-                dependencies, CocoaPods, or Homebrew packages required.
+              <span class="simulator-badge build-badge">Test Locally Now</span>
+              <h3 class="bento-title build-title">Clone &amp; Build in 30 Seconds</h3>
+              <p class="bento-copy build-copy">
+                Compiles with Xcode Command Line Tools. Zero external packages.
               </p>
 
               <div class="terminal-box">
                 <div class="terminal-header">
-                  <span>zsh — macOS 14+ (Apple Silicon &amp; Intel)</span>
+                  <span>zsh — macOS 14+ (Universal)</span>
                   <button type="button" id="btn-copy-build-cmd" class="copy-cmd-btn">Copy</button>
                 </div>
                 <pre class="terminal-code" id="build-cmd-code"><code>git clone https://github.com/stevewong-a/pupil.git &amp;&amp; cd pupil
@@ -679,9 +802,9 @@
             </div>
 
             <ul class="requirements-list">
-              <li><strong>macOS 14 Sonoma or later</strong> (Apple Silicon &amp; Intel universal build)</li>
-              <li><strong>Permissions:</strong> Camera (Vision gaze, RAM-only) &amp; Accessibility (optional OS lockdown)</li>
-              <li><strong>Phone Companion:</strong> Scan the in-app QR code on iOS 16.4+ Safari &amp; Add to Home Screen</li>
+              <li><strong>macOS 14+</strong> · Universal Apple Silicon &amp; Intel</li>
+              <li><strong>Permissions</strong> · Camera (RAM-only) &amp; Accessibility</li>
+              <li><strong>iPhone PWA</strong> · iOS 16.4+ Safari QR pairing</li>
             </ul>
           </div>
         </div>
@@ -691,11 +814,15 @@
 
   <footer class="site-footer">
     <div class="container footer-row">
-      <span>Pupil for macOS — 100% Native Swift 6 · Zero Cloud · Open Source</span>
+      <div class="footer-brand">
+        <img src="./assets/pupil-icon.png" alt="Pupil icon" class="footer-brand-icon" width="22" height="22">
+        <span>Pupil for macOS — Native Swift 6 · Zero Cloud · Open Source</span>
+      </div>
       <div class="footer-links">
-        <a href="#simulator">Interactive Demo</a>
+        <a href="#simulator">Simulator</a>
+        <a href="#scroll-story">Sequence</a>
         <a href="#screenshots">App Tour</a>
-        <a href="./companion.html">iPhone Companion PWA</a>
+        <a href="./companion.html">iPhone Companion</a>
         <a href="https://github.com/stevewong-a/pupil" target="_blank" rel="noopener noreferrer">GitHub</a>
       </div>
     </div>

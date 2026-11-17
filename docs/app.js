@@ -22,6 +22,24 @@ const WAITLIST_ENDPOINT = WAITLIST_CONFIG;
   }
 
   // =========================================================================
+  // Shared Crisp Monochrome Vector Icons (Zero Emojis)
+  // =========================================================================
+  const ICONS = {
+    volumeOff:
+      '<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>',
+    volumeOn:
+      '<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>',
+    eye:
+      '<svg class="icon-svg icon-svg-lg" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
+    plug:
+      '<svg class="icon-svg icon-svg-lg" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>',
+    monitor:
+      '<svg class="icon-svg icon-svg-lg" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>',
+    siren:
+      '<svg class="icon-svg icon-svg-lg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="M20 12h2"/><path d="m19.07 4.93-1.41 1.41"/><path d="M2 12h2"/><path d="M7 18v-5a5 5 0 0 1 10 0v5"/><rect x="5" y="18" width="14" height="4" rx="1"/></svg>'
+  };
+
+  // =========================================================================
   // 1. Interactive MacBook Notch & iPhone Companion Simulator
   // =========================================================================
   const macbookEl = document.getElementById("sim-macbook");
@@ -46,8 +64,6 @@ const WAITLIST_ENDPOINT = WAITLIST_CONFIG;
   const telTrigger = document.getElementById("tel-trigger");
   const telSiren = document.getElementById("tel-siren");
   const menubarPower = document.getElementById("sim-menubar-power");
-  const badgeFlap = document.getElementById("sim-badge-flap");
-  const badgeSleep = document.getElementById("sim-badge-sleep");
 
   const iphoneBanner = document.getElementById("sim-iphone-banner");
   const iphoneTime = document.getElementById("sim-iphone-time");
@@ -64,12 +80,13 @@ const WAITLIST_ENDPOINT = WAITLIST_CONFIG;
   const envButtons = Array.from(document.querySelectorAll(".sim-env-pill[data-env]"));
 
   const audioToggleBtn = document.getElementById("btn-sim-audio-toggle");
+  const audioIcon = document.getElementById("sim-audio-icon");
   const audioLabel = document.getElementById("sim-audio-label");
 
   const ENV_PRESETS = {
-    library: { name: "Quiet Library", cap: 45 },
+    library: { name: "Library", cap: 45 },
     cafe: { name: "Cafe", cap: 80 },
-    park: { name: "Busy Park", cap: 100 }
+    park: { name: "Park", cap: 100 }
   };
 
   const sim = {
@@ -140,7 +157,6 @@ const WAITLIST_ENDPOINT = WAITLIST_CONFIG;
     const gain = sim.audioCtx.createGain();
     osc.type = "square";
     osc.frequency.setValueAtTime(880, sim.audioCtx.currentTime);
-    // Keep browser preview volume gentle and safe while reflecting 30%->100% ramp
     const capScalar = ENV_PRESETS[sim.env].cap / 100;
     gain.gain.setValueAtTime(0.015 * capScalar, sim.audioCtx.currentTime);
 
@@ -203,7 +219,7 @@ const WAITLIST_ENDPOINT = WAITLIST_CONFIG;
     const preset = ENV_PRESETS[envKey];
     sirenEnvLabel.textContent = preset.name + " Preset (" + preset.cap + "% max)";
     if (sim.scenario !== "siren") {
-      telSiren.textContent = "0% (" + preset.name + " " + preset.cap + "% cap)";
+      telSiren.textContent = "0% (" + preset.name + " " + preset.cap + "%)";
     }
   }
 
@@ -222,25 +238,23 @@ const WAITLIST_ENDPOINT = WAITLIST_CONFIG;
       macbookEl.dataset.blurred = "false";
       shieldOverlay.classList.remove("is-visible");
       menubarPower.textContent = "MagSafe AC";
-      badgeFlap.textContent = "Flap Guard: Ready";
-      badgeSleep.textContent = "Sleep Hold: Standby";
-      setNotch("amber", "Arming…", "2s exit", true);
-      telState.textContent = "ARMING (2s)";
-      telVision.textContent = "Calibrating ambient ROI";
+      setNotch("amber", "Arming…", "2s", true);
+      telState.textContent = "ARMING";
+      telVision.textContent = "Calibrating";
       telTrigger.textContent = "Shortcut ⌃⌥⌘L";
-      telSiren.textContent = "0% (" + preset.name + " " + preset.cap + "% cap)";
-      setIphoneState("safe", "Arming MacBook Pro…", "Exit delay started. Sensors calibrating.", "now");
-      setJournal("ArmingStarted", "Exit countdown started via ⌃⌥⌘L; calibrating room noise floor.");
+      telSiren.textContent = "0% (" + preset.name + " " + preset.cap + "%)";
+      setIphoneState("safe", "Arming MacBook Pro…", "Exit delay started.", "now");
+      setJournal("ArmingStarted", "Exit countdown active via ⌃⌥⌘L.");
 
       sim.armingTimer = setTimeout(function () {
         if (sim.scenario !== "arm") return;
         macbookEl.dataset.simState = "armed";
         setNotch("green", "Armed", "10.0 FPS", true);
         telState.textContent = "ARMED";
-        telVision.textContent = "10.0 FPS · 0B disk";
-        telTrigger.textContent = "Monitoring 4 sensors";
-        setIphoneState("safe", "Armed Sentinel Active", "MacBook Pro is guarded. Lock-screen alerts ready over APNs.", "now");
-        setJournal("SystemArmed", "Monitoring active. MagSafe AC, External Display, Clamshell Lid, and Vision Gaze armed.");
+        telVision.textContent = "10.0 FPS";
+        telTrigger.textContent = "4 active";
+        setIphoneState("safe", "Armed Sentinel Active", "Instant APNs alerts over Wi-Fi or 5G.", "now");
+        setJournal("SystemArmed", "MagSafe, Display, Lid, and Gaze armed.");
       }, 900);
       return;
     }
@@ -249,18 +263,18 @@ const WAITLIST_ENDPOINT = WAITLIST_CONFIG;
       macbookEl.dataset.simState = "gaze-warning";
       macbookEl.dataset.blurred = "true";
       shieldOverlay.classList.add("is-visible");
-      shieldIcon.textContent = "👁️";
+      shieldIcon.innerHTML = ICONS.eye;
       shieldTitle.textContent = "Privacy Shield Active";
-      shieldDetail.textContent = "Shoulder surfer gaze locked in peripheral ROI (Score 0.78 ≥ 0.52 Strict). Auto-clears when they look away.";
+      shieldDetail.textContent = "Peripheral gaze locked. Clears on look-away.";
       modalUnlockBtn.textContent = "Dismiss Preview Blur";
       menubarPower.textContent = "MagSafe AC";
       setNotch("amber", "Gaze Detected", "Score 0.78", true);
       telState.textContent = "GAZE SHIELD";
-      telVision.textContent = "10.0 FPS · Ultra 90% ROI";
-      telTrigger.textContent = "Dwell 2.0s · Blink ≤350ms";
-      telSiren.textContent = "Silent blur (0% audio)";
-      setIphoneState("warning", "Shoulder Surfer Blocked", "On-device Apple Vision blurred workspace locally. Zero frames written to disk.", "just now");
-      setJournal("GazeWarning", "Sustained peripheral gaze detected (2.0s dwell); frosted privacy blur activated.");
+      telVision.textContent = "90% ROI";
+      telTrigger.textContent = "2.0s dwell";
+      telSiren.textContent = "0% (Silent)";
+      setIphoneState("warning", "Shoulder Surfer Blocked", "Workspace blurred in RAM. Zero frames saved.", "just now");
+      setJournal("GazeWarning", "Peripheral gaze dwell reached 2.0s; blur active.");
       return;
     }
 
@@ -270,30 +284,29 @@ const WAITLIST_ENDPOINT = WAITLIST_CONFIG;
       macbookEl.dataset.simState = isMagSafe ? "tamper-magsafe" : "tamper-display";
       macbookEl.dataset.blurred = "true";
       shieldOverlay.classList.add("is-visible");
-      shieldIcon.textContent = isMagSafe ? "🔌" : "🖥️";
+      shieldIcon.innerHTML = isMagSafe ? ICONS.plug : ICONS.monitor;
       shieldTitle.textContent = "Tamper detected — 15s";
       shieldDetail.textContent = isMagSafe
-        ? "AC Charger Unplugged. ChargerFlapDetector active (≥3 cycles in 6s blocks re-plug bypass)."
-        : "External Library Monitor Disconnected (DisplayTopologyEvaluator 1 → 0 IDs).";
-      modalUnlockBtn.textContent = "Unlock via Touch ID / YubiKey";
-      menubarPower.textContent = isMagSafe ? "Battery (Unplugged!)" : "MagSafe AC";
-      badgeFlap.textContent = isMagSafe ? "Flap Guard: 3x/6s Armed" : "Display IDs: 1 → 0";
+        ? "AC power unplugged. Anti-flap guard active."
+        : "External display unplugged. 15s grace timer active.";
+      modalUnlockBtn.textContent = "Unlock via Touch ID / PIN";
+      menubarPower.textContent = isMagSafe ? "Battery" : "MagSafe AC";
       setNotch("amber", isMagSafe ? "Power Unplugged" : "Monitor Unplugged", "15s", true);
 
       telState.textContent = "TAMPER (15s)";
-      telVision.textContent = "10.0 FPS · Burst Mode";
-      telTrigger.textContent = isMagSafe ? "IOPSCopyPowerSourcesInfo" : "DisplayTopologyEvaluator";
-      telSiren.textContent = "Grace countdown (0%)";
+      telVision.textContent = "10.0 FPS";
+      telTrigger.textContent = isMagSafe ? "Power Unplug" : "Display Unplug";
+      telSiren.textContent = "Grace (0%)";
 
       setIphoneState(
         "warning",
-        isMagSafe ? "Power Unplugged on MacBook Pro" : "External Monitor Disconnected",
-        "15s grace countdown started. Tap Remote Disarm if this was you.",
+        isMagSafe ? "Power Unplugged" : "Monitor Unplugged",
+        "15s grace timer active. Tap Remote Disarm to cancel.",
         "just now"
       );
       setJournal(
         isMagSafe ? "TamperPowerUnplugged" : "TamperDisplayUnplugged",
-        (isMagSafe ? "AC Charger Unplugged" : "External Display Unplugged") + " — 15s grace countdown active."
+        "Hardware tripwire triggered — 15s grace timer running."
       );
 
       sim.countdownTimer = setInterval(function () {
@@ -309,20 +322,18 @@ const WAITLIST_ENDPOINT = WAITLIST_CONFIG;
       return;
     }
 
-    if (scenario === "yubikey") {
-      macbookEl.dataset.simState = "disarmed-yubikey";
+    if (scenario === "touchid") {
+      macbookEl.dataset.simState = "disarmed-touchid";
       macbookEl.dataset.blurred = "false";
       shieldOverlay.classList.remove("is-visible");
       menubarPower.textContent = "MagSafe AC";
-      badgeFlap.textContent = "Flap Guard: Ready";
-      badgeSleep.textContent = "Sleep Hold: Idle";
-      setNotch("green", "YubiKey Verified", "Disarmed", true);
+      setNotch("green", "Touch ID Verified", "Disarmed", true);
       telState.textContent = "DISARMED";
-      telVision.textContent = "Idle (Camera off)";
-      telTrigger.textContent = "USBKey 0x1050:0x0407";
+      telVision.textContent = "Idle";
+      telTrigger.textContent = "Touch ID / BLE";
       telSiren.textContent = "0% (Silenced)";
-      setIphoneState("safe", "Disarmed by Owner", "Hardware key YubiKey 5C Nano (serial-pinned) verified on MacBook Pro.", "just now");
-      setJournal("DisarmedUSBKey", "Disarmed instantly via YubiKey 5C Nano (VID 0x1050 : PID 0x0407, serial pinned).");
+      setIphoneState("safe", "Disarmed by Owner", "Touch ID & iPhone proximity verified.", "just now");
+      setJournal("DisarmedOwner", "Disarmed instantly via Touch ID & proximity.");
       return;
     }
 
@@ -330,13 +341,12 @@ const WAITLIST_ENDPOINT = WAITLIST_CONFIG;
       macbookEl.dataset.simState = "alarm-siren";
       macbookEl.dataset.blurred = "true";
       shieldOverlay.classList.add("is-visible");
-      shieldIcon.textContent = "🚨";
+      shieldIcon.innerHTML = ICONS.siren;
       shieldTitle.textContent = "ALARM ACTIVE — 880 / 660 Hz";
-      shieldDetail.textContent = "Built-in speakers forced & unmuted. Progressive escalation ramps 30% → 100% over 8 seconds.";
-      modalUnlockBtn.textContent = "Disarm Siren (PIN / Touch ID)";
+      shieldDetail.textContent = "Built-in speakers forced. Ramps 30% → 100% over 8s.";
+      modalUnlockBtn.textContent = "Disarm Siren (Touch ID / PIN)";
       sirenMeterEl.hidden = false;
       envPillsWrap.hidden = false;
-      badgeSleep.textContent = "IOPMAssertion: Sleep Blocked";
       setNotch("red", "ALARM ACTIVE", "30% → " + preset.cap + "%", true);
 
       sim.sirenStartMs = performance.now();
@@ -353,9 +363,9 @@ const WAITLIST_ENDPOINT = WAITLIST_CONFIG;
         sirenPctLabel.textContent = effectivePct + "% (of " + activeCap + "% cap)";
         sirenBarFill.style.width = Math.max(8, effectivePct) + "%";
         notchRightText.textContent = effectivePct + "%";
-        telState.textContent = "ALARM LATCHED";
-        telVision.textContent = "10.0 FPS · Alert Capture";
-        telTrigger.textContent = "IOPMAssertion Sleep Hold";
+        telState.textContent = "ALARM";
+        telVision.textContent = "10.0 FPS";
+        telTrigger.textContent = "Sleep Blocked";
         telSiren.textContent = effectivePct + "% (" + ENV_PRESETS[sim.env].name + ")";
         updateSirenAudioGain(effectivePct);
       };
@@ -365,11 +375,11 @@ const WAITLIST_ENDPOINT = WAITLIST_CONFIG;
 
       setIphoneState(
         "critical",
-        "🚨 SIREN ACTIVE — MacBook Tamper Alarm",
-        "Progressive 880/660 Hz siren latched. Ping Camera Snapshot or tap Remote Disarm.",
+        "SIREN ACTIVE — Tamper Alarm",
+        "880/660 Hz siren latched. Ping snapshot or disarm.",
         "now"
       );
-      setJournal("AlarmEscalated", "Progressive siren active (30% → 100% over 8s). Built-in speakers forced; sleep blocked.");
+      setJournal("AlarmEscalated", "Progressive siren active (30% → 100%). Sleep blocked.");
     }
   }
 
@@ -386,40 +396,39 @@ const WAITLIST_ENDPOINT = WAITLIST_CONFIG;
   });
 
   modalUnlockBtn.addEventListener("click", function () {
-    runScenario("yubikey");
+    runScenario("touchid");
   });
 
   btnIphoneDisarm.addEventListener("click", function () {
     clearSimTimers();
     stopSirenAudio();
-    sim.scenario = "yubikey";
-    setActiveScenarioButton("yubikey");
-    macbookEl.dataset.simState = "disarmed-yubikey";
+    sim.scenario = "touchid";
+    setActiveScenarioButton("touchid");
+    macbookEl.dataset.simState = "disarmed-touchid";
     macbookEl.dataset.blurred = "false";
     shieldOverlay.classList.remove("is-visible");
     sirenMeterEl.hidden = true;
     envPillsWrap.hidden = true;
     menubarPower.textContent = "MagSafe AC";
-    badgeSleep.textContent = "Sleep Hold: Idle";
     setNotch("green", "Remote Disarm", "Verified", true);
     telState.textContent = "DISARMED";
-    telTrigger.textContent = "pupildisarm:// HMAC-SHA256";
+    telTrigger.textContent = "HMAC-SHA256";
     telSiren.textContent = "0% (Silenced)";
-    setIphoneState("safe", "Disarmed Remotely", "Authenticated HMAC-SHA256 disarm command verified by your MacBook.", "just now");
-    setJournal("DisarmedRemotely", "Authenticated pupildisarm:// command received from paired iPhone.");
+    setIphoneState("safe", "Disarmed Remotely", "Authenticated disarm verified on MacBook.", "just now");
+    setJournal("DisarmedRemotely", "Authenticated disarm command received from iPhone.");
   });
 
   btnIphoneSnapshot.addEventListener("click", function () {
     snapshotEmpty.hidden = true;
     snapshotPreview.hidden = false;
-    setJournal("RemoteSnapshotSent", "Encrypted verification frame pushed to iPhone companion (pupilsnapshot://).");
+    setJournal("RemoteSnapshotSent", "Verification frame pushed to iPhone companion.");
   });
 
   audioToggleBtn.addEventListener("click", function () {
     sim.audioEnabled = !sim.audioEnabled;
     audioToggleBtn.setAttribute("aria-pressed", sim.audioEnabled ? "true" : "false");
     audioLabel.textContent = sim.audioEnabled ? "Audio Preview: On (880/660 Hz)" : "Audio Preview: Off";
-    audioToggleBtn.firstElementChild.textContent = sim.audioEnabled ? "🔊" : "🔇";
+    audioIcon.innerHTML = sim.audioEnabled ? ICONS.volumeOn : ICONS.volumeOff;
 
     if (sim.audioEnabled && sim.scenario === "siren") {
       startSirenAudioIfEnabled();
@@ -443,20 +452,20 @@ const WAITLIST_ENDPOINT = WAITLIST_CONFIG;
         {
           x: 78,
           y: 24,
-          title: "Idle Inactivity Auto-Arm (5–30 min)",
-          desc: "Polls CGEventSource HID idle duration with streak suppression and closed-lid sleep immunity—so Pupil never false-arms overnight or during Power Nap."
+          title: "Idle Auto-Arm (5–30m)",
+          desc: "Arms after HID inactivity; ignores closed-lid sleep."
         },
         {
           x: 78,
           y: 48,
           title: "OS Hardware Lockdown",
-          desc: "Blocks Force Quit, Command-Tab switching, Dock interaction, and Logout while the tamper Screen Shield is active."
+          desc: "Blocks Force Quit, Command-Tab, and Dock during tamper."
         },
         {
           x: 68,
           y: 72,
-          title: "Stepped Exit & Grace Timers (5s–30s)",
-          desc: "Gives you predictable stepped time to unplug your own charger or cancel an accidental library cable bump before the siren latches."
+          title: "Stepped Grace Timers",
+          desc: "5s–30s window to cancel accidental cable bumps."
         }
       ]
     },
@@ -471,26 +480,26 @@ const WAITLIST_ENDPOINT = WAITLIST_CONFIG;
         {
           x: 78,
           y: 17,
-          title: "Adaptive Vision Frame Rate (10 → 5 → 2 FPS)",
-          desc: "Automatically throttles Apple Vision inference when battery drops below 30% or macOS thermal pressure rises, bursting back to 10 FPS on activity."
+          title: "Adaptive Frame Governor",
+          desc: "Scales 10 → 5 → 2 FPS on low battery."
         },
         {
           x: 70,
           y: 28,
-          title: "Notch Deterrent Style Tiles",
-          desc: "Choose between Glance-inspired Minimal Pill notch wings or Silent Log audit mode. All camera frames remain strictly in RAM."
+          title: "Notch Deterrent Modes",
+          desc: "Switch between live notch wings and silent audit log."
         },
         {
           x: 65,
           y: 42,
-          title: "4-Stage Peripheral Cone (Relaxed → Ultra)",
-          desc: "Strict and Ultra expand the camera Region of Interest up to 90% × 90% and lower the gaze vector threshold to catch side shoulder-surfers."
+          title: "4-Stage Peripheral Cone",
+          desc: "Expands camera ROI up to 90% for side angles."
         }
       ]
     },
     sensors: {
       src: "./assets/screenshots/settings-sensors.png",
-      alt: "Pupil Sensors Settings window showing Hardware Triggers, One-Time QR Phone Companion, Bluetooth Proximity, YubiKey enrollment, and Trusted Wi-Fi",
+      alt: "Pupil Sensors Settings window showing Hardware Triggers, One-Time QR Phone Companion, Bluetooth Proximity, and Trusted Wi-Fi",
       width: 1000,
       height: 4086,
       wide: false,
@@ -499,20 +508,20 @@ const WAITLIST_ENDPOINT = WAITLIST_CONFIG;
         {
           x: 56,
           y: 6,
-          title: "Hardware Tripwires & External Display Unplug",
-          desc: "Guards Power Unplug (with ChargerFlapDetector), Lid Close (with IOPMAssertion sleep-hold), Screen Lock, and External Display Hot-Unplug."
+          title: "Hardware Tripwire Matrix",
+          desc: "Monitors MagSafe, USB-C displays, lid state, and input."
         },
         {
           x: 45,
           y: 39,
-          title: "One-Time QR iPhone Pairing (RFC 8291)",
-          desc: "Direct Mac-to-APNs encrypted Web Push pairing using native CryptoKit ECDH P-256 + HKDF-SHA256—zero accounts or relay databases."
+          title: "One-Time QR Pairing",
+          desc: "Direct RFC 8291 Web Push encryption without cloud relays."
         },
         {
           x: 65,
           y: 75,
-          title: "YubiKey Fast Disarm & Trusted Wi-Fi Boundary",
-          desc: "Pin hardware USB keys (VID:PID + serial) in an AES-GCM vault and SHA-256 hash dorm/home Wi-Fi SSIDs + router gateway MACs."
+          title: "Proximity, Wi-Fi & Keys",
+          desc: "Bluetooth proximity disarm, trusted Wi-Fi, and optional USB keys."
         }
       ]
     },
@@ -527,20 +536,20 @@ const WAITLIST_ENDPOINT = WAITLIST_CONFIG;
         {
           x: 78,
           y: 12,
-          title: "Force Built-In Speakers & Unmute",
-          desc: "Overrides headphone/AirPods routing via CoreAudio and unmutes hardware output so plugging in a dummy jack cannot silence the alarm."
+          title: "Speaker Route Override",
+          desc: "Bypasses headphones and unmutes built-in MacBook speakers."
         },
         {
           x: 64,
           y: 18,
-          title: "Location Environment Presets (45% / 80% / 100%)",
-          desc: "One-tap acoustic ceilings for Quiet Library (45%), Cafe (80%), and Busy Park (100%) alongside smooth 30% → 100% 8s escalation."
+          title: "Acoustic Ceiling Presets",
+          desc: "Caps siren at 45% (Library), 80% (Cafe), or 100%."
         },
         {
           x: 68,
           y: 50,
-          title: "Encrypted Tamper Journal & Markdown Export",
-          desc: "Records up to 200 security events in an AES-GCM sealed ring buffer (tamper-journal.enc.json) with one-click Markdown export."
+          title: "Encrypted Tamper Journal",
+          desc: "200-event AES-GCM ring buffer with Markdown export."
         }
       ]
     },
@@ -555,20 +564,20 @@ const WAITLIST_ENDPOINT = WAITLIST_CONFIG;
         {
           x: 50,
           y: 13,
-          title: "Live Sentinel & Power Source Header",
-          desc: "Displays instant armed state, active grace countdowns, and AC/Battery power status directly inside NSStatusBar."
+          title: "Live NSStatusBar Header",
+          desc: "Real-time armed state, grace timer, and AC status."
         },
         {
           x: 65,
           y: 47,
-          title: "1-Click Privacy & Lock Toggles",
-          desc: "Toggle Gaze deterrence, Blur screen on gaze, Auto-arm on lock, and Lock on input without opening the Settings window."
+          title: "1-Click Quick Toggles",
+          desc: "Flip gaze blur and auto-arm without opening Settings."
         },
         {
           x: 50,
           y: 75,
-          title: "Dockless .accessory Architecture",
-          desc: "Runs cleanly with zero Dock icon clutter; opens Settings (⌘,) on demand and blocks unauthorized Quit while armed."
+          title: "Dockless Accessory Mode",
+          desc: "Zero Dock clutter; blocks unauthorized Quit while armed."
         }
       ]
     },
@@ -583,20 +592,20 @@ const WAITLIST_ENDPOINT = WAITLIST_CONFIG;
         {
           x: 50,
           y: 42,
-          title: "Exact Tamper Source & Timestamp Telemetry",
-          desc: "Clearly surfaces what triggered the shield (e.g., AC Charger Unplugged or External Display Unplugged) and when it happened."
+          title: "Tamper Source Telemetry",
+          desc: "Displays exact hardware trigger and timestamp on lock screen."
         },
         {
           x: 59,
           y: 61,
-          title: "Touch ID + Brute-Force Lockout (PinAttemptLimiter)",
-          desc: "Supports instant Touch ID or constant-time salted SHA-256 PIN with exponential backoff (15s at 5 fails, 60s at 8, 300s + Siren at 10)."
+          title: "Touch ID & PIN Backoff",
+          desc: "Instant biometric unlock with exponential brute-force lockouts."
         },
         {
           x: 50,
           y: 90,
-          title: "macOS Account Password Recovery",
-          desc: "Locked yourself out? Verify your macOS user password via LocalAuthentication to recover cleanly and reset lockout state."
+          title: "macOS Password Recovery",
+          desc: "LocalAuthentication fallback resets PIN lockout cleanly."
         }
       ]
     }
@@ -741,7 +750,6 @@ const WAITLIST_ENDPOINT = WAITLIST_CONFIG;
     passCard.hidden = false;
   }
 
-  // Restore saved pass if user already signed up
   try {
     const existingRaw = localStorage.getItem(WAITLIST_CONFIG.storageKey);
     if (existingRaw) {
@@ -829,7 +837,152 @@ const WAITLIST_ENDPOINT = WAITLIST_CONFIG;
   });
 
   // =========================================================================
-  // 4. IntersectionObserver Fallback for Scroll-Driven Entry Reveals
+  // 4. Sticky Scrollytelling (#scroll-story) & Scroll-Driven Card Engine
+  // =========================================================================
+  const storyTrack = document.getElementById("scroll-story-track");
+  const storyRailFill = document.getElementById("story-rail-fill");
+  const storyHudStage = document.getElementById("story-hud-stage");
+  const storyActiveModule = document.getElementById("story-active-module");
+  const storyProgressPct = document.getElementById("story-progress-pct");
+  const storyStateBadge = document.getElementById("story-state-badge");
+  const storyMetric1 = document.getElementById("story-metric-1");
+  const storyMetric2 = document.getElementById("story-metric-2");
+  const storyMetric3 = document.getElementById("story-metric-3");
+  const storyChapters = Array.from(document.querySelectorAll(".story-chapter[data-chapter]"));
+  const scrollCards = Array.from(document.querySelectorAll(".scroll-card"));
+
+  const STORY_STATES = [
+    {
+      module: "VisionGazeDetector",
+      badge: "OPTICAL LOCK",
+      m1: "10.0 FPS ANE",
+      m2: "2.0s Dwell",
+      m3: "Instant Blur"
+    },
+    {
+      module: "PowerAndLidMonitor",
+      badge: "IOKIT TRIPWIRE",
+      m1: "150ms Polling",
+      m2: "3x/6s Anti-Flap",
+      m3: "15s Grace Hold"
+    },
+    {
+      module: "LocalAuth & BLE",
+      badge: "OWNER DISARM",
+      m1: "Touch ID / PIN",
+      m2: "iPhone RSSI",
+      m3: "< 0.5s Unlock"
+    },
+    {
+      module: "SirenEscalation",
+      badge: "LIBRARY SIREN",
+      m1: "880 / 660 Hz",
+      m2: "30% → 100% / 8s",
+      m3: "Built-in Audio"
+    }
+  ];
+
+  let activeStoryChapter = 0;
+
+  function applyStoryChapter(chapterIdx, layerProgress) {
+    const clampedIdx = Math.max(0, Math.min(3, chapterIdx));
+    const state = STORY_STATES[clampedIdx];
+    if (storyHudStage) {
+      storyHudStage.dataset.activeChapter = String(clampedIdx);
+      storyHudStage.style.setProperty("--layer-p", Math.max(0.2, Math.min(1, layerProgress)).toFixed(3));
+    }
+    if (clampedIdx !== activeStoryChapter) {
+      activeStoryChapter = clampedIdx;
+      storyChapters.forEach(function (btn, idx) {
+        const isActive = idx === clampedIdx;
+        btn.classList.toggle("is-active", isActive);
+        btn.setAttribute("aria-pressed", isActive ? "true" : "false");
+      });
+    }
+    if (storyActiveModule) storyActiveModule.textContent = state.module;
+    if (storyStateBadge) storyStateBadge.textContent = state.badge;
+    if (storyMetric1) storyMetric1.textContent = state.m1;
+    if (storyMetric2) storyMetric2.textContent = state.m2;
+    if (storyMetric3) storyMetric3.textContent = state.m3;
+  }
+
+  storyChapters.forEach(function (btn, idx) {
+    btn.addEventListener("click", function () {
+      const isStickyLayout = window.innerWidth > 900 && storyTrack && storyTrack.offsetHeight > window.innerHeight * 1.25;
+      if (isStickyLayout) {
+        const trackRect = storyTrack.getBoundingClientRect();
+        const trackTop = window.scrollY + trackRect.top;
+        const scrollable = Math.max(1, storyTrack.offsetHeight - window.innerHeight);
+        const targetProgress = (idx + 0.12) / 4;
+        window.scrollTo({
+          top: trackTop + scrollable * targetProgress,
+          behavior: "smooth"
+        });
+      } else {
+        const pct = Math.round(((idx + 1) / 4) * 100);
+        if (storyRailFill) storyRailFill.style.setProperty("--scroll-p", ((idx + 1) / 4).toFixed(3));
+        if (storyProgressPct) storyProgressPct.textContent = pct + "%";
+        applyStoryChapter(idx, 1);
+      }
+    });
+  });
+
+  const prefersReducedMotion =
+    window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function updateScrollDrivenMotion() {
+    const vh = window.innerHeight || 900;
+    const maxScroll = Math.max(1, document.documentElement.scrollHeight - vh);
+    const pageProgress = Math.max(0, Math.min(1, window.scrollY / maxScroll));
+    document.documentElement.style.setProperty("--page-scroll", pageProgress.toFixed(4));
+
+    if (storyTrack && window.innerWidth > 900 && !prefersReducedMotion) {
+      const rect = storyTrack.getBoundingClientRect();
+      const scrollable = Math.max(1, rect.height - vh);
+      const rawP = -rect.top / scrollable;
+      const p = Math.max(0, Math.min(1, rawP));
+      const chapterFloat = p * 4;
+      const chapterIdx = Math.min(3, Math.floor(chapterFloat));
+      const layerProgress = chapterIdx === 3 && p >= 0.98 ? 1 : Math.max(0.2, Math.min(1, chapterFloat - chapterIdx + 0.25));
+
+      if (storyRailFill) {
+        storyRailFill.style.setProperty("--scroll-p", p.toFixed(4));
+      }
+      if (storyProgressPct) {
+        storyProgressPct.textContent = Math.round(p * 100) + "%";
+      }
+      applyStoryChapter(chapterIdx, layerProgress);
+    }
+
+    if (!prefersReducedMotion) {
+      scrollCards.forEach(function (card) {
+        const rect = card.getBoundingClientRect();
+        const cardProgress = Math.max(0, Math.min(1, (vh - rect.top) / (vh * 0.36)));
+        card.style.setProperty("--card-p", cardProgress.toFixed(3));
+      });
+    } else {
+      scrollCards.forEach(function (card) {
+        card.style.setProperty("--card-p", "1");
+      });
+    }
+  }
+
+  let scrollRafScheduled = false;
+  function requestScrollUpdate() {
+    if (scrollRafScheduled) return;
+    scrollRafScheduled = true;
+    window.requestAnimationFrame(function () {
+      scrollRafScheduled = false;
+      updateScrollDrivenMotion();
+    });
+  }
+
+  window.addEventListener("scroll", requestScrollUpdate, { passive: true });
+  window.addEventListener("resize", requestScrollUpdate, { passive: true });
+  updateScrollDrivenMotion();
+
+  // =========================================================================
+  // 5. IntersectionObserver Fallback for Scroll-Driven Entry Reveals
   // =========================================================================
   const supportsViewTimeline =
     typeof CSS !== "undefined" &&
