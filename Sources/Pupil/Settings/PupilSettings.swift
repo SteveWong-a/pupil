@@ -389,6 +389,14 @@ public final class PupilSettings {
         EnvironmentPreset.matching(volume: sirenOverrideVolume)
     }
 
+    public var sirenEscalationCurveEnabled: Bool {
+        didSet { defaults.set(sirenEscalationCurveEnabled, forKey: Keys.sirenEscalationCurveEnabled) }
+    }
+
+    public var sirenEscalationProfile: SirenEscalationProfile {
+        didSet { defaults.set(sirenEscalationProfile.rawValue, forKey: Keys.sirenEscalationProfile) }
+    }
+
     public var preferredCameraID: String? {
         didSet { defaults.set(preferredCameraID, forKey: Keys.preferredCameraID) }
     }
@@ -575,6 +583,13 @@ public final class PupilSettings {
         self.sirenSpeakerOverrideEnabled = defaults.object(forKey: Keys.sirenSpeakerOverrideEnabled) as? Bool ?? true
         let storedVolume = defaults.object(forKey: Keys.sirenOverrideVolume) as? Double ?? 0.80
         self.sirenOverrideVolume = min(max(storedVolume, 0.10), 1.00)
+        self.sirenEscalationCurveEnabled = defaults.object(forKey: Keys.sirenEscalationCurveEnabled) as? Bool ?? false
+        if let rawProfile = defaults.string(forKey: Keys.sirenEscalationProfile),
+           let profile = SirenEscalationProfile(rawValue: rawProfile) {
+            self.sirenEscalationProfile = profile
+        } else {
+            self.sirenEscalationProfile = .smoothRamp
+        }
         self.preferredCameraID = defaults.string(forKey: Keys.preferredCameraID)
         self.preferredDisplayID = defaults.string(forKey: Keys.preferredDisplayID)
         self.relayEnabled = defaults.object(forKey: Keys.relayEnabled) as? Bool ?? false
@@ -636,6 +651,8 @@ public final class PupilSettings {
         static let sirenFrequencyHz = "pupil.sirenFrequencyHz"
         static let sirenSpeakerOverrideEnabled = "pupil.sirenSpeakerOverrideEnabled"
         static let sirenOverrideVolume = "pupil.sirenOverrideVolume"
+        static let sirenEscalationCurveEnabled = "pupil.sirenEscalationCurveEnabled"
+        static let sirenEscalationProfile = "pupil.sirenEscalationProfile"
         static let preferredCameraID = "pupil.preferredCameraID"
         static let preferredDisplayID = "pupil.preferredDisplayID"
         static let relayEnabled = "pupil.relayEnabled"

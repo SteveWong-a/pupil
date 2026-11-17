@@ -149,11 +149,13 @@ public final class SecurityCoordinator {
     public let bluetoothMonitor: BluetoothProximityMonitor
     public let journalStore: TamperJournalStore
     public let networkSentinel: NetworkPathSentinel
+    public let audioVolumeManager: any SystemAudioVolumeManaging
     /// Injectable clock (epoch seconds) so corroboration windows are testable.
     public var clock: () -> TimeInterval = { Date().timeIntervalSince1970 }
     /// Injectable thermal state provider for deterministic testing.
     public var thermalStateProvider: () -> ProcessInfo.ThermalState = { ProcessInfo.processInfo.thermalState }
 
+    public private(set) var currentSirenVolumeFactor: Float = 1.0
     public private(set) var idleEvaluator = IdleInactivityEvaluator()
     private var idleInactivityTimer: Timer?
     /// Injectable HID idle seconds provider (defaults to CoreGraphics combined session HID idle time).
@@ -174,7 +176,10 @@ public final class SecurityCoordinator {
     private var lastSurroundingsAlertTime: TimeInterval = 0
     private var countdownTimer: Timer?
     private var alarmReminderTimer: Timer?
+    private var alarmEscalationTimer: Timer?
     private var alarmStartTime: TimeInterval?
+    private var activeAudioSessionID: UInt64 = 0
+    private var lastEscalationEvaluation: SirenEscalationEvaluation?
     private var gazeWarningDismissWorkItem: DispatchWorkItem?
     private var liveCalibrationProfiler = RoomNoiseProfiler()
     private var liveCalibrationTimer: Timer?
@@ -189,7 +194,8 @@ public final class SecurityCoordinator {
             webPushManager: nil,
             alertNotifier: nil,
             bluetoothMonitor: nil,
-            journalStore: .shared
+            journalStore: .shared,
+            audioVolumeManager: nil
         )
     }
 
@@ -202,7 +208,8 @@ public final class SecurityCoordinator {
         alertNotifier: AlertNotifier? = nil,
         bluetoothMonitor: BluetoothProximityMonitor? = nil,
         networkSentinel: NetworkPathSentinel? = nil,
-        journalStore: TamperJournalStore? = nil
+        journalStore: TamperJournalStore? = nil,
+        audioVolumeManager: (any SystemAudioVolumeManaging)? = nil
     ) {
         let resolvedJournalStore: TamperJournalStore
         if let journalStore {
@@ -221,6 +228,7 @@ public final class SecurityCoordinator {
         self.cameraManager = cameraManager
         self.bluetoothMonitor = bluetoothMonitor ?? BluetoothProximityMonitor()
         self.networkSentinel = networkSentinel ?? NetworkPathSentinel()
+        self.audioVolumeManager = audioVolumeManager ?? SystemAudioVolumeManager.shared
         let pushManager = webPushManager ?? WebPushManager(settings: settings)
         self.webPushManager = pushManager
         self.alertNotifier = alertNotifier ?? AlertNotifier { message in
@@ -590,8 +598,18 @@ public final class SecurityCoordinator {
         countdownSecondsRemaining = 0
         alarmReminderTimer?.invalidate()
         alarmReminderTimer = nil
+        stopSirenEscalationTimer()
         alarmStartTime = nil
-        SirenSynthesizer.shared.stop()
+        currentSirenVolumeFactor = 1.0
+        lastEscalationEvaluation = nil
+        if wasAlarm || activeAudioSessionID != 0 {
+            let endedSessionID = activeAudioSessionID
+            activeAudioSessionID &+= 1
+            if activeAudioSessionID == 0 {
+                activeAudioSessionID = 1
+            }
+            audioVolumeManager.endAlarmAudio(sessionID: endedSessionID)
+        }
         powerMonitor.releaseSleepHoldAssertion()
 
         state = .disarmed
@@ -854,6 +872,7 @@ public final class SecurityCoordinator {
         countdownTimer?.invalidate()
         countdownTimer = nil
         countdownSecondsRemaining = 0
+        stopSirenEscalationTimer()
         activeTamperSource = source
         activeAlarmTime = Date()
         state = .alarm
@@ -874,15 +893,40 @@ public final class SecurityCoordinator {
         }
 
         powerMonitor.acquireSleepHoldAssertion(reason: "Pupil Active Theft Siren")
-        SirenSynthesizer.shared.start(
+
+        activeAudioSessionID &+= 1
+        if activeAudioSessionID == 0 {
+            activeAudioSessionID = 1
+        }
+        let sessionID = activeAudioSessionID
+        let initialEval = SirenEscalationEvaluator.evaluate(
+            elapsedSeconds: 0,
+            profile: settings.sirenEscalationProfile,
+            maxVolume: Float(settings.sirenOverrideVolume),
+            enabled: settings.sirenEscalationCurveEnabled
+        )
+        currentSirenVolumeFactor = initialEval.volumeFactor
+        lastEscalationEvaluation = initialEval
+
+        audioVolumeManager.beginAlarmAudio(
+            sessionID: sessionID,
             baseFrequencyHz: Double(settings.sirenFrequencyHz),
             overrideSpeakers: settings.sirenSpeakerOverrideEnabled,
-            targetVolume: Float(settings.sirenOverrideVolume)
+            initialEvaluation: initialEval
         )
+        startSirenEscalationTimerIfNeeded(for: initialEval)
+
+        let escalationNote: String
+        if settings.sirenEscalationCurveEnabled && settings.sirenEscalationProfile != .immediate {
+            let startPct = Int((initialEval.volumeFactor * 100).rounded())
+            escalationNote = " Escalation: \(settings.sirenEscalationProfile.title) (starting at \(startPct)%)."
+        } else {
+            escalationNote = ""
+        }
 
         logEvent(
             "ALARM LATCHED",
-            detail: "Triggered by \(source.rawValue). Audible siren active until PIN or Touch ID disarm.",
+            detail: "Triggered by \(source.rawValue). Audible siren active until PIN or Touch ID disarm.\(escalationNote)",
             simulated: simulated
         )
         onStateChanged?(state)
@@ -894,6 +938,82 @@ public final class SecurityCoordinator {
             severity: "critical",
             tag: "pupil-alarm"
         )
+    }
+
+    public func tickSirenEscalationIfNeeded() {
+        guard state == .alarm, let start = alarmStartTime else {
+            stopSirenEscalationTimer()
+            return
+        }
+        let elapsed = max(0, clock() - start)
+        let evaluation = SirenEscalationEvaluator.evaluate(
+            elapsedSeconds: elapsed,
+            profile: settings.sirenEscalationProfile,
+            maxVolume: Float(settings.sirenOverrideVolume),
+            enabled: settings.sirenEscalationCurveEnabled
+        )
+        currentSirenVolumeFactor = evaluation.volumeFactor
+        if evaluation != lastEscalationEvaluation {
+            lastEscalationEvaluation = evaluation
+            audioVolumeManager.applyEscalationStep(
+                sessionID: activeAudioSessionID,
+                overrideSpeakers: settings.sirenSpeakerOverrideEnabled,
+                evaluation: evaluation
+            )
+        }
+        if evaluation.isComplete {
+            stopSirenEscalationTimer()
+        }
+    }
+
+    private func resumeAlarmAudioAtCurrentElapsedTime() {
+        guard state == .alarm else { return }
+        let now = clock()
+        let start = alarmStartTime ?? now
+        if alarmStartTime == nil {
+            alarmStartTime = start
+        }
+        let elapsed = max(0, now - start)
+        let evaluation = SirenEscalationEvaluator.evaluate(
+            elapsedSeconds: elapsed,
+            profile: settings.sirenEscalationProfile,
+            maxVolume: Float(settings.sirenOverrideVolume),
+            enabled: settings.sirenEscalationCurveEnabled
+        )
+
+        activeAudioSessionID &+= 1
+        if activeAudioSessionID == 0 {
+            activeAudioSessionID = 1
+        }
+        let sessionID = activeAudioSessionID
+        currentSirenVolumeFactor = evaluation.volumeFactor
+        lastEscalationEvaluation = evaluation
+
+        audioVolumeManager.beginAlarmAudio(
+            sessionID: sessionID,
+            baseFrequencyHz: Double(settings.sirenFrequencyHz),
+            overrideSpeakers: settings.sirenSpeakerOverrideEnabled,
+            initialEvaluation: evaluation
+        )
+        startSirenEscalationTimerIfNeeded(for: evaluation)
+    }
+
+    private func startSirenEscalationTimerIfNeeded(for evaluation: SirenEscalationEvaluation) {
+        stopSirenEscalationTimer()
+        guard !evaluation.isComplete else { return }
+        alarmEscalationTimer = Timer.scheduledTimer(
+            withTimeInterval: SirenEscalationEvaluator.evaluationTickIntervalSeconds,
+            repeats: true
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.tickSirenEscalationIfNeeded()
+            }
+        }
+    }
+
+    private func stopSirenEscalationTimer() {
+        alarmEscalationTimer?.invalidate()
+        alarmEscalationTimer = nil
     }
 
     private func handleRemoteSnapshotRequest() {
@@ -1507,11 +1627,7 @@ public final class SecurityCoordinator {
                 }
             case .wake:
                 if self.isMonitoring && self.state == .alarm {
-                    SirenSynthesizer.shared.start(
-                        baseFrequencyHz: Double(self.settings.sirenFrequencyHz),
-                        overrideSpeakers: self.settings.sirenSpeakerOverrideEnabled,
-                        targetVolume: Float(self.settings.sirenOverrideVolume)
-                    )
+                    self.resumeAlarmAudioAtCurrentElapsedTime()
                 }
             case .screenUnlocked:
                 if self.settings.autoArmOnScreenLock {

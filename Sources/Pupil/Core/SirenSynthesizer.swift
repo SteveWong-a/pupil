@@ -10,7 +10,21 @@ import AudioToolbox
 import AVFoundation
 import Foundation
 
-public final class SirenSynthesizer: @unchecked Sendable {
+public protocol SirenPlaybackControlling: Sendable {
+    var isActive: Bool { get }
+
+    func start(
+        baseFrequencyHz: Double,
+        overrideSpeakers: Bool,
+        targetVolume: Float,
+        outputGain: Float
+    )
+
+    func setOutputGain(_ gain: Float)
+    func stop()
+}
+
+public final class SirenSynthesizer: SirenPlaybackControlling, @unchecked Sendable {
     public static let shared = SirenSynthesizer()
 
     private let lock = NSLock()
@@ -31,12 +45,17 @@ public final class SirenSynthesizer: @unchecked Sendable {
     public func start(
         baseFrequencyHz: Double = 880.0,
         overrideSpeakers: Bool = false,
-        targetVolume: Float = 0.80
+        targetVolume: Float = 0.80,
+        outputGain: Float = 1.0
     ) {
+        let clampedGain = min(max(outputGain.isFinite ? outputGain : 1.0, 0.0), 1.0)
         lock.lock()
         defer { lock.unlock() }
         self.baseFrequencyHz = baseFrequencyHz
-        guard !isSounding else { return }
+        if isSounding {
+            engine?.mainMixerNode.outputVolume = clampedGain
+            return
+        }
         if overrideSpeakers {
             SystemAudioController.shared.forceBuiltInSpeakers(volume: targetVolume)
         }
@@ -79,7 +98,7 @@ public final class SirenSynthesizer: @unchecked Sendable {
 
         audioEngine.attach(node)
         audioEngine.connect(node, to: audioEngine.mainMixerNode, format: monoFormat)
-        audioEngine.mainMixerNode.outputVolume = 1.0
+        audioEngine.mainMixerNode.outputVolume = clampedGain
 
         do {
             try audioEngine.start()
@@ -88,6 +107,14 @@ public final class SirenSynthesizer: @unchecked Sendable {
         } catch {
             self.isSounding = false
         }
+    }
+
+    public func setOutputGain(_ gain: Float) {
+        let clampedGain = min(max(gain.isFinite ? gain : 1.0, 0.0), 1.0)
+        lock.lock()
+        let activeEngine = isSounding ? engine : nil
+        lock.unlock()
+        activeEngine?.mainMixerNode.outputVolume = clampedGain
     }
 
     public func stop() {
@@ -111,7 +138,8 @@ public final class SirenSynthesizer: @unchecked Sendable {
 
     /// Plays a brief 1.2s test chirp so the user can verify speaker output from Settings.
     public func playTestChirp(baseFrequencyHz: Double = 880.0) {
-        start(baseFrequencyHz: baseFrequencyHz, overrideSpeakers: false)
+        start(baseFrequencyHz: baseFrequencyHz, overrideSpeakers: false, targetVolume: 0.80, outputGain: 1.0)
+        setOutputGain(1.0)
         DispatchQueue.global().asyncAfter(deadline: .now() + 1.2) { [weak self] in
             self?.stop()
         }
