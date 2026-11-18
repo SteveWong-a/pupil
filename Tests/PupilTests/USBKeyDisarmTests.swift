@@ -561,6 +561,7 @@ struct USBKeyDisarmTests {
         let monitor = USBKeyMonitor(startImmediately: false)
         monitor.connectedDevicesProvider = { [] }
         let powerMonitor = PowerAndLidMonitor(isOnACPower: true, batteryPercentage: 100)
+        defer { powerMonitor.stopMonitoring() }
         env.settings.idleAutoArmEnabled = true
 
         let coordinator = SecurityCoordinator(
@@ -609,6 +610,7 @@ struct USBKeyDisarmTests {
         let monitor = USBKeyMonitor(startImmediately: false)
         monitor.connectedDevicesProvider = { [] }
         let powerMonitor = PowerAndLidMonitor(isOnACPower: true, batteryPercentage: 100)
+        defer { powerMonitor.stopMonitoring() }
         env.settings.idleAutoArmEnabled = true
 
         let coordinator = SecurityCoordinator(
@@ -708,6 +710,7 @@ struct USBKeyDisarmTests {
         let monitor = USBKeyMonitor(startImmediately: false)
         monitor.connectedDevicesProvider = { connectedList }
         let powerMonitor = PowerAndLidMonitor(isOnACPower: true, batteryPercentage: 100)
+        defer { powerMonitor.stopMonitoring() }
 
         let coordinator = SecurityCoordinator(
             settings: env.settings,
@@ -777,6 +780,7 @@ struct USBKeyDisarmTests {
         let monitor = USBKeyMonitor(startImmediately: false)
         monitor.connectedDevicesProvider = { [yubikey, externalMouse] }
         let powerMonitor = PowerAndLidMonitor(isOnACPower: true, batteryPercentage: 100)
+        defer { powerMonitor.stopMonitoring() }
 
         let coordinator = SecurityCoordinator(
             settings: env.settings,
