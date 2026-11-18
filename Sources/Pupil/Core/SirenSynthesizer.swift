@@ -53,8 +53,14 @@ public final class SirenSynthesizer: SirenPlaybackControlling, @unchecked Sendab
         defer { lock.unlock() }
         self.baseFrequencyHz = baseFrequencyHz
         if isSounding {
-            engine?.mainMixerNode.outputVolume = clampedGain
-            return
+            if let engine, engine.isRunning {
+                engine.mainMixerNode.outputVolume = clampedGain
+                return
+            }
+            if SecurityCoordinator.isRunningUnderTests {
+                return
+            }
+            teardownEngineLocked()
         }
         if overrideSpeakers {
             SystemAudioController.shared.forceBuiltInSpeakers(volume: targetVolume)
@@ -71,6 +77,7 @@ public final class SirenSynthesizer: SirenPlaybackControlling, @unchecked Sendab
         let sampleRate = outputFormat.sampleRate > 0 ? outputFormat.sampleRate : 44100.0
 
         guard let monoFormat = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1) else {
+            isSounding = false
             return
         }
 
@@ -129,15 +136,19 @@ public final class SirenSynthesizer: SirenPlaybackControlling, @unchecked Sendab
             return
         }
         isSounding = false
+        teardownEngineLocked()
+        lock.unlock()
+
+        SystemAudioController.shared.restoreIfNeeded()
+    }
+
+    private func teardownEngineLocked() {
         engine?.stop()
         if let node = sourceNode {
             engine?.detach(node)
         }
         sourceNode = nil
         engine = nil
-        lock.unlock()
-
-        SystemAudioController.shared.restoreIfNeeded()
     }
 
     /// Plays a brief 1.2s test chirp so the user can verify speaker output from Settings.
