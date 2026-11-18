@@ -2,6 +2,11 @@
 # auto-sync-prs.sh - Software Factory Auto-Rebase Hook
 set -eo pipefail
 
+if [ -n "$AUTO_SYNC_RUNNING" ]; then
+  exit 0
+fi
+export AUTO_SYNC_RUNNING=1
+
 REPO_DIR="/Users/stevew/Documents/Pupil"
 WORKTREE_DIR="/Users/stevew/Documents/Pupil-worktrees"
 
@@ -13,8 +18,6 @@ echo "📍 Current main HEAD: $LATEST_MAIN"
 
 PAIRS=(
   "siren:feat/siren-escalation-curve"
-  "usb:feat/usb-security-key"
-  "wifi:feat/trusted-wifi-boundary"
 )
 
 SYNCED_COUNT=0
@@ -33,6 +36,10 @@ for pair in "${PAIRS[@]}"; do
 
     git fetch pupil main "$branch" >/dev/null 2>&1 || git fetch pupil main >/dev/null 2>&1
     TARGET_MAIN=$(git rev-parse pupil/main)
+    if git merge-base --is-ancestor HEAD "$TARGET_MAIN" 2>/dev/null; then
+      echo "✓ $branch is already merged into main ($TARGET_MAIN)."
+      continue
+    fi
     MERGE_BASE=$(git merge-base HEAD "$TARGET_MAIN")
 
     NEEDS_MERGE=true
