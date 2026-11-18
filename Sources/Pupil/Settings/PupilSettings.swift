@@ -767,9 +767,6 @@ self.usbKeyDisarmEnabled = defaults.object(forKey: Keys.usbKeyDisarmEnabled) as?
         guard snapshot.isSatisfied, snapshot.primaryInterface == .wifi else {
             return .failure(.notOnWiFi)
         }
-        guard snapshot.hasStrongerIdentifier else {
-            return .failure(.missingStrongerIdentifier)
-        }
         let trimmedCustom = customDisplayName?.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedName = (trimmedCustom?.isEmpty == false ? trimmedCustom : nil)
             ?? snapshot.suggestedDisplayName
@@ -783,6 +780,9 @@ self.usbKeyDisarmEnabled = defaults.object(forKey: Keys.usbKeyDisarmEnabled) as?
             enrolledSource: snapshot.activeFingerprintSource,
             lastMatchedAt: Date()
         )
+        guard entry.hasUsableIdentifier, entry.hasStrongerIdentifier else {
+            return .failure(.missingStrongerIdentifier)
+        }
         enrollTrustedNetwork(entry)
         return .success(entry)
     }
