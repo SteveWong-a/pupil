@@ -586,6 +586,9 @@ public final class SecurityCoordinator {
 
     @discardableResult
     public func enrollCurrentUSBKey() -> USBEnrollmentOutcome {
+        guard state == .disarmed else {
+            return .failed(USBKeyStorageError.enrollmentBlockedWhileActive.localizedDescription)
+        }
         let candidates = refreshEnrollableUSBDevices()
         if candidates.isEmpty {
             return .noDeviceFound
@@ -603,6 +606,9 @@ public final class SecurityCoordinator {
 
     @discardableResult
     public func enrollUSBKey(_ device: USBDeviceDescriptor) throws -> EnrolledUSBKeySignature {
+        guard state == .disarmed else {
+            throw USBKeyStorageError.enrollmentBlockedWhileActive
+        }
         let signature = try KeychainManager.enrollUSBKey(device, vault: usbKeyVault)
         enrolledUSBKey = signature
         settings.enrolledUSBKeySummary = signature.summary
@@ -617,9 +623,9 @@ public final class SecurityCoordinator {
         return signature
     }
 
-    public func removeEnrolledUSBKey() {
+    public func removeEnrolledUSBKey() throws {
         let previousName = enrolledUSBKey?.displayName ?? settings.enrolledUSBKeySummary?.displayName
-        KeychainManager.clearEnrolledUSBKey(vault: usbKeyVault)
+        try KeychainManager.clearEnrolledUSBKey(vault: usbKeyVault)
         enrolledUSBKey = nil
         settings.enrolledUSBKeySummary = nil
         settings.usbKeyDisarmEnabled = false
