@@ -10,3 +10,4 @@ ENGINEERING_PLAYBOOK.md
 *.xcodeproj/xcuserdata/
 .env
 .env.*
+web/node_modules/
