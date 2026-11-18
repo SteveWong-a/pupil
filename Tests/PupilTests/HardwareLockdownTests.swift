@@ -24,12 +24,16 @@ struct HardwareLockdownTests {
         manager.engage()
         #expect(manager.isLockdownActive == true)
         if let app = NSApp {
-            #expect(app.presentationOptions.contains(.disableProcessSwitching))
-            #expect(app.presentationOptions.contains(.disableForceQuit))
-            #expect(app.presentationOptions.contains(.disableSessionTermination))
-            #expect(app.presentationOptions.contains(.disableHideApplication))
-            #expect(app.presentationOptions.contains(.hideDock))
-            #expect(app.presentationOptions.contains(.hideMenuBar))
+            if SecurityCoordinator.isRunningUnderTests {
+                #expect(app.presentationOptions == [])
+            } else {
+                #expect(app.presentationOptions.contains(.disableProcessSwitching))
+                #expect(app.presentationOptions.contains(.disableForceQuit))
+                #expect(app.presentationOptions.contains(.disableSessionTermination))
+                #expect(app.presentationOptions.contains(.disableHideApplication))
+                #expect(app.presentationOptions.contains(.hideDock))
+                #expect(app.presentationOptions.contains(.hideMenuBar))
+            }
         }
 
         manager.release()
