@@ -583,15 +583,24 @@ export function createMacBook(assets: SceneAssets) {
   }
 
   const portX = -DECK_W / 2 - 0.005;
-  const magsafePort = new THREE.Mesh(new THREE.ShapeGeometry(rrect(new THREE.Shape(), 1.18, 0.34, 0.12), 8), mats.port);
+  const magsafeCollar = new THREE.Mesh(
+    new THREE.ShapeGeometry(rrect(new THREE.Shape(), 1.26, 0.42, 0.14), 8),
+    mats.chamfer,
+  );
+  magsafeCollar.rotation.y = -Math.PI / 2;
+  magsafeCollar.position.set(portX + 0.002, 0.04, -3.8);
+  const magsafePort = new THREE.Mesh(new THREE.ShapeGeometry(rrect(new THREE.Shape(), 1.16, 0.32, 0.11), 8), mats.port);
   magsafePort.rotation.y = -Math.PI / 2;
   magsafePort.position.set(portX, 0.04, -3.8);
-  base.add(magsafePort);
+  base.add(magsafeCollar, magsafePort);
   for (const tz of [-1.9, -0.6]) {
-    const tbPort = new THREE.Mesh(new THREE.ShapeGeometry(rrect(new THREE.Shape(), 0.74, 0.26, 0.13), 8), mats.port);
+    const tbCollar = new THREE.Mesh(new THREE.ShapeGeometry(rrect(new THREE.Shape(), 0.8, 0.32, 0.15), 8), mats.chamfer);
+    tbCollar.rotation.y = -Math.PI / 2;
+    tbCollar.position.set(portX + 0.002, 0.04, tz);
+    const tbPort = new THREE.Mesh(new THREE.ShapeGeometry(rrect(new THREE.Shape(), 0.72, 0.24, 0.12), 8), mats.port);
     tbPort.rotation.y = -Math.PI / 2;
     tbPort.position.set(portX, 0.04, tz);
-    base.add(tbPort);
+    base.add(tbCollar, tbPort);
   }
 
   const MAGSAFE_X = -DECK_W / 2 - 0.36;
@@ -653,6 +662,9 @@ export function createMacBook(assets: SceneAssets) {
   const hingeBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 18.4, 24).rotateZ(Math.PI / 2), mats.baseInner);
   hingeBarrel.position.set(0, 0.06, -0.08);
   hingeBarrel.castShadow = hingeBarrel.receiveShadow = true;
+  const screenBounce = new THREE.PointLight(0xdbe8ff, 1.35, 28, 2);
+  screenBounce.position.set(0, 4.2, 6.5);
+  root.add(screenBounce);
   lid.add(lidShell, emblemDisc, lidBezel, screenMesh, camLens, camLed, hingeBarrel);
   lid.position.set(0, LAYERS.lid.y, HINGE_Z);
   root.add(lid);
@@ -755,7 +767,18 @@ export function createMacBook(assets: SceneAssets) {
     lid.rotation.x = THREE.MathUtils.lerp(-0.28, Math.PI / 2, pose.lidAngle);
     magsafe.position.set(MAGSAFE_X - pose.magsafeSlide * 3.8, 0.04, -3.8);
     mats.magsafeLed.color.setHex(pose.magsafeSlide > 0.08 ? 0xff453a : 0x30d158);
-    mats.camLed.color.setHex(Math.round(pose.screenMode) <= 1 ? 0x30d158 : 0x0b160e);
+    const sMode = Math.round(pose.screenMode);
+    mats.camLed.color.setHex(sMode <= 1 ? 0x30d158 : 0x0b160e);
+    if (sMode === 3) {
+      screenBounce.color.setHex(0xff453a);
+      screenBounce.intensity = 1.65 + pose.sirenPulse * 0.65;
+    } else if (sMode === 2) {
+      screenBounce.color.setHex(0xff8c3a);
+      screenBounce.intensity = 1.55;
+    } else {
+      screenBounce.color.setHex(0xdbe8ff);
+      screenBounce.intensity = 1.35 * (1 - pose.lidAngle * 0.75);
+    }
     screenTex.update(pose);
     iphone.update(pose);
 

@@ -12,6 +12,20 @@
   opacity: 0;
 }
 
+.nav::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  transform-origin: left center;
+  transform: scaleX(var(--scroll-progress, 0));
+  opacity: 0.78;
+  pointer-events: none;
+}
+
 .brand {
   display: inline-flex;
   align-items: center;

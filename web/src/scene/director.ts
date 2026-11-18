@@ -205,6 +205,7 @@ export async function startExperience({
       intro.update();
     }
     markSection();
+    ui.nav.style.setProperty("--scroll-progress", (scroll ? scroll.progress() : 0).toFixed(4));
 
     const idle = stage.idle;
     springLean(dt);

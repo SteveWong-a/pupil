@@ -20,6 +20,218 @@ function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: n
   ctx.closePath();
 }
 
+function drawPupilEyeVector(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number, color: string) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = Math.max(2, s * 0.085);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  const halfSpan = s * 0.4;
+  const cornerR = s * 0.12;
+  const armLen = s * 0.14;
+  for (const [sx, sy] of [
+    [-1, -1],
+    [1, -1],
+    [-1, 1],
+    [1, 1],
+  ]) {
+    const xc = cx + sx * halfSpan;
+    const yc = cy + sy * halfSpan;
+    ctx.beginPath();
+    ctx.moveTo(xc - sx * (cornerR + armLen), yc);
+    ctx.lineTo(xc - sx * cornerR, yc);
+    ctx.quadraticCurveTo(xc, yc, xc, yc - sy * cornerR);
+    ctx.lineTo(xc, yc - sy * (cornerR + armLen));
+    ctx.stroke();
+  }
+
+  const eyeRx = s * 0.23;
+  const eyeRy = s * 0.145;
+  ctx.beginPath();
+  ctx.moveTo(cx - eyeRx, cy);
+  ctx.quadraticCurveTo(cx, cy - eyeRy * 1.45, cx + eyeRx, cy);
+  ctx.quadraticCurveTo(cx, cy + eyeRy * 1.45, cx - eyeRx, cy);
+  ctx.closePath();
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, s * 0.068, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawPadlockIcon(ctx: CanvasRenderingContext2D, cx: number, cy: number, color: string) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 2.6;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  roundRectPath(ctx, cx - 9, cy - 2, 18, 14, 3.5);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx, cy - 3, 5.5, Math.PI, 0, false);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawWarningTriangle(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, color: string) {
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - r);
+  ctx.lineTo(cx + r * 0.96, cy + r * 0.78);
+  ctx.lineTo(cx - r * 0.96, cy + r * 0.78);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#111215";
+  ctx.fillRect(cx - r * 0.1, cy - r * 0.35, r * 0.2, r * 0.62);
+  ctx.beginPath();
+  ctx.arc(cx, cy + r * 0.48, r * 0.12, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawBellBadge(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, color: string) {
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = Math.max(2, r * 0.16);
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.arc(cx, cy - r * 0.08, r * 0.56, Math.PI, 0, false);
+  ctx.lineTo(cx + r * 0.72, cy + r * 0.48);
+  ctx.lineTo(cx - r * 0.72, cy + r * 0.48);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx, cy + r * 0.68, r * 0.18, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawSpeakerWaves(ctx: CanvasRenderingContext2D, cx: number, cy: number, color: string) {
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.4;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(cx - 11, cy - 4);
+  ctx.lineTo(cx - 5, cy - 4);
+  ctx.lineTo(cx + 1, cy - 9);
+  ctx.lineTo(cx + 1, cy + 9);
+  ctx.lineTo(cx - 5, cy + 4);
+  ctx.lineTo(cx - 11, cy + 4);
+  ctx.closePath();
+  ctx.fill();
+  for (const wr of [6, 11]) {
+    ctx.beginPath();
+    ctx.arc(cx + 2, cy, wr, -0.65, 0.65);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawAlarmAuthCard(ctx: CanvasRenderingContext2D) {
+  const cw = 576;
+  const ch = 660;
+  const cx = (W - cw) / 2;
+  const cy = (H - ch) / 2;
+
+  ctx.save();
+  ctx.shadowColor = "rgba(0, 0, 0, 0.55)";
+  ctx.shadowBlur = 64;
+  ctx.shadowOffsetY = 28;
+  roundRectPath(ctx, cx, cy, cw, ch, 36);
+  ctx.fillStyle = "rgba(28, 28, 30, 0.96)";
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  roundRectPath(ctx, cx, cy, cw, ch, 36);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.16)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // 1. 52x52 (scaled 104x104) Rounded Square Badge with Crimson Bell
+  const bx = W / 2 - 52;
+  const by = cy + 48;
+  roundRectPath(ctx, bx, by, 104, 104, 28);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.14)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  drawBellBadge(ctx, W / 2, by + 52, 24, "#FF453A");
+
+  // 2. Title + Crimson Source Capsule + Timestamp + Subtitle
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#FFFFFF";
+  ctx.font = '600 30px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
+  ctx.fillText("Security alarm active", W / 2, cy + 196);
+
+  const pillW = 280;
+  roundRectPath(ctx, W / 2 - pillW / 2, cy + 230, pillW, 44, 22);
+  ctx.fillStyle = "rgba(255, 69, 58, 0.16)";
+  ctx.fill();
+  ctx.fillStyle = "#FF453A";
+  ctx.font = '600 21px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
+  ctx.fillText("Display Lid Closed", W / 2, cy + 252);
+
+  ctx.fillStyle = "rgba(255, 255, 255, 0.68)";
+  ctx.font = '500 20px "SF Mono", Menlo, monospace';
+  ctx.fillText("Triggered at 9:41 AM (just now)", W / 2, cy + 306);
+
+  ctx.fillStyle = "rgba(255, 255, 255, 0.62)";
+  ctx.font = '400 23px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
+  ctx.fillText("Enter your PIN to silence the alarm.", W / 2, cy + 352);
+
+  // 3. PIN Input Field + Touch ID + Unlock Button + Forgot PIN
+  const fx = cx + 44;
+  const fw = cw - 88;
+  roundRectPath(ctx, fx, cy + 394, fw, 68, 16);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.42)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255, 69, 58, 0.55)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.textAlign = "left";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.36)";
+  ctx.font = '400 25px "SF Mono", Menlo, monospace';
+  ctx.fillText("Enter PIN", fx + 24, cy + 429);
+
+  // Touch ID fingerprint rings + arrow inside input
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.78)";
+  ctx.lineWidth = 2;
+  for (const r of [6, 11, 16]) {
+    ctx.beginPath();
+    ctx.arc(fx + fw - 78, cy + 428, r, -Math.PI * 0.8, Math.PI * 0.8);
+    ctx.stroke();
+  }
+  ctx.fillStyle = "rgba(255, 255, 255, 0.28)";
+  ctx.beginPath();
+  ctx.arc(fx + fw - 34, cy + 428, 15, 0, Math.PI * 2);
+  ctx.fill();
+
+  roundRectPath(ctx, fx, cy + 486, fw, 68, 16);
+  ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+  ctx.fill();
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#111215";
+  ctx.font = '600 25px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
+  ctx.fillText("Unlock", W / 2, cy + 521);
+
+  ctx.fillStyle = "rgba(255, 255, 255, 0.52)";
+  ctx.font = '500 21px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
+  ctx.fillText("Forgot PIN?", W / 2, cy + 598);
+  ctx.restore();
+}
+
 function drawCoverImage(ctx: CanvasRenderingContext2D, img: HTMLImageElement, w: number, h: number) {
   const iw = img.naturalWidth || img.width;
   const ih = img.naturalHeight || img.height;
@@ -178,12 +390,12 @@ export function createScreenTexture(wallpaper: HTMLImageElement | null, screensh
 
     if (blurAlpha > 0.01) {
       ctx.save();
-      const px = Math.round(blurAlpha * 26);
+      const px = Math.round(blurAlpha * 34);
       if (supportsFilter) {
         if (px > 0) ctx.filter = `blur(${px}px)`;
-        ctx.drawImage(deskCanvas, -24, -24, W + 48, H + 48);
+        ctx.drawImage(deskCanvas, -28, -28, W + 56, H + 56);
       } else if (blurCanvas && blurCtx && px > 0) {
-        const scale = Math.max(0.03, 1 / (1 + px * 0.45));
+        const scale = Math.max(0.025, 1 / (1 + px * 0.45));
         const bw = Math.max(16, Math.round(W * scale));
         const bh = Math.max(10, Math.round(H * scale));
         blurCanvas.width = bw;
@@ -193,99 +405,69 @@ export function createScreenTexture(wallpaper: HTMLImageElement | null, screensh
         blurCtx.drawImage(deskCanvas, 0, 0, bw, bh);
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = "high";
-        ctx.drawImage(blurCanvas, -24, -24, W + 48, H + 48);
+        ctx.drawImage(blurCanvas, -28, -28, W + 56, H + 56);
       } else {
-        ctx.drawImage(deskCanvas, -24, -24, W + 48, H + 48);
+        ctx.drawImage(deskCanvas, -28, -28, W + 56, H + 56);
       }
       ctx.restore();
 
-      ctx.fillStyle = `rgba(10, 12, 18, ${(0.42 * blurAlpha).toFixed(3)})`;
+      // Native ScreenShieldView .ultraThickMaterial frosted tint (consistent across gaze blur, tamper, and alarm)
+      ctx.fillStyle = `rgba(22, 24, 30, ${(0.52 * blurAlpha).toFixed(3)})`;
       ctx.fillRect(0, 0, W, H);
 
+      // 2. Match ScreenShieldView.swift:
+      //    - mode === 1 (isGazePrivacyOnly): pure frosted glass + Notch Gaze Wing ONLY (NO modal card!)
+      //    - mode === 2 (isTamper): #FF6B0D perimeter outline + Tamper countdown PIN card
+      //    - mode === 3 (isAlarm): #FF453A crimson perimeter outline + Security alarm active PIN card
       ctx.save();
-      if (screenshots.screenShield && (screenshots.screenShield.naturalWidth || screenshots.screenShield.width)) {
-        const sw = screenshots.screenShield.naturalWidth || screenshots.screenShield.width;
-        const sh = screenshots.screenShield.naturalHeight || screenshots.screenShield.height;
-        ctx.globalAlpha = Math.min(0.62, blurAlpha * 0.62);
-        ctx.drawImage(screenshots.screenShield, 0, 0, W, H);
+      if (mode === 2) {
+        ctx.save();
+        ctx.strokeStyle = "rgba(255, 107, 13, 0.9)";
+        ctx.lineWidth = 8;
+        ctx.shadowColor = "rgba(255, 107, 13, 0.65)";
+        ctx.shadowBlur = 24;
+        ctx.strokeRect(4, 4, W - 8, H - 8);
+        ctx.restore();
 
-        ctx.globalAlpha = Math.min(1, blurAlpha * 1.1);
-        const cx0 = 0.28;
-        const cy0 = 0.13;
-        const cw0 = 0.44;
-        const ch0 = 0.74;
-        ctx.drawImage(
-          screenshots.screenShield,
-          sw * cx0,
-          sh * cy0,
-          sw * cw0,
-          sh * ch0,
-          W * cx0,
-          H * cy0,
-          W * cw0,
-          H * ch0,
-        );
-      } else if (mode === 2) {
-        const cw = W * 0.44;
-        const ch = H * 0.52;
-        const cx = (W - cw) / 2;
-        const cy = (H - ch) / 2;
-        ctx.globalAlpha = Math.min(1, blurAlpha * 1.1);
-        roundRectPath(ctx, cx, cy, cw, ch, 26);
-        ctx.fillStyle = "#1E1E20";
-        ctx.fill();
-        ctx.strokeStyle = "rgba(255, 159, 10, 0.45)";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-
-        ctx.fillStyle = "#FFFFFF";
-        ctx.font = '700 42px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(`Tamper detected — ${Math.max(1, Math.round(pose.countdown))}s`, W / 2, cy + ch * 0.36);
-
-        ctx.fillStyle = "#FF9F0A";
-        ctx.font = '600 24px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
-        ctx.fillText("AC Charger Unplugged · Enter PIN or Touch ID", W / 2, cy + ch * 0.54);
-      }
-
-      ctx.globalAlpha = Math.min(1, blurAlpha * 1.1);
-      if (mode === 1) {
-        roundRectPath(ctx, W * 0.31, H * 0.335, W * 0.38, H * 0.16, 16);
-        ctx.fillStyle = "#1E1E20";
-        ctx.fill();
-
-        ctx.fillStyle = "#FFFFFF";
-        ctx.font = '700 42px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("Privacy shield active", W / 2, H * 0.368);
-
-        const badgeW = 396;
-        roundRectPath(ctx, W / 2 - badgeW / 2, H * 0.402, badgeW, 44, 22);
-        ctx.fillStyle = "rgba(255, 159, 10, 0.18)";
-        ctx.fill();
-        ctx.fillStyle = "#FF9F0A";
-        ctx.font = '600 22px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
-        ctx.fillText("👁  Shoulder-Surfer Gaze Detected", W / 2, H * 0.425);
-
-        ctx.fillStyle = "rgba(235, 238, 245, 0.78)";
-        ctx.font = '500 21px "SF Mono", Menlo, monospace';
-        ctx.fillText("Blurred in 95ms · 10.0 FPS Apple Vision ANE", W / 2, H * 0.468);
+        if (screenshots.screenShield && (screenshots.screenShield.naturalWidth || screenshots.screenShield.width)) {
+          const sw = screenshots.screenShield.naturalWidth || screenshots.screenShield.width;
+          const sh = screenshots.screenShield.naturalHeight || screenshots.screenShield.height;
+          ctx.globalAlpha = Math.min(1, blurAlpha * 1.1);
+          const cx0 = 0.28;
+          const cy0 = 0.13;
+          const cw0 = 0.44;
+          const ch0 = 0.74;
+          ctx.drawImage(screenshots.screenShield, sw * cx0, sh * cy0, sw * cw0, sh * ch0, W * cx0, H * cy0, W * cw0, H * ch0);
+        } else {
+          const cw = 576;
+          const ch = 620;
+          const cx = (W - cw) / 2;
+          const cy = (H - ch) / 2;
+          ctx.globalAlpha = Math.min(1, blurAlpha * 1.1);
+          roundRectPath(ctx, cx, cy, cw, ch, 36);
+          ctx.fillStyle = "rgba(28, 28, 30, 0.95)";
+          ctx.fill();
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.16)";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.fillStyle = "#FFFFFF";
+          ctx.font = '600 30px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
+          ctx.textAlign = "center";
+          ctx.fillText(`Tamper detected — ${Math.max(1, Math.round(pose.countdown))}s`, W / 2, cy + ch * 0.4);
+          ctx.fillStyle = "#FF9F0A";
+          ctx.font = '600 22px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
+          ctx.fillText("AC Charger Unplugged · Enter PIN or Touch ID", W / 2, cy + ch * 0.54);
+        }
       } else if (mode === 3) {
-        const pillW = 720;
-        const pillX = W / 2 - pillW / 2;
-        roundRectPath(ctx, pillX, 92, pillW, 56, 28);
-        ctx.fillStyle = "rgba(40, 14, 16, 0.94)";
-        ctx.fill();
-        ctx.strokeStyle = "#FF453A";
-        ctx.lineWidth = 2.5;
-        ctx.stroke();
-        ctx.fillStyle = "#FF453A";
-        ctx.font = '700 22px "SF Mono", Menlo, monospace';
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("SLEEP BLOCKED (IOPMAssertion) · SIREN 30% -> 100%", W / 2, 121);
+        ctx.save();
+        ctx.strokeStyle = "rgba(255, 69, 58, 0.95)";
+        ctx.lineWidth = 10;
+        ctx.shadowColor = "rgba(255, 69, 58, 0.75)";
+        ctx.shadowBlur = 28;
+        ctx.strokeRect(5, 5, W - 10, H - 10);
+        ctx.restore();
+        ctx.globalAlpha = Math.min(1, blurAlpha * 1.1);
+        drawAlarmAuthCard(ctx);
       }
       ctx.restore();
     } else {
@@ -312,49 +494,46 @@ export function createScreenTexture(wallpaper: HTMLImageElement | null, screensh
     ctx.textAlign = "right";
     ctx.fillStyle = "rgba(235, 240, 248, 0.88)";
     ctx.font = '500 21px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
-    ctx.fillText("Pupil   Wi-Fi   100%   Tue 9:41 AM", W - 36, 28);
+    ctx.fillText("Wi-Fi   100%   Tue 9:41 AM", W - 36, 28);
+    drawPupilEyeVector(ctx, W - 332, 27, 26, "#F5F7FA");
 
-    // Expanding Center Pupil Notch Pill
-    const expanded = mode >= 1 && mode <= 4;
-    const pillW = expanded ? 580 : 460;
-    const pillH = expanded ? 76 : 66;
-    const pillX = W / 2 - pillW / 2;
-    roundRectPath(ctx, pillX, -12, pillW, pillH + 12, 24);
-    ctx.fillStyle = "#050507";
+    // Authentic MacBook Pro Hardware Notch + NotchOverlayView Flanking Wings
+    const isWingActive = mode === 1 || mode === 2 || mode === 3;
+    const notchW = isWingActive ? 430 : 244;
+    const notchH = isWingActive ? 74 : 54;
+    const notchX = W / 2 - notchW / 2;
+    roundRectPath(ctx, notchX, -14, notchW, notchH + 14, 22);
+    ctx.fillStyle = "#000000";
     ctx.fill();
 
-    let pillColor = "#30D158";
-    let pillLabel = "PUPIL ARMED · 10 FPS ANE";
-    if (mode === 1) {
-      pillColor = "#FF9F0A";
-      pillLabel = "GAZE DETECTED · BLURRING SCREEN";
-    } else if (mode === 2) {
-      pillColor = "#FF9F0A";
-      pillLabel = `CHARGER UNPLUGGED · ${Math.max(0, Math.ceil(pose.countdown))}S GRACE`;
-    } else if (mode === 3) {
-      pillColor = "#FF453A";
-      pillLabel = "LID TAMPER · SIREN ACTIVE";
-    } else if (mode === 4) {
-      pillColor = "#30D158";
-      pillLabel = "DISARMED VIA IPHONE COMPANION";
-    } else if (mode === 5) {
-      pillColor = "#64D2FF";
-      pillLabel = "TOUCH ID VERIFIED · UNLOCKED";
+    if (isWingActive) {
+      const borderGrad = ctx.createLinearGradient(0, 0, 0, notchH);
+      const borderHex = mode === 3 ? "255, 69, 58" : mode === 2 ? "255, 107, 13" : "255, 255, 255";
+      const borderAlpha = mode === 1 ? 0.24 : 0.95;
+      borderGrad.addColorStop(0, `rgba(${borderHex}, ${borderAlpha})`);
+      borderGrad.addColorStop(1, `rgba(${borderHex}, ${(borderAlpha * 0.35).toFixed(2)})`);
+      ctx.strokeStyle = borderGrad;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      const leftWingX = notchX + 48;
+      const rightWingX = notchX + notchW - 48;
+      const wingY = notchH / 2 + 2;
+
+      if (mode === 1) {
+        drawPadlockIcon(ctx, leftWingX, wingY, "rgba(255, 255, 255, 0.92)");
+        drawPupilEyeVector(ctx, rightWingX, wingY, 32, "rgba(255, 255, 255, 0.94)");
+      } else if (mode === 2) {
+        drawWarningTriangle(ctx, leftWingX, wingY, 13, "#FF9F0A");
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#FF9F0A";
+        ctx.font = '700 22px "SF Mono", Menlo, monospace';
+        ctx.fillText(`${Math.max(1, Math.ceil(pose.countdown))}s`, rightWingX, wingY + 1);
+      } else if (mode === 3) {
+        drawBellBadge(ctx, leftWingX, wingY, 13, "#FF453A");
+        drawSpeakerWaves(ctx, rightWingX, wingY, "#FF453A");
+      }
     }
-
-    ctx.strokeStyle = pillColor;
-    ctx.lineWidth = 2.2;
-    ctx.stroke();
-
-    ctx.fillStyle = pillColor;
-    ctx.beginPath();
-    ctx.arc(pillX + 42, 34, 7, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#F8FAFC";
-    ctx.font = '600 20px "SF Mono", Menlo, monospace';
-    ctx.fillText(pillLabel, W / 2 + 12, 35);
     ctx.restore();
 
     texture.needsUpdate = true;

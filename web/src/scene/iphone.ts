@@ -120,10 +120,12 @@ export function createIPhone(surface: SurfaceMaps) {
   screenMesh.position.y = PHONE_H / 2 + 0.016;
   group.add(screenMesh);
 
-  // 4. Front Camera Lens (Dynamic Island pill & status text render cleanly in phoneTexture)
+  // 4. Front Camera Lens & Earpiece Micro-Slit
   const lensMesh = new THREE.Mesh(new THREE.CircleGeometry(0.11, 20).rotateX(-Math.PI / 2), mats.sapphire);
   lensMesh.position.set(0.68, PHONE_H / 2 + 0.019, -PHONE_D / 2 + 0.78);
-  group.add(lensMesh);
+  const speakerSlit = new THREE.Mesh(slab(0.95, 0.07, 0.008, 0.03), mats.bezel);
+  speakerSlit.position.set(0, PHONE_H / 2 + 0.018, -PHONE_D / 2 + 0.24);
+  group.add(lensMesh, speakerSlit);
 
   // 5. Left Titanium Buttons & Right Side Button
   const actionBtn = new THREE.Mesh(slab(0.08, 0.58, 0.18, 0.03, 0.015, 6), mats.titanium);
