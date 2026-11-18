@@ -16,7 +16,7 @@ public final class HardwareLockdownManager {
     private init() {}
 
     public func engage() {
-        if let app = NSApp {
+        if !SecurityCoordinator.isRunningUnderTests, let app = NSApp {
             app.setActivationPolicy(.regular)
             app.presentationOptions = [
                 .disableProcessSwitching,
@@ -32,7 +32,7 @@ public final class HardwareLockdownManager {
     }
 
     public func release() {
-        if let app = NSApp {
+        if !SecurityCoordinator.isRunningUnderTests, let app = NSApp {
             app.presentationOptions = []
             let hasOpenMainWindow = app.windows.contains { $0.canBecomeMain && $0.isVisible && !($0 is ScreenShieldWindow) }
             if !hasOpenMainWindow {

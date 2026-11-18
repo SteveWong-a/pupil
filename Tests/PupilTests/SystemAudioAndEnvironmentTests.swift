@@ -179,4 +179,28 @@ struct SystemAudioAndEnvironmentTests {
         controller.restoreIfNeeded()
         #expect(backend.virtualMainVolume(deviceID: headphonesID) == 0.50)
     }
+
+    @Test("Test isolation uses SimulatedAudioHardwareBackend and skips physical siren playback")
+    func testHardwareIsolationUnderTests() {
+        #expect(SecurityCoordinator.isRunningUnderTests == true)
+
+        let simBackend = SimulatedAudioHardwareBackend()
+        let simController = SystemAudioController(backend: simBackend)
+        simController.forceBuiltInSpeakers(volume: 0.90)
+        #expect(simController.hasActiveSnapshot == true)
+        #expect(simBackend.defaultOutputDeviceID() == simBackend.builtInSpeakerDeviceID())
+        simController.restoreIfNeeded()
+        #expect(simController.hasActiveSnapshot == false)
+        #expect(simBackend.defaultOutputDeviceID() == 1)
+
+        SirenSynthesizer.shared.stop()
+        #expect(SirenSynthesizer.shared.isActive == false)
+        SirenSynthesizer.shared.start(baseFrequencyHz: 880, overrideSpeakers: true, targetVolume: 0.85)
+        #expect(SirenSynthesizer.shared.isActive == true)
+        #expect(SystemAudioController.shared.hasActiveSnapshot == true)
+        SirenSynthesizer.shared.playCountdownTick()
+        SirenSynthesizer.shared.stop()
+        #expect(SirenSynthesizer.shared.isActive == false)
+        #expect(SystemAudioController.shared.hasActiveSnapshot == false)
+    }
 }
