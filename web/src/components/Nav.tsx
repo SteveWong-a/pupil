@@ -1,14 +1,15 @@
 import type { MouseEvent, Ref } from "react";
 import type { SectionName } from "../scene/uiHandles";
 import { Button } from "./Button";
+import { FeatureIcon, type IconKind } from "./FeatureIcon";
 import styles from "./Nav.module.css";
 
-const LINKS: { name: SectionName; label: string }[] = [
+const LINKS: { name: SectionName; label: string; icon?: IconKind }[] = [
   { name: "overview", label: "Overview" },
-  { name: "gaze", label: "Gaze Blur" },
-  { name: "tamper", label: "Tamper Alert" },
-  { name: "phone", label: "Phone Link" },
-  { name: "macos", label: "macOS & Touch ID" },
+  { name: "gaze", label: "Gaze Blur", icon: "eye" },
+  { name: "tamper", label: "Tamper Alert", icon: "bolt" },
+  { name: "phone", label: "Phone Link", icon: "phone" },
+  { name: "macos", label: "macOS & Touch ID", icon: "touchid" },
 ];
 
 interface NavProps {
@@ -34,7 +35,7 @@ export function Nav({ ref, active, onGo, onWaitlist, onOpenModal }: NavProps) {
         </span>
       </a>
       <div className={styles.links}>
-        {LINKS.map(({ name, label }) => (
+        {LINKS.map(({ name, label, icon }) => (
           <a
             key={name}
             href={`#${name}`}
@@ -42,7 +43,8 @@ export function Nav({ ref, active, onGo, onWaitlist, onOpenModal }: NavProps) {
             aria-current={active === name ? "true" : undefined}
             onClick={go(name)}
           >
-            {label}
+            {icon && <FeatureIcon kind={icon} size={13} />}
+            <span>{label}</span>
           </a>
         ))}
         <a

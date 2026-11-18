@@ -124,10 +124,10 @@ export function App() {
           onWaitlist={() => experience.current?.goToEnd()}
           onOpenModal={() => setModalView("screenshots")}
         />
-        <Panel ref={gaze} place="right" {...GAZE} />
-        <Panel ref={tamper} place="right" {...TAMPER} />
-        <Panel ref={phone} place="left" {...PHONE} />
-        <Panel ref={macos} place="left" {...MACOS} />
+        <Panel ref={gaze} place="right" icon="eye" {...GAZE} />
+        <Panel ref={tamper} place="right" icon="bolt" {...TAMPER} />
+        <Panel ref={phone} place="left" icon="phone" {...PHONE} />
+        <Panel ref={macos} place="left" icon="touchid" {...MACOS} />
         <Labels ref={labels} />
         <Final
           ref={final}

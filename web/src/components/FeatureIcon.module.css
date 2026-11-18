@@ -1,0 +1,39 @@
+.icon {
+  display: inline-block;
+  flex-shrink: 0;
+  transition:
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    color 0.2s ease;
+}
+
+.pupil {
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: center;
+}
+
+.strokeDraw {
+  stroke-dasharray: 48;
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 0.4s ease;
+}
+
+:is(a, button, [data-icon-hover]):hover .icon {
+  transform: scale(1.14);
+  color: var(--accent);
+}
+
+:is(a, button, [data-icon-hover]):hover .pupil {
+  transform: translate(1.4px, -0.6px) scale(1.12);
+}
+
+:is(a, button, [data-icon-hover]):hover .strokeDraw {
+  stroke-dashoffset: -10;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .icon,
+  .pupil,
+  .strokeDraw {
+    transition: none;
+  }
+}

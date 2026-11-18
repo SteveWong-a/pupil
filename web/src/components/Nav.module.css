@@ -63,6 +63,9 @@
 }
 
 .link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: var(--size-nav);
   font-stretch: var(--stretch-nav);
   color: var(--muted);
