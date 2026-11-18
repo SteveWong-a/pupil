@@ -988,4 +988,64 @@ struct TrustedNetworkBoundaryTests {
         monitor.refreshCurrentNetwork(at: simTime)
         #expect(coordinator.state == .disarmed)
     }
+
+    @Test("enrollTrustedSnapshot rejects interface-only snapshots and upgrades legacy interface-only entries")
+    @MainActor
+    func enrollTrustedSnapshotRejectsInterfaceOnlyAndUpgradesLegacyEntries() {
+        let (settings, defaults, suiteName) = makeIsolatedSettings()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let ifHash = NetworkIdentifierHasher.hashInterfaceFingerprint(
+            interfaceName: "en0",
+            localHardwareMAC: "aa:bb:cc:dd:ee:ff",
+            routerIP: "192.168.1.1",
+            subnetCIDR: "192.168.1.0/24",
+            dhcpServerID: "192.168.1.1"
+        )!
+
+        // 1. Offline / non-Wi-Fi snapshot is rejected
+        let offlineSnap = NetworkIdentitySnapshot(isSatisfied: false, primaryInterface: .none)
+        #expect(settings.enrollTrustedSnapshot(offlineSnap) == .failure(.notOnWiFi))
+
+        // 2. Interface-only Wi-Fi snapshot (no SSID, BSSID, or gateway MAC) is rejected
+        let ifOnlySnap = makeWiFiSnapshot(
+            ssid: nil,
+            bssid: nil,
+            gatewayMAC: nil,
+            interfaceHash: ifHash,
+            permission: .denied
+        )
+        #expect(settings.enrollTrustedSnapshot(ifOnlySnap) == .failure(.missingStrongerIdentifier))
+        #expect(settings.trustedNetworks.isEmpty)
+
+        // 3. Existing persisted interface-only entry can be re-enrolled with a stronger identifier and upgraded in place
+        let legacyEntry = TrustedNetworkEntry(
+            displayName: "Legacy Subnet",
+            ssidHash: nil,
+            bssidHash: nil,
+            gatewayMACHash: nil,
+            interfaceHash: ifHash,
+            enrolledSource: .interfaceHash
+        )
+        settings.trustedNetworks = [legacyEntry]
+        #expect(legacyEntry.hasStrongerIdentifier == false)
+
+        let upgradedSnap = makeWiFiSnapshot(
+            ssid: "HomeWiFi",
+            bssid: "aa:bb:cc:11:22:33",
+            gatewayMAC: "00:11:22:33:44:55",
+            interfaceHash: ifHash,
+            permission: .authorized
+        )
+        let result = settings.enrollTrustedSnapshot(upgradedSnap)
+        guard case .success(let enrolled) = result else {
+            Issue.record("Expected enrollment to succeed with stronger identifier, got \(result)")
+            return
+        }
+        #expect(settings.trustedNetworks.count == 1)
+        #expect(settings.trustedNetworks.first?.id == legacyEntry.id)
+        #expect(settings.trustedNetworks.first?.hasStrongerIdentifier == true)
+        #expect(settings.trustedNetworks.first?.ssidHash == NetworkIdentifierHasher.hashSSID("HomeWiFi"))
+        #expect(enrolled.enrolledSource == .ssid)
+    }
 }
