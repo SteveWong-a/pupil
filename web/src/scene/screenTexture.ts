@@ -555,7 +555,7 @@ export function createScreenTexture(wallpaper: HTMLImageElement | null, screensh
     draw(pose);
   }
 
-  draw({ lidAngle: 0, magsafeSlide: 0, screenMode: 0, shieldBlur: 0, countdown: 15, sirenPulse: 0, phoneMode: 0, phonePress: 0 });
+  draw({ lidAngle: 0, magsafeSlide: 0, screenMode: 0, shieldBlur: 0, countdown: 15, sirenPulse: 0, phoneMode: 0, phonePress: 0, phoneLift: 0 });
 
   return {
     texture,

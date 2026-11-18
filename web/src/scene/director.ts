@@ -205,7 +205,8 @@ export async function startExperience({
       intro.update();
     }
     markSection();
-    ui.nav.style.setProperty("--scroll-progress", (scroll ? scroll.progress() : 0).toFixed(4));
+    const p = scroll ? scroll.progress() : 0;
+    document.documentElement.style.setProperty("--scroll-progress", p.toFixed(4));
 
     const idle = stage.idle;
     springLean(dt);
@@ -296,6 +297,22 @@ export async function startExperience({
   } else {
     intro.play();
   }
+
+  const chapterOrder: (SectionName | "waitlist")[] = ["overview", "gaze", "tamper", "phone", "macos", "waitlist"];
+  addEventListener(
+    "keydown",
+    (e) => {
+      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+      const tag = (document.activeElement as HTMLElement | null)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || document.querySelector("[role='dialog']")) return;
+      const cur = scroll ? (sectionAt(scroll.progress()) ?? "waitlist") : "overview";
+      const idx = chapterOrder.indexOf(cur);
+      const next = chapterOrder[Math.min(chapterOrder.length - 1, Math.max(0, idx + (e.key === "ArrowRight" ? 1 : -1)))];
+      if (next === "waitlist") goToEnd();
+      else goToSection(next);
+    },
+    { signal },
+  );
 
   return {
     goToSection,

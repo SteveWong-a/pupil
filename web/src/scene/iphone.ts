@@ -46,10 +46,10 @@ function slab(w: number, d: number, h: number, r: number, bevel = 0, segs = 12, 
   return g;
 }
 
-export function createIPhone(surface: SurfaceMaps) {
+export function createIPhone(surface: SurfaceMaps, pupilIcon: HTMLImageElement | null = null) {
   const group = new THREE.Group();
   const n2 = (v: number) => new THREE.Vector2(v, v);
-  const phoneTex = createPhoneTexture();
+  const phoneTex = createPhoneTexture(pupilIcon);
 
   const mats = {
     titanium: new THREE.MeshPhysicalMaterial({
@@ -142,6 +142,17 @@ export function createIPhone(surface: SurfaceMaps) {
   group.rotation.y = PHONE_RY;
 
   function update(pose: MacBookPose) {
+    const lift = Math.min(1, Math.max(0, pose.phoneLift));
+    group.position.set(
+      THREE.MathUtils.lerp(PHONE_POS.x, 19.2, lift),
+      THREE.MathUtils.lerp(PHONE_POS.y, 5.2, lift),
+      THREE.MathUtils.lerp(PHONE_POS.z, 4.8, lift),
+    );
+    group.rotation.set(
+      THREE.MathUtils.lerp(0, 1.06, lift),
+      THREE.MathUtils.lerp(PHONE_RY, -0.1, lift),
+      0,
+    );
     phoneTex.update(pose);
   }
 

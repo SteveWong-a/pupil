@@ -8,6 +8,7 @@ export interface ScreenshotAtlas {
   settingsGaze: HTMLImageElement | null;
   settingsSensors: HTMLImageElement | null;
   settingsAlarm: HTMLImageElement | null;
+  pupilIcon: HTMLImageElement | null;
 }
 
 export interface LegendAtlas {
@@ -564,7 +565,7 @@ export async function loadSceneAssets(): Promise<SceneAssets> {
   const grain = createMicroGrainNormalMap();
   const smudge = createSurfaceWearMap();
 
-  const [wallpaper, menubarPopover, screenShield, settingsGeneral, settingsGaze, settingsSensors, settingsAlarm] = await Promise.all([
+  const [wallpaper, menubarPopover, screenShield, settingsGeneral, settingsGaze, settingsSensors, settingsAlarm, pupilIcon] = await Promise.all([
     loadImage("./assets/macos-wallpaper.jpg"),
     loadImage("./assets/screenshots/menubar-popover.png"),
     loadImage("./assets/screenshots/screen-shield.png"),
@@ -572,6 +573,7 @@ export async function loadSceneAssets(): Promise<SceneAssets> {
     loadImage("./assets/screenshots/settings-gaze.png"),
     loadImage("./assets/screenshots/settings-sensors.png"),
     loadImage("./assets/screenshots/settings-alarm.png"),
+    loadImage("./assets/pupil-icon.png"),
   ]);
 
   const configureTiled = (tex: THREE.Texture, cm: number) => {
@@ -599,6 +601,7 @@ export async function loadSceneAssets(): Promise<SceneAssets> {
       settingsGaze,
       settingsSensors,
       settingsAlarm,
+      pupilIcon,
     },
     surface,
   };

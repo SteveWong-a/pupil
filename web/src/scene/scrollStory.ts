@@ -42,10 +42,10 @@ export function createScrollStory({
   const kbY = stage.mbPose.y;
 
   const glow: GlowState = { backlight: BACKLIGHT, press: 0, wave: 0, key: 0, ch1: 0, ch2: 0, ch3: 0, ch4: 0 };
-  Object.assign(mb.pose, { lidAngle: 0, magsafeSlide: 0, screenMode: 0, shieldBlur: 0, countdown: 15, sirenPulse: 0, phoneMode: 0, phonePress: 0 });
+  Object.assign(mb.pose, { lidAngle: 0, magsafeSlide: 0, screenMode: 0, shieldBlur: 0, countdown: 15, sirenPulse: 0, phoneMode: 0, phonePress: 0, phoneLift: 0 });
 
   const tl = gsap.timeline({ paused: true, defaults: { ease: "power2.inOut" } });
-  tl.set(mb.pose, { lidAngle: 0, magsafeSlide: 0, screenMode: 0, shieldBlur: 0, countdown: 15, sirenPulse: 0, phoneMode: 0, phonePress: 0 }, 0);
+  tl.set(mb.pose, { lidAngle: 0, magsafeSlide: 0, screenMode: 0, shieldBlur: 0, countdown: 15, sirenPulse: 0, phoneMode: 0, phonePress: 0, phoneLift: 0 }, 0);
 
   // CHAPTER 1: Gaze Detection & Instant Screen Blur (settled at t = 2.64 / ?p=0.22)
   tl.to(ui.hero, { autoAlpha: 0, y: -30, filter: "blur(10px)", duration: 0.6, ease: "power1.in" }, 0);
@@ -84,9 +84,10 @@ export function createScrollStory({
   tl.to(ui.tamper, { autoAlpha: 0, y: -20, duration: 0.45, ease: "power1.in" }, 6.3);
   tl.to(glow, { ch2: 0, duration: 0.35 }, 6.3);
   tl.to(mb.pose, { lidAngle: 0, magsafeSlide: 0, sirenPulse: 0, duration: 0.8, ease: "power2.inOut" }, 6.4);
+  tl.to(mb.pose, { phoneLift: 1, duration: 1.0, ease: "power3.inOut" }, 6.45);
   tl.to(
     cam,
-    { tx: 13.5, ty: kbY + 3.2, tz: 2.8, az: 0.18, el: 0.35, dist: 48, shiftX: -0.09, shiftY: -0.02, fit: 0.78, duration: 1.45 },
+    { tx: 14.5, ty: kbY + 5.8, tz: 4.5, az: 0.14, el: 0.16, dist: 44, shiftX: -0.08, shiftY: -0.02, fit: 0.78, duration: 1.45 },
     6.4,
   );
   tl.set(mb.pose, { phoneMode: 1 }, 6.6);
@@ -99,6 +100,7 @@ export function createScrollStory({
   // CHAPTER 4: Seamless macOS UI & Touch ID (settled at t = 10.32 / ?p=0.86)
   tl.to(ui.phone, { autoAlpha: 0, y: -20, duration: 0.45, ease: "power1.in" }, 8.9);
   tl.to(glow, { ch3: 0, duration: 0.35 }, 8.9);
+  tl.to(mb.pose, { phoneLift: 0, duration: 0.85, ease: "power2.inOut" }, 8.95);
   tl.set(mb.pose, { phonePress: 0, screenMode: 0 }, 9.1);
   tl.set(mb.pose, { screenMode: 5 }, 9.8);
   tl.to(

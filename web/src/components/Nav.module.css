@@ -29,11 +29,12 @@
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: var(--size-brand);
+  gap: 10px;
+  font-size: 22px;
   font-weight: var(--w-bold);
   font-stretch: var(--stretch-ui);
-  letter-spacing: var(--track-ui);
+  letter-spacing: -0.02em;
+  line-height: 1;
   color: var(--ink);
   text-decoration: none;
   pointer-events: auto;
@@ -44,14 +45,15 @@
   height: 24px;
   border-radius: 6px;
   object-fit: contain;
+  flex-shrink: 0;
+  display: block;
 }
 
-.brand span {
-  font-family: var(--serif);
-  font-weight: var(--w-serif);
-  font-size: var(--size-brand-serif);
-  font-stretch: normal;
-  color: var(--accent);
+.wordmark {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  line-height: 1;
 }
 
 .links {

@@ -49,7 +49,7 @@ export function createIntroTimeline({
   Object.assign(flight, { mix: 1, near: 0.1 });
   Object.assign(stage, { desk: 0, idle: 0, tilt: 0, shadow: 0.85, hoverKeys: 0, light: 0.65, rim: 0.6, rake: 0.25 });
   Object.assign(stage.mbPose, { y: KB_Y, rx: 0, ry: 0, rz: 0 });
-  Object.assign(mb.pose, { lidAngle: 0.86, magsafeSlide: 0.75, screenMode: 0, shieldBlur: 0, countdown: 15, sirenPulse: 0, phoneMode: 0, phonePress: 0 });
+  Object.assign(mb.pose, { lidAngle: 0.86, magsafeSlide: 0.75, screenMode: 0, shieldBlur: 0, countdown: 15, sirenPulse: 0, phoneMode: 0, phonePress: 0, phoneLift: 0 });
 
   const glow = { level: 0.0 };
   post.ao.configuration.aoRadius = 0.45;

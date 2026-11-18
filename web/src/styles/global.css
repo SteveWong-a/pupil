@@ -28,4 +28,18 @@ p {
 em {
   font-style: normal;
   color: var(--accent);
+  background: linear-gradient(
+    112deg,
+    #8db8ff 0%,
+    #c6deff 26%,
+    #f4f8ff 48%,
+    #c6deff 72%,
+    #8db8ff 100%
+  );
+  background-size: 220% 100%;
+  background-position: calc(var(--scroll-progress, 0.15) * 100%) 50%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 20px rgba(10, 14, 24, 0.92));
 }

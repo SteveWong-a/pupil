@@ -36,6 +36,7 @@ export interface MacBookPose {
   sirenPulse: number;
   phoneMode: number;
   phonePress: number;
+  phoneLift: number;
 }
 
 export type FeatureId =
@@ -282,7 +283,7 @@ export function createMacBook(assets: SceneAssets) {
   const N = KEYS.length;
   const n2 = (v: number) => new THREE.Vector2(v, v);
   const screenTex = createScreenTexture(wallpaper, screenshots);
-  const iphone = createIPhone(surface);
+  const iphone = createIPhone(surface, screenshots.pupilIcon);
   root.add(iphone.group);
 
   const mats = {
@@ -700,6 +701,7 @@ export function createMacBook(assets: SceneAssets) {
     sirenPulse: 0,
     phoneMode: 0,
     phonePress: 0,
+    phoneLift: 0,
   };
 
   let seed = 3;

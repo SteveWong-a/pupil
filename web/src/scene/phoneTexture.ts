@@ -19,7 +19,8 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
-export function createPhoneTexture() {
+// Renders the real Pupil Mobile Sentinel Companion PWA (companion.html) on OLED #000000
+export function createPhoneTexture(pupilIcon: HTMLImageElement | null = null) {
   const canvas = document.createElement("canvas");
   canvas.width = PW;
   canvas.height = PH;
@@ -35,194 +36,237 @@ export function createPhoneTexture() {
   function draw(pose: MacBookPose) {
     const mode = Math.round(pose.phoneMode);
     const press = pose.phonePress;
+    const isTamper = mode === 1;
+    const isDisarmed = mode === 2;
 
     ctx.clearRect(0, 0, PW, PH);
 
-    // 1. iOS 18 Dark Titanium Wallpaper
-    const bg = ctx.createLinearGradient(0, 0, PW, PH);
-    bg.addColorStop(0, "#0b111e");
-    bg.addColorStop(0.45, "#131c2e");
-    bg.addColorStop(1, "#07090f");
-    ctx.fillStyle = bg;
+    // 1. Pure OLED #000000 Companion PWA Background
+    ctx.fillStyle = "#000000";
     ctx.fillRect(0, 0, PW, PH);
 
-    const glow = ctx.createRadialGradient(PW * 0.5, PH * 0.28, 40, PW * 0.5, PH * 0.28, 680);
-    glow.addColorStop(0, mode === 1 ? "rgba(255, 149, 0, 0.28)" : mode === 2 ? "rgba(48, 209, 88, 0.26)" : "rgba(56, 128, 255, 0.20)");
-    glow.addColorStop(1, "rgba(0, 0, 0, 0)");
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, PW, PH);
-
-    // 2. iOS Status Bar + Dynamic Island Live Activity
+    // 2. iOS Status Bar + Dynamic Island
     ctx.fillStyle = "#F5F7FA";
-    ctx.font = '600 34px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
+    ctx.font = '600 32px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.fillText("9:41", 88, 86);
+    ctx.fillText("9:41", 86, 84);
     ctx.textAlign = "right";
-    ctx.font = '600 28px "SF Mono", Menlo, monospace';
-    ctx.fillText("5G  100%", PW - 84, 86);
+    ctx.font = '600 26px "SF Mono", Menlo, monospace';
+    ctx.fillText("5G  100%", PW - 82, 84);
 
-    roundRect(ctx, PW / 2 - 250, 44, 500, 84, 42);
-    ctx.fillStyle = "#030305";
+    roundRect(ctx, PW / 2 - 190, 46, 380, 74, 37);
+    ctx.fillStyle = "#09090b";
     ctx.fill();
-    ctx.strokeStyle = mode === 1 ? "#FF9F0A" : "#30D158";
-    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = isTamper ? "rgba(255, 159, 10, 0.75)" : "rgba(48, 209, 88, 0.55)";
+    ctx.lineWidth = 2;
     ctx.stroke();
 
-    ctx.fillStyle = mode === 1 ? "#FF9F0A" : "#30D158";
+    ctx.fillStyle = isTamper ? "#FF9F0A" : "#30D158";
     ctx.beginPath();
-    ctx.arc(PW / 2 - 196, 86, 10, 0, Math.PI * 2);
+    ctx.arc(PW / 2 - 140, 83, 8, 0, Math.PI * 2);
     ctx.fill();
-
     ctx.textAlign = "center";
-    ctx.fillStyle = "#F8FAFC";
-    ctx.font = '600 23px "SF Mono", Menlo, monospace';
-    ctx.fillText(mode === 1 ? "TAMPER ALERT · 15S GRACE" : mode === 2 ? "DISARMED REMOTELY" : "BLE LINKED · -52 dBm", PW / 2 + 16, 87);
+    ctx.fillStyle = "#F5F7FA";
+    ctx.font = '600 20px "SF Mono", Menlo, monospace';
+    ctx.fillText(isTamper ? "TAMPER · 15S" : isDisarmed ? "DISARMED" : "ARMED · BLE", PW / 2 + 12, 84);
 
-    // 3. iOS Lock Screen Clock
-    ctx.fillStyle = "rgba(235, 242, 255, 0.72)";
-    ctx.font = '500 36px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
-    ctx.fillText("Tuesday, November 17", PW / 2, 224);
-
-    ctx.fillStyle = "#FFFFFF";
-    ctx.font = '700 176px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
-    ctx.fillText("9:41", PW / 2, 372);
-
-    // 4. Main RFC 8291 Web Push Notification & Intruder Snapshot Card
-    const cx = 64;
-    const cy = 500;
-    const cw = PW - 128;
-    const ch = 920;
-    roundRect(ctx, cx, cy, cw, ch, 48);
-    ctx.fillStyle = "rgba(20, 24, 34, 0.92)";
-    ctx.fill();
-    ctx.strokeStyle = mode === 1 ? "rgba(255, 159, 10, 0.65)" : mode === 2 ? "rgba(48, 209, 88, 0.65)" : "rgba(255, 255, 255, 0.16)";
-    ctx.lineWidth = 3;
-    ctx.stroke();
-
-    roundRect(ctx, cx + 44, cy + 44, cw - 88, 72, 20);
-    ctx.fillStyle = mode === 1 ? "rgba(255, 159, 10, 0.18)" : "rgba(48, 209, 88, 0.18)";
-    ctx.fill();
-    ctx.fillStyle = mode === 1 ? "#FF9F0A" : "#30D158";
-    ctx.font = '700 25px "SF Mono", Menlo, monospace';
-    ctx.textAlign = "left";
-    ctx.fillText(
-      mode === 1 ? "RFC 8291 WEB PUSH · CRITICAL" : mode === 2 ? "REMOTE DISARM CONFIRMED" : "PUPIL COMPANION · ARMED",
-      cx + 72,
-      cy + 81,
-    );
-
-    ctx.fillStyle = "#FFFFFF";
-    ctx.font = '700 44px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
-    ctx.fillText(
-      mode === 1 ? "AC Charger Unplugged" : mode === 2 ? "MacBook Pro Unlocked" : '16" MacBook Pro Protected',
-      cx + 48,
-      cy + 178,
-    );
-
-    ctx.fillStyle = "rgba(210, 220, 236, 0.82)";
-    ctx.font = '400 29px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
-    ctx.fillText(
-      mode === 1
-        ? "15s grace window active · Sleep blocked (IOPMAssertion)"
-        : mode === 2
-          ? "Screen shield cleared · Siren cancelled via APNs"
-          : "Walk-away auto-arm & return auto-disarm active",
-      cx + 48,
-      cy + 236,
-    );
-
-    const sx = cx + 48;
-    const sy = cy + 286;
-    const sw = cw - 96;
-    const sh = 380;
-    roundRect(ctx, sx, sy, sw, sh, 28);
-    const snapGrad = ctx.createLinearGradient(sx, sy, sx + sw, sy + sh);
-    snapGrad.addColorStop(0, "#141d2b");
-    snapGrad.addColorStop(1, "#0d121c");
-    ctx.fillStyle = snapGrad;
+    // 3. Companion App Header (pupil-icon.png + Pupil / Mobile Sentinel Companion + Status Pill)
+    const padX = 56;
+    const hdrY = 176;
+    const iconSize = 82;
+    ctx.save();
+    roundRect(ctx, padX, hdrY, iconSize, iconSize, 18);
+    ctx.fillStyle = "#141414";
     ctx.fill();
     ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
     ctx.lineWidth = 2;
     ctx.stroke();
-
-    ctx.fillStyle = "rgba(255, 255, 255, 0.14)";
-    ctx.beginPath();
-    ctx.arc(sx + sw / 2, sy + 148, 56, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(sx + sw / 2, sy + 320, 118, Math.PI, 0, false);
-    ctx.fill();
-
-    ctx.strokeStyle = mode === 1 ? "#FF9F0A" : "#30D158";
-    ctx.lineWidth = 3;
-    ctx.strokeRect(sx + sw / 2 - 92, sy + 72, 184, 184);
-
-    ctx.fillStyle = mode === 1 ? "#FF9F0A" : "#30D158";
-    ctx.font = '600 22px "SF Mono", Menlo, monospace';
-    ctx.fillText("ENCRYPTED SNAPSHOT · AES-256-GCM", sx + 28, sy + 44);
-    ctx.fillStyle = "rgba(235, 242, 255, 0.78)";
-    ctx.fillText("1080p FaceTime HD · 0B Cloud Storage", sx + 28, sy + sh - 28);
-
-    // 5. One-Tap "Disarm MacBook" Button
-    const bx = cx + 48;
-    const by = cy + 712 + press * 8;
-    const bw = cw - 96;
-    const bh = 148;
-    roundRect(ctx, bx, by, bw, bh, 34);
-    ctx.fillStyle = mode === 2 || press > 0.4 ? "#30D158" : "#248A3D";
-    ctx.fill();
-    ctx.strokeStyle = "#70FF94";
-    ctx.lineWidth = press > 0.2 ? 4 : 2;
-    ctx.stroke();
-
-    ctx.textAlign = "center";
-    ctx.fillStyle = "#061209";
-    ctx.font = '700 38px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
-    ctx.fillText(mode === 2 ? "✓ MacBook Disarmed" : "Disarm MacBook", PW / 2, by + bh / 2 + 2);
-
-    // 6. Bluetooth Proximity & Walk-Away Auto-Arm Card at Bottom
-    const px = 64;
-    const py = 1470;
-    const pw = PW - 128;
-    const ph = 390;
-    roundRect(ctx, px, py, pw, ph, 42);
-    ctx.fillStyle = "rgba(18, 22, 32, 0.88)";
-    ctx.fill();
-    ctx.strokeStyle = "rgba(100, 210, 255, 0.35)";
-    ctx.lineWidth = 2.5;
-    ctx.stroke();
+    ctx.clip();
+    if (pupilIcon && (pupilIcon.naturalWidth || pupilIcon.width)) {
+      ctx.drawImage(pupilIcon, padX, hdrY, iconSize, iconSize);
+    } else {
+      ctx.fillStyle = "#FFFFFF";
+      ctx.beginPath();
+      ctx.arc(padX + iconSize / 2, hdrY + iconSize / 2, 22, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
 
     ctx.textAlign = "left";
-    ctx.fillStyle = "#64D2FF";
-    ctx.font = '700 24px "SF Mono", Menlo, monospace';
-    ctx.fillText("BLUETOOTH LE PROXIMITY RADAR", px + 48, py + 66);
-
-    ctx.fillStyle = "#FFFFFF";
+    ctx.fillStyle = "#EEEEEE";
     ctx.font = '600 36px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
-    ctx.fillText("Steve's iPhone 16 Pro · Trusted", px + 48, py + 132);
+    ctx.fillText("Pupil", padX + 104, hdrY + 28);
+    ctx.fillStyle = "#999999";
+    ctx.font = '400 24px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
+    ctx.fillText("Mobile Sentinel Companion", padX + 104, hdrY + 62);
 
-    ctx.fillStyle = "rgba(205, 216, 232, 0.78)";
-    ctx.font = '400 27px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
-    ctx.fillText("Auto-arms when RSSI drops below -78 dBm", px + 48, py + 192);
-    ctx.fillText("Auto-disarms on return within 1.5m desk radius", px + 48, py + 236);
-
-    roundRect(ctx, px + 48, py + 278, 360, 68, 20);
-    ctx.fillStyle = "rgba(48, 209, 88, 0.16)";
+    // Header Status Pill (matches .header-status-pill in companion.html)
+    const pillW = isTamper ? 276 : 230;
+    const pillX = PW - padX - pillW;
+    const pillY = hdrY + 11;
+    roundRect(ctx, pillX, pillY, pillW, 60, 30);
+    const pillAccent = isTamper ? "#FF9F0A" : "#30D158";
+    ctx.fillStyle = isTamper ? "rgba(255, 159, 10, 0.14)" : "rgba(48, 209, 88, 0.12)";
     ctx.fill();
-    ctx.fillStyle = "#30D158";
-    ctx.font = '600 24px "SF Mono", Menlo, monospace';
-    ctx.fillText("● RSSI -52 dBm (NEAR)", px + 76, py + 313);
+    ctx.strokeStyle = isTamper ? "rgba(255, 159, 10, 0.4)" : "rgba(48, 209, 88, 0.32)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
 
-    roundRect(ctx, px + 436, py + 278, 412, 68, 20);
-    ctx.fillStyle = "rgba(100, 210, 255, 0.14)";
+    ctx.fillStyle = pillAccent;
+    ctx.beginPath();
+    ctx.arc(pillX + 30, pillY + 30, 8, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = "#64D2FF";
-    ctx.fillText("P-256 ECDH + AES-128-GCM", px + 462, py + 313);
+    ctx.font = '500 24px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
+    ctx.fillText(isTamper ? "Tamper Alert" : isDisarmed ? "Disarmed" : "Paired · Armed", pillX + 52, pillY + 31);
 
-    roundRect(ctx, PW / 2 - 180, PH - 48, 360, 14, 7);
-    ctx.fillStyle = "rgba(255, 255, 255, 0.65)";
+    // 4. Section 1: LOCK-SCREEN PUSH ALERTS
+    const cardW = PW - padX * 2;
+    ctx.fillStyle = "#999999";
+    ctx.font = '500 24px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
+    ctx.fillText("LOCK-SCREEN PUSH ALERTS", padX + 16, 326);
+
+    const c1Y = 356;
+    const c1H = 344;
+    roundRect(ctx, padX, c1Y, cardW, c1H, 24);
+    ctx.fillStyle = "#141414";
     ctx.fill();
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.10)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = "#EEEEEE";
+    ctx.font = '600 30px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
+    ctx.fillText("Direct Apple APNs Delivery", padX + 32, c1Y + 52);
+
+    ctx.fillStyle = "#BFBFBF";
+    ctx.font = '400 24px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
+    ctx.fillText("End-to-end encrypted alerts wake your locked phone", padX + 32, c1Y + 96);
+    ctx.fillText("whenever your Mac detects tamper or lid triggers.", padX + 32, c1Y + 128);
+
+    // Utility Pills (Copy Code + Test Alert)
+    roundRect(ctx, padX + 32, c1Y + 168, 220, 62, 31);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.fill();
+    ctx.fillStyle = "#EEEEEE";
+    ctx.font = '500 24px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
+    ctx.textAlign = "center";
+    ctx.fillText("Copy Code", padX + 142, c1Y + 200);
+
+    roundRect(ctx, padX + 272, c1Y + 168, 220, 62, 31);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.fill();
+    ctx.fillStyle = "#EEEEEE";
+    ctx.fillText("Test Alert", padX + 382, c1Y + 200);
+
+    // Status Banner inside Card 1
+    ctx.textAlign = "left";
+    roundRect(ctx, padX + 32, c1Y + 252, cardW - 64, 64, 16);
+    ctx.fillStyle = isTamper ? "rgba(255, 159, 10, 0.12)" : "rgba(48, 209, 88, 0.10)";
+    ctx.fill();
+    ctx.fillStyle = isTamper ? "#FF9F0A" : "#30D158";
+    ctx.font = '500 23px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
+    ctx.fillText(
+      isTamper
+        ? "Tamper: AC Charger Unplugged · 15s grace active"
+        : isDisarmed
+          ? "Disarmed remotely · MacBook shield cleared"
+          : "Paired to MacBook Pro · APNs ready",
+      padX + 54,
+      c1Y + 285,
+    );
+
+    // 5. Section 2: VERIFICATION & REMOTE CONTROL
+    ctx.fillStyle = "#999999";
+    ctx.font = '500 24px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
+    ctx.fillText("VERIFICATION & REMOTE CONTROL", padX + 16, 766);
+
+    const c2Y = 796;
+    const c2H = 980;
+    roundRect(ctx, padX, c2Y, cardW, c2H, 24);
+    ctx.fillStyle = "#141414";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.10)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = "#EEEEEE";
+    ctx.font = '600 30px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
+    ctx.fillText("Verification Snapshot", padX + 32, c2Y + 54);
+    ctx.fillStyle = "#BFBFBF";
+    ctx.font = '400 23px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
+    ctx.fillText("Inspect the captured frame before disarming.", padX + 32, c2Y + 94);
+
+    // Refresh Photo pill
+    roundRect(ctx, PW - padX - 230, c2Y + 34, 198, 56, 28);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.fill();
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#EEEEEE";
+    ctx.font = '500 22px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
+    ctx.fillText("Refresh Photo", PW - padX - 131, c2Y + 63);
+
+    // 16:9 Verification Snapshot Frame
+    const sx = padX + 32;
+    const sy = c2Y + 136;
+    const sw = cardW - 64;
+    const sh = 460;
+    roundRect(ctx, sx, sy, sw, sh, 20);
+    const snapGrad = ctx.createLinearGradient(sx, sy, sx + sw, sy + sh);
+    snapGrad.addColorStop(0, "#141923");
+    snapGrad.addColorStop(1, "#0b0d12");
+    ctx.fillStyle = snapGrad;
+    ctx.fill();
+    ctx.strokeStyle = isTamper ? "rgba(255, 159, 10, 0.45)" : "rgba(255, 255, 255, 0.12)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Camera viewfinder silhouette & FaceTime ROI box
+    ctx.fillStyle = "rgba(255, 255, 255, 0.14)";
+    ctx.beginPath();
+    ctx.arc(sx + sw / 2, sy + 178, 66, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(sx + sw / 2, sy + 382, 138, Math.PI, 0, false);
+    ctx.fill();
+
+    ctx.strokeStyle = isTamper ? "#FF9F0A" : "#30D158";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(sx + sw / 2 - 110, sy + 88, 220, 220);
+
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#999999";
+    ctx.font = '500 22px "SF Mono", Menlo, monospace';
+    ctx.fillText(isTamper ? "Alert frame · Just now" : "1080p FaceTime HD · On-device", sx + 22, sy + sh - 28);
+    ctx.textAlign = "right";
+    ctx.fillText("AES-256-GCM", sx + sw - 22, sy + sh - 28);
+
+    // Divider
+    ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
+    ctx.fillRect(padX + 32, c2Y + 634, cardW - 64, 2);
+
+    // Remote Disarm Row (matches companion.html lines 646-654)
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#EEEEEE";
+    ctx.font = '600 30px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
+    ctx.fillText("Remote Disarm", padX + 32, c2Y + 690);
+    ctx.fillStyle = "#BFBFBF";
+    ctx.font = '400 23px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
+    ctx.fillText("Send an authenticated disarm command if false alarm.", padX + 32, c2Y + 730);
+
+    const btnY = c2Y + 780 + press * 8;
+    roundRect(ctx, padX + 32, btnY, cardW - 64, 114, 22);
+    ctx.fillStyle = isDisarmed ? "#30D158" : isTamper ? "#FF453A" : "#0A84FF";
+    ctx.fill();
+    ctx.textAlign = "center";
+    ctx.fillStyle = isDisarmed ? "#07140B" : "#FFFFFF";
+    ctx.font = '600 31px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
+    ctx.fillText(isDisarmed ? "✓  MacBook Disarmed" : "Disarm Mac (False Alarm)", PW / 2, btnY + 58);
+
+    // 6. Footer (matches companion.html lines 666-671)
+    ctx.fillStyle = "#999999";
+    ctx.font = '400 23px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
+    ctx.fillText("End-to-End Encrypted Web Push (RFC 8291 + VAPID)", PW / 2, 1890);
 
     texture.needsUpdate = true;
   }
@@ -236,7 +280,7 @@ export function createPhoneTexture() {
     draw(pose);
   }
 
-  draw({ lidAngle: 0, magsafeSlide: 0, screenMode: 0, shieldBlur: 0, countdown: 15, sirenPulse: 0, phoneMode: 0, phonePress: 0 });
+  draw({ lidAngle: 0, magsafeSlide: 0, screenMode: 0, shieldBlur: 0, countdown: 15, sirenPulse: 0, phoneMode: 0, phonePress: 0, phoneLift: 0 });
 
   return {
     texture,

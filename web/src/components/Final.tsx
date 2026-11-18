@@ -95,7 +95,7 @@ export function Final({ ref, onOpenScreenshots, onOpenBuild }: FinalProps) {
     <section ref={ref} id="waitlist" className={styles.final}>
       <h2 className={styles.title}>
         Leave your desk, <br />
-        keep your peace.
+        <em>keep your peace.</em>
       </h2>
       <p className={styles.closer}>Pupil for macOS 14+. Native Swift 6 on Apple Silicon and Intel.</p>
 

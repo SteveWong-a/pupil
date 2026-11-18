@@ -29,7 +29,9 @@ export function Nav({ ref, active, onGo, onWaitlist, onOpenModal }: NavProps) {
     <nav ref={ref} className={styles.nav} aria-label="Primary">
       <a href="#overview" className={styles.brand} onClick={go("overview")}>
         <img src="./assets/pupil-icon.png" alt="" width={24} height={24} className={styles.icon} />
-        <span>pupil</span>sentry
+        <span className={styles.wordmark}>
+          <em>pupil</em> sentry
+        </span>
       </a>
       <div className={styles.links}>
         {LINKS.map(({ name, label }) => (

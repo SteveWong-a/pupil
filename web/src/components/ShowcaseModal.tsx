@@ -15,6 +15,7 @@ interface ScreenTab {
   label: string;
   src: string;
   file: string;
+  isIframe?: boolean;
   hotspots: Hotspot[];
 }
 
@@ -83,6 +84,18 @@ const TABS: ScreenTab[] = [
       { x: 50, y: 42, title: "Tamper Source Telemetry", desc: "Displays exact hardware trigger and timestamp on lock screen." },
       { x: 59, y: 61, title: "Touch ID & PIN Backoff", desc: "Instant biometric unlock with exponential brute-force lockouts." },
       { x: 50, y: 90, title: "macOS Password Recovery", desc: "LocalAuthentication fallback resets PIN lockout cleanly." },
+    ],
+  },
+  {
+    key: "companion",
+    label: "Mobile Companion",
+    src: "./companion.html",
+    file: "companion.html (PWA)",
+    isIframe: true,
+    hotspots: [
+      { x: 50, y: 24, title: "Direct Apple APNs Pairing", desc: "Scan the QR code in Sensors Settings once; zero cloud accounts or relays." },
+      { x: 50, y: 54, title: "Verification Snapshot Frame", desc: "Inspect the captured 1080p FaceTime HD frame before disarming remotely." },
+      { x: 50, y: 82, title: "One-Tap Remote Disarm", desc: "Silence the alarm and clear the Screen Shield from across the library or cafe." },
     ],
   },
 ];
@@ -169,19 +182,27 @@ export function ShowcaseModal({ view, onClose, onSwitchView }: ShowcaseModalProp
             <div className={styles.stageGrid}>
               <div className={styles.viewport}>
                 <div className={styles.imgWrap}>
-                  <img src={tab.src} alt={tab.label} className={styles.screenshot} />
-                  {tab.hotspots.map((h, i) => (
-                    <button
-                      key={h.title}
-                      type="button"
-                      style={{ left: `${h.x}%`, top: `${h.y}%` }}
-                      className={`${styles.pin} ${i === spotIdx ? styles.pinActive : ""}`}
-                      onClick={() => setSpotIdx(i)}
-                      aria-label={`Hotspot ${i + 1}: ${h.title}`}
-                    >
-                      {i + 1}
-                    </button>
-                  ))}
+                  {tab.isIframe ? (
+                    <div className={styles.phoneFrame}>
+                      <iframe src={tab.src} title={tab.label} className={styles.phoneIframe} />
+                    </div>
+                  ) : (
+                    <>
+                      <img src={tab.src} alt={tab.label} className={styles.screenshot} />
+                      {tab.hotspots.map((h, i) => (
+                        <button
+                          key={h.title}
+                          type="button"
+                          style={{ left: `${h.x}%`, top: `${h.y}%` }}
+                          className={`${styles.pin} ${i === spotIdx ? styles.pinActive : ""}`}
+                          onClick={() => setSpotIdx(i)}
+                          aria-label={`Hotspot ${i + 1}: ${h.title}`}
+                        >
+                          {i + 1}
+                        </button>
+                      ))}
+                    </>
+                  )}
                 </div>
               </div>
 
