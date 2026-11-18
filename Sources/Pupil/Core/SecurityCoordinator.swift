@@ -186,13 +186,16 @@ public final class SecurityCoordinator {
     private var liveCalibrationTimer: Timer?
     private var pinLockoutTimer: Timer?
 
-    nonisolated private static var isRunningUnderTests: Bool {
+    nonisolated public static var isRunningUnderTests: Bool {
         let env = ProcessInfo.processInfo.environment
         if env["XCTestConfigurationFilePath"] != nil || env["XCTestBundlePath"] != nil || env["SWIFT_TESTING_ENABLED"] != nil {
             return true
         }
         let procName = ProcessInfo.processInfo.processName.lowercased()
-        return procName.contains("xctest") || procName.contains("testing-helper") || procName.hasSuffix("tests")
+        if procName.contains("xctest") || procName.contains("testing-helper") || procName.contains("tests") {
+            return true
+        }
+        return !Bundle.main.bundlePath.hasSuffix(".app")
     }
 
     public convenience init() {
@@ -409,7 +412,7 @@ public final class SecurityCoordinator {
             pinLockoutSecondsRemaining = currentStatus.remainingSeconds
             startPinLockoutTimerIfNeeded()
             logEvent("PIN Lockout Active", detail: "PIN entry blocked for \(currentStatus.remainingSeconds)s after repeated failed attempts.")
-            if settings.hapticFeedbackEnabled {
+            if settings.hapticFeedbackEnabled && !Self.isRunningUnderTests {
                 NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
             }
             return false
@@ -432,7 +435,7 @@ public final class SecurityCoordinator {
                     enterAlarm(source: .pinBruteForce)
                 }
             }
-            if settings.hapticFeedbackEnabled {
+            if settings.hapticFeedbackEnabled && !Self.isRunningUnderTests {
                 NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
             }
             onNotchUpdateNeeded?()
@@ -1391,7 +1394,7 @@ public final class SecurityCoordinator {
             detail: "Sustained gaze toward screen detected (≥ \(String(format: "%.1fs", settings.dwellThresholdSeconds))). Deterrent activated.",
             simulated: simulated
         )
-        if settings.hapticFeedbackEnabled {
+        if settings.hapticFeedbackEnabled && !Self.isRunningUnderTests {
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
         }
         onNotchUpdateNeeded?()

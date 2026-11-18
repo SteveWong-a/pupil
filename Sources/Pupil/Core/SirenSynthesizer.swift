@@ -62,6 +62,10 @@ public final class SirenSynthesizer: SirenPlaybackControlling, @unchecked Sendab
         isSounding = true
         sampleIndex = 0
 
+        if SecurityCoordinator.isRunningUnderTests {
+            return
+        }
+
         let audioEngine = AVAudioEngine()
         let outputFormat = audioEngine.outputNode.inputFormat(forBus: 0)
         let sampleRate = outputFormat.sampleRate > 0 ? outputFormat.sampleRate : 44100.0
@@ -147,6 +151,7 @@ public final class SirenSynthesizer: SirenPlaybackControlling, @unchecked Sendab
 
     /// Plays a subtle, non-intrusive acoustic tick for countdown warning feedback.
     public func playCountdownTick() {
+        guard !SecurityCoordinator.isRunningUnderTests else { return }
         AudioServicesPlaySystemSound(1057)
     }
 }
