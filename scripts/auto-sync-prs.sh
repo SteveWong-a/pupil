@@ -53,20 +53,23 @@ for pair in "${PAIRS[@]}"; do
   fi
 done
 
-# Rebuild combined test.pupil.app only if branches changed or test.pupil.app is missing
+# Always synchronize and rebuild combined test.pupil.app with latest changes
 if [ -d "$WORKTREE_DIR/preview-wave3" ]; then
   cd "$WORKTREE_DIR/preview-wave3"
-  PREVIEW_BASE=$(git merge-base HEAD pupil/main)
-  if [ "$SYNCED_COUNT" -gt 0 ] || [ "$PREVIEW_BASE" != "$LATEST_MAIN" ] || [ ! -d "$REPO_DIR/dist/test.pupil.app" ]; then
-    echo "🔨 Rebuilding combined dist/test.pupil.app from preview-wave3..."
-    git merge pupil/main --no-edit >/dev/null 2>&1 || true
-    ./scripts/bundle-app.sh release >/dev/null 2>&1 || true
-    rm -rf "$REPO_DIR/dist/test.pupil.app"
-    cp -R "$WORKTREE_DIR/preview-wave3/dist/Pupil.app" "$REPO_DIR/dist/test.pupil.app"
-    echo "✨ dist/test.pupil.app refreshed and ready!"
-  else
-    echo "✓ dist/test.pupil.app is already up to date."
-  fi
+  echo "🔨 Synchronizing combined preview branch with main and active feature branches..."
+  git merge pupil/main --no-edit >/dev/null 2>&1 || true
+
+  # Merge each active branch into preview
+  for pair in "${PAIRS[@]}"; do
+    branch="${pair##*:}"
+    git merge "pupil/$branch" --no-edit >/dev/null 2>&1 || true
+  done
+
+  echo "🔨 Rebuilding combined dist/test.pupil.app from preview-wave3..."
+  ./scripts/bundle-app.sh release >/dev/null 2>&1 || true
+  rm -rf "$REPO_DIR/dist/test.pupil.app"
+  cp -R "$WORKTREE_DIR/preview-wave3/dist/Pupil.app" "$REPO_DIR/dist/test.pupil.app"
+  echo "✨ dist/test.pupil.app rebuilt and refreshed with all latest changes!"
 fi
 
-echo "🎉 Auto-sync complete! ($SYNCED_COUNT branches updated)"
+echo "🎉 Auto-sync complete! ($SYNCED_COUNT branches updated, test.pupil.app ready)"
