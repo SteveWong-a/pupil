@@ -60,6 +60,9 @@ public final class AlertNotifier {
     private var inFlightMessage: AlertMessage?
     private var cancelInFlight = false
     private var isDraining = false
+    private var backoffWakeContinuation: CheckedContinuation<Void, Never>?
+    private var backoffSleepTask: Task<Void, Never>?
+    private var backoffGeneration: UInt64 = 0
 
     /// Called once per message with its final result (not for `.notConfigured`).
     public var onResult: ((AlertMessage, AlertResult) -> Void)?
@@ -80,6 +83,7 @@ public final class AlertNotifier {
 
     /// Immediately wakes or restarts draining of pending messages (e.g., when network interface transitions or recovers).
     public func flushPendingNow() {
+        resumeBackoff()
         startDrainingIfNeeded()
     }
 
@@ -122,6 +126,7 @@ public final class AlertNotifier {
                 && current.tag == "pupil-tamper"
             if sameTag || staleCountdown {
                 cancelInFlight = true
+                resumeBackoff()
                 onResult?(current, .superseded)
             }
         }
@@ -176,8 +181,38 @@ public final class AlertNotifier {
                 onResult?(message, .failed(attempts: attempts, reason: lastReason))
                 return
             }
-            await sleep(backoffSeconds[attempts - 1])
+            await waitForBackoff(seconds: backoffSeconds[attempts - 1])
             guard !cancelInFlight else { return }
+        }
+    }
+
+    private func waitForBackoff(seconds: Double) async {
+        backoffGeneration &+= 1
+        let generation = backoffGeneration
+        await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                backoffWakeContinuation = continuation
+                backoffSleepTask = Task { @MainActor [weak self] in
+                    await self?.sleep(seconds)
+                    self?.resumeBackoff(generation: generation)
+                }
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in
+                self?.resumeBackoff(generation: generation)
+            }
+        }
+    }
+
+    private func resumeBackoff(generation: UInt64? = nil) {
+        if let generation, generation != backoffGeneration {
+            return
+        }
+        backoffSleepTask?.cancel()
+        backoffSleepTask = nil
+        if let continuation = backoffWakeContinuation {
+            backoffWakeContinuation = nil
+            continuation.resume()
         }
     }
 }

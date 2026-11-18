@@ -100,9 +100,10 @@ public final class PowerAndLidMonitor {
         self.isLidClosed = Self.readClamshellClosedState()
         self.connectedDisplayCount = NSScreen.screens.count
         self.connectedUSBDeviceCount = Self.readUSBDeviceCount()
-        let initialTopology = Self.readActiveDisplayTopology()
-        self.connectedExternalDisplayIDs = initialTopology.externalDisplayIDs
-        self.displayTopologyEvaluator.latchBaseline(initialTopology)
+        if let initialTopology = Self.readActiveDisplayTopology() {
+            self.connectedExternalDisplayIDs = initialTopology.externalDisplayIDs
+            self.displayTopologyEvaluator.latchBaseline(initialTopology)
+        }
         startMonitoring()
     }
 
@@ -246,7 +247,9 @@ public final class PowerAndLidMonitor {
             onHardwareEvent?(currentClamshell ? .lidClosed : .lidOpened)
         }
 
-        evaluateDisplayTopology(Self.readActiveDisplayTopology())
+        if let topology = Self.readActiveDisplayTopology() {
+            evaluateDisplayTopology(topology)
+        }
 
         connectedDisplayCount = NSScreen.screens.count
         evaluatePeripheralCounts(
@@ -263,16 +266,16 @@ public final class PowerAndLidMonitor {
         }
     }
 
-    nonisolated public static func readActiveDisplayTopology() -> DisplayTopologySnapshot {
+    nonisolated public static func readActiveDisplayTopology() -> DisplayTopologySnapshot? {
         var displayCount: UInt32 = 0
         let maxDisplays: UInt32 = 32
         var displays = [CGDirectDisplayID](repeating: 0, count: Int(maxDisplays))
-        let result = CGGetActiveDisplayList(maxDisplays, &displays, &displayCount)
-        if result == .success {
-            let activeIDs = Array(displays.prefix(Int(displayCount)))
-            return DisplayTopologySnapshot(allDisplayIDs: activeIDs)
-        }
-        return DisplayTopologySnapshot(allDisplayIDs: [])
+        // Query online (not just active) displays so sleeping or hardware-mirrored external
+        // displays stay in the baseline until physically disconnected.
+        let result = CGGetOnlineDisplayList(maxDisplays, &displays, &displayCount)
+        guard result == .success else { return nil }
+        let onlineIDs = Array(displays.prefix(Int(displayCount)))
+        return DisplayTopologySnapshot(allDisplayIDs: onlineIDs)
     }
 
     /// Evaluates whether a connected external display or USB peripheral was unplugged since the last observation.

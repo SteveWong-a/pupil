@@ -201,116 +201,122 @@ struct DisplayTopologyTests {
     @Test("SecurityCoordinator latches baseline on arm and escalates to tamperPending when external display is unplugged")
     @MainActor
     func testSecurityCoordinatorEscalatesOnExternalDisplayUnplugged() throws {
-        try KeychainManager.enrollPin("1234")
-        let (settings, defaults, suiteName) = makeIsolatedSettings()
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        try KeychainManager.withIsolatedStore {
+            try KeychainManager.enrollPin("1234")
+            let (settings, defaults, suiteName) = makeIsolatedSettings()
+            defer { defaults.removePersistentDomain(forName: suiteName) }
 
-        settings.displayUnplugTriggerEnabled = true
-        settings.gazeDetectionEnabled = false
-        settings.exitDelaySeconds = 0
+            settings.displayUnplugTriggerEnabled = true
+            settings.gazeDetectionEnabled = false
+            settings.exitDelaySeconds = 0
 
-        let notifier = AlertNotifier(backoffSeconds: [], transport: { _ in .notConfigured })
-        let coordinator = SecurityCoordinator(settings: settings, alertNotifier: notifier)
-        defer { coordinator.disarmWithPin("1234") }
+            let notifier = AlertNotifier(backoffSeconds: [], transport: { _ in .notConfigured })
+            let coordinator = SecurityCoordinator(settings: settings, alertNotifier: notifier)
+            defer { coordinator.disarmWithPin("1234") }
 
-        // Arm coordinator immediately
-        coordinator.startArming(immediate: true)
-        #expect(coordinator.state == .armed)
-        #expect(coordinator.armedDisplayTopologyEvaluator.hasBaseline)
+            // Arm coordinator immediately
+            coordinator.startArming(immediate: true)
+            #expect(coordinator.state == .armed)
+            #expect(coordinator.armedDisplayTopologyEvaluator.hasBaseline)
 
-        // Latch known armed baseline with external monitor [100] and built-in [1]
-        coordinator.latchArmedDisplayTopologyBaseline(DisplayTopologySnapshot(
-            externalDisplayIDs: [100],
-            builtInDisplayIDs: [1]
-        ))
+            // Latch known armed baseline with external monitor [100] and built-in [1]
+            coordinator.latchArmedDisplayTopologyBaseline(DisplayTopologySnapshot(
+                externalDisplayIDs: [100],
+                builtInDisplayIDs: [1]
+            ))
 
-        // Built-in sleep or display attach should NOT trigger tamper
-        coordinator.handleDisplayTopologyChange(DisplayTopologySnapshot(
-            externalDisplayIDs: [100, 200],
-            builtInDisplayIDs: [1]
-        ))
-        #expect(coordinator.state == .armed)
-        #expect(coordinator.activeTamperSource == nil)
+            // Built-in sleep or display attach should NOT trigger tamper
+            coordinator.handleDisplayTopologyChange(DisplayTopologySnapshot(
+                externalDisplayIDs: [100, 200],
+                builtInDisplayIDs: [1]
+            ))
+            #expect(coordinator.state == .armed)
+            #expect(coordinator.activeTamperSource == nil)
 
-        // Unplug external display 200
-        coordinator.handleDisplayTopologyChange(DisplayTopologySnapshot(
-            externalDisplayIDs: [100],
-            builtInDisplayIDs: [1]
-        ))
-        #expect(coordinator.state == .tamperPending)
-        #expect(coordinator.activeTamperSource == .peripheralDisconnected)
+            // Unplug external display 200
+            coordinator.handleDisplayTopologyChange(DisplayTopologySnapshot(
+                externalDisplayIDs: [100],
+                builtInDisplayIDs: [1]
+            ))
+            #expect(coordinator.state == .tamperPending)
+            #expect(coordinator.activeTamperSource == .peripheralDisconnected)
 
-        // Disarm and verify evaluator baseline is reset
-        coordinator.disarmWithPin("1234")
-        #expect(coordinator.state == .disarmed)
-        #expect(!coordinator.armedDisplayTopologyEvaluator.hasBaseline)
+            // Disarm and verify evaluator baseline is reset
+            coordinator.disarmWithPin("1234")
+            #expect(coordinator.state == .disarmed)
+            #expect(!coordinator.armedDisplayTopologyEvaluator.hasBaseline)
+        }
     }
 
     @Test("SecurityCoordinator ignores external display unplug when displayUnplugTriggerEnabled is false")
     @MainActor
     func testSecurityCoordinatorIgnoresUnplugWhenTriggerDisabled() throws {
-        try KeychainManager.enrollPin("1234")
-        let (settings, defaults, suiteName) = makeIsolatedSettings()
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        try KeychainManager.withIsolatedStore {
+            try KeychainManager.enrollPin("1234")
+            let (settings, defaults, suiteName) = makeIsolatedSettings()
+            defer { defaults.removePersistentDomain(forName: suiteName) }
 
-        settings.displayUnplugTriggerEnabled = false
-        settings.gazeDetectionEnabled = false
-        settings.exitDelaySeconds = 0
+            settings.displayUnplugTriggerEnabled = false
+            settings.gazeDetectionEnabled = false
+            settings.exitDelaySeconds = 0
 
-        let notifier = AlertNotifier(backoffSeconds: [], transport: { _ in .notConfigured })
-        let coordinator = SecurityCoordinator(settings: settings, alertNotifier: notifier)
-        defer { coordinator.disarmWithPin("1234") }
+            let notifier = AlertNotifier(backoffSeconds: [], transport: { _ in .notConfigured })
+            let coordinator = SecurityCoordinator(settings: settings, alertNotifier: notifier)
+            defer { coordinator.disarmWithPin("1234") }
 
-        coordinator.startArming(immediate: true)
-        #expect(coordinator.state == .armed)
+            coordinator.startArming(immediate: true)
+            #expect(coordinator.state == .armed)
 
-        coordinator.latchArmedDisplayTopologyBaseline(DisplayTopologySnapshot(
-            externalDisplayIDs: [100],
-            builtInDisplayIDs: [1]
-        ))
+            coordinator.latchArmedDisplayTopologyBaseline(DisplayTopologySnapshot(
+                externalDisplayIDs: [100],
+                builtInDisplayIDs: [1]
+            ))
 
-        // Unplug external display while setting is disabled
-        coordinator.handleDisplayTopologyChange(DisplayTopologySnapshot(
-            externalDisplayIDs: [],
-            builtInDisplayIDs: [1]
-        ))
+            // Unplug external display while setting is disabled
+            coordinator.handleDisplayTopologyChange(DisplayTopologySnapshot(
+                externalDisplayIDs: [],
+                builtInDisplayIDs: [1]
+            ))
 
-        #expect(coordinator.state == .armed)
-        #expect(coordinator.activeTamperSource == nil)
+            #expect(coordinator.state == .armed)
+            #expect(coordinator.activeTamperSource == nil)
+        }
     }
 
     @Test("SecurityCoordinator ignores external display unplug when peripheralDisconnect hardware trigger is excluded")
     @MainActor
     func testSecurityCoordinatorIgnoresUnplugWhenHardwareTriggerExcluded() throws {
-        try KeychainManager.enrollPin("1234")
-        let (settings, defaults, suiteName) = makeIsolatedSettings()
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        try KeychainManager.withIsolatedStore {
+            try KeychainManager.enrollPin("1234")
+            let (settings, defaults, suiteName) = makeIsolatedSettings()
+            defer { defaults.removePersistentDomain(forName: suiteName) }
 
-        settings.displayUnplugTriggerEnabled = true
-        settings.hardwareTriggers.remove(.peripheralDisconnect)
-        settings.gazeDetectionEnabled = false
-        settings.exitDelaySeconds = 0
+            settings.displayUnplugTriggerEnabled = true
+            settings.hardwareTriggers.remove(.peripheralDisconnect)
+            settings.gazeDetectionEnabled = false
+            settings.exitDelaySeconds = 0
 
-        let notifier = AlertNotifier(backoffSeconds: [], transport: { _ in .notConfigured })
-        let coordinator = SecurityCoordinator(settings: settings, alertNotifier: notifier)
-        defer { coordinator.disarmWithPin("1234") }
+            let notifier = AlertNotifier(backoffSeconds: [], transport: { _ in .notConfigured })
+            let coordinator = SecurityCoordinator(settings: settings, alertNotifier: notifier)
+            defer { coordinator.disarmWithPin("1234") }
 
-        coordinator.startArming(immediate: true)
-        #expect(coordinator.state == .armed)
+            coordinator.startArming(immediate: true)
+            #expect(coordinator.state == .armed)
 
-        coordinator.latchArmedDisplayTopologyBaseline(DisplayTopologySnapshot(
-            externalDisplayIDs: [100],
-            builtInDisplayIDs: [1]
-        ))
+            coordinator.latchArmedDisplayTopologyBaseline(DisplayTopologySnapshot(
+                externalDisplayIDs: [100],
+                builtInDisplayIDs: [1]
+            ))
 
-        // Unplug external display with peripheralDisconnect trigger unchecked
-        coordinator.handleDisplayTopologyChange(DisplayTopologySnapshot(
-            externalDisplayIDs: [],
-            builtInDisplayIDs: [1]
-        ))
+            // Unplug external display with peripheralDisconnect trigger unchecked
+            coordinator.handleDisplayTopologyChange(DisplayTopologySnapshot(
+                externalDisplayIDs: [],
+                builtInDisplayIDs: [1]
+            ))
 
-        #expect(coordinator.state == .armed)
-        #expect(coordinator.activeTamperSource == nil)
+            #expect(coordinator.state == .armed)
+            #expect(coordinator.activeTamperSource == nil)
+        }
     }
 
     @Test("SecurityCoordinator ignores display topology changes while disarmed")

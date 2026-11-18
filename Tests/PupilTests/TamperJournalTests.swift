@@ -332,46 +332,48 @@ struct TamperJournalTests {
         let (store, fileURL, _, tempDir) = makeIsolatedStore()
         defer { try? FileManager.default.removeItem(at: tempDir) }
 
-        let coordinator = SecurityCoordinator(
-            settings: settings,
-            alertNotifier: AlertNotifier(backoffSeconds: [], transport: { _ in .notConfigured }),
-            journalStore: store
-        )
-        defer { coordinator.disarmWithPin("1234") }
+        try KeychainManager.withIsolatedStore {
+            let coordinator = SecurityCoordinator(
+                settings: settings,
+                alertNotifier: AlertNotifier(backoffSeconds: [], transport: { _ in .notConfigured }),
+                journalStore: store
+            )
+            defer { coordinator.disarmViaRemotePhone() }
 
-        #expect(coordinator.events.isEmpty)
+            #expect(coordinator.events.isEmpty)
 
-        // 1. Arming logs events and persists to journalStore
-        coordinator.startArming(immediate: true)
-        #expect(!coordinator.events.isEmpty)
-        let loadedAfterArming = try store.loadRecords()
-        #expect(loadedAfterArming.count == coordinator.events.count)
-        #expect(loadedAfterArming.first?.title == coordinator.events.first?.title)
+            // 1. Arming logs events and persists to journalStore
+            coordinator.startArming(immediate: true)
+            #expect(!coordinator.events.isEmpty)
+            let loadedAfterArming = try store.loadRecords()
+            #expect(loadedAfterArming.count == coordinator.events.count)
+            #expect(loadedAfterArming.first?.title == coordinator.events.first?.title)
 
-        // 2. Tamper triggers log additional events
-        coordinator.triggerTamper(source: .manualTest, immediateAlarm: false, simulated: true)
-        let loadedAfterTamper = try store.loadRecords()
-        #expect(loadedAfterTamper.count == coordinator.events.count)
-        #expect(loadedAfterTamper.contains { $0.title == "Manual Test" || $0.isSimulated })
+            // 2. Tamper triggers log additional events
+            coordinator.triggerTamper(source: .manualTest, immediateAlarm: false, simulated: true)
+            let loadedAfterTamper = try store.loadRecords()
+            #expect(loadedAfterTamper.count == coordinator.events.count)
+            #expect(loadedAfterTamper.contains { $0.title == "Manual Test" || $0.isSimulated })
 
-        // 3. exportIncidentReportMarkdown helper produces sanitized markdown
-        let markdown = coordinator.exportIncidentReportMarkdown()
-        #expect(markdown.contains("# Pupil Security Incident Report"))
-        #expect(markdown.contains("- Total Events: \(coordinator.events.count)"))
+            // 3. exportIncidentReportMarkdown helper produces sanitized markdown
+            let markdown = coordinator.exportIncidentReportMarkdown()
+            #expect(markdown.contains("# Pupil Security Incident Report"))
+            #expect(markdown.contains("- Total Events: \(coordinator.events.count)"))
 
-        // 4. Persistence reload across coordinator instances
-        let coordinator2 = SecurityCoordinator(
-            settings: settings,
-            alertNotifier: AlertNotifier(backoffSeconds: [], transport: { _ in .notConfigured }),
-            journalStore: store
-        )
-        #expect(coordinator2.events.count == coordinator.events.count)
-        #expect(coordinator2.events.first?.id == coordinator.events.first?.id)
+            // 4. Persistence reload across coordinator instances
+            let coordinator2 = SecurityCoordinator(
+                settings: settings,
+                alertNotifier: AlertNotifier(backoffSeconds: [], transport: { _ in .notConfigured }),
+                journalStore: store
+            )
+            #expect(coordinator2.events.count == coordinator.events.count)
+            #expect(coordinator2.events.first?.id == coordinator.events.first?.id)
 
-        // 5. clearEventLog clears in-memory events and wipes journal on disk
-        coordinator2.clearEventLog()
-        #expect(coordinator2.events.isEmpty)
-        #expect(try store.loadRecords().isEmpty)
-        #expect(!FileManager.default.fileExists(atPath: fileURL.path))
+            // 5. clearEventLog clears in-memory events and wipes journal on disk
+            coordinator2.clearEventLog()
+            #expect(coordinator2.events.isEmpty)
+            #expect(try store.loadRecords().isEmpty)
+            #expect(!FileManager.default.fileExists(atPath: fileURL.path))
+        }
     }
 }
