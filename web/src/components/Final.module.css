@@ -3,6 +3,7 @@
   inset: 0;
   text-align: center;
   padding: var(--final-top) var(--gutter) 0;
+  background: radial-gradient(ellipse 780px 440px at 50% 34%, rgba(6, 7, 10, 0.78) 0%, rgba(6, 7, 10, 0.44) 58%, rgba(6, 7, 10, 0) 100%);
   opacity: 0;
   visibility: hidden;
 }
@@ -13,13 +14,14 @@
   font-stretch: var(--stretch-display);
   letter-spacing: var(--track-display);
   line-height: var(--lh-display);
-  text-shadow: var(--heading-shadow);
+  text-shadow: 0 2px 28px rgba(0, 0, 0, 0.95), 0 1px 8px rgba(0, 0, 0, 0.9);
 }
 
 .closer {
   margin-top: var(--gap-closer);
   font-size: var(--size-closer);
-  color: var(--muted);
+  color: rgba(236, 238, 244, 0.86);
+  text-shadow: 0 1px 16px rgba(0, 0, 0, 0.95);
 }
 
 .form {

@@ -22,7 +22,10 @@
   gap: var(--label-gap);
   font-size: var(--size-label);
   line-height: var(--lh-label);
-  text-shadow: var(--label-halo);
+  text-shadow:
+    0 1px 10px rgba(0, 0, 0, 0.98),
+    0 0 22px rgba(0, 0, 0, 0.95),
+    0 0 4px rgba(0, 0, 0, 1);
 }
 
 .box b {
@@ -32,7 +35,7 @@
 }
 
 .box span {
-  color: var(--muted);
+  color: rgba(224, 228, 236, 0.86);
   font-size: var(--size-label-note);
 }
 

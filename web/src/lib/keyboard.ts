@@ -1,31 +1,49 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { KEYS, BODY_W, BODY_D, U, CAP_GAP, type Key } from "./layout";
+import { KEYS, BODY_W, BODY_D, HERO_KEY, U, CAP_GAP, type Key } from "./layout";
+import { createScreenTexture } from "./screenTexture";
 export interface LegendAtlas { texture: THREE.Texture; rects: [number, number, number, number][] }
 export interface SurfaceMaps { metalNormal: THREE.Texture; capNormal: THREE.Texture; smudge: THREE.Texture; capSmudge: THREE.Texture }
 
-// A low-profile mechanical keyboard, built the way real ones are
-// (306 × 116 × 22 mm). Top to bottom: keycaps on MX-style stems; switches
-// whose top housing sits on a 1.5 mm aluminium plate (14 mm square cutouts)
-// and whose bottom housing passes through it; stabilizers under the long
-// keys; dampening foam between plate and board; the 1.6 mm logic board
-// (per-key LED north of each switch, a diode beside it); the battery; and the
-// aluminium case the whole stack drops into.
-//
-// Local y of each layer's centre when assembled (the case's underside sits on
-// y = 0) and how far it travels when the keyboard splits apart. Switches are
-// measured from the plate's top face, where their top housings sit.
+// CNC-machined 16-inch MacBook Pro unibody with Vibetyper's 80-key mechanical
+// keyboard internals preserved in a sunken well. Top to bottom: hinged 16"
+// Liquid Retina XDR display lid; dished PBT keycaps + Touch ID sapphire ring;
+// smoked polycarbonate MX switches + stabilizers; CNC unibody palm-rest deck
+// with Force Touch glass trackpad & flanking speaker grilles; Poron/IXPE foam;
+// Apple Silicon M4 logic board; 6-cell 100Wh battery array; and the machined
+// aluminium lower enclosure with detachable MagSafe 3 magnetic plug.
+export const SIDE_DECK = 1.6;
+export const FRONT_DECK = 8.6;
+export const REAR_DECK = 0.45;
+export const Z_REAR = -BODY_D / 2 - REAR_DECK;
+export const Z_FRONT = BODY_D / 2 + FRONT_DECK;
+export const Z_CENTER = (Z_REAR + Z_FRONT) / 2;
+export const DECK_W = BODY_W + SIDE_DECK * 2;
+export const DECK_D = Z_FRONT - Z_REAR;
+export const HINGE_Z = Z_REAR + 0.22;
+export const Z_TRACKPAD = BODY_D / 2 + FRONT_DECK * 0.48;
+
 export const LAYERS = {
-  caps: { y: 1.93, lift: 10.0 }, // 1.64–2.22
-  switch: { y: 1.12, lift: 7.2 },
-  plate: { y: 1.045, lift: 4.6 }, // 0.97–1.12
-  foam: { y: 0.825, lift: 1.9 }, // 0.70–0.95
-  pcb: { y: 0.6, lift: -1.4 }, // 0.52–0.68
-  battery: { y: 0.3, lift: -3.9 },
-  base: { y: 0.575, lift: -7.2 }, // the case, 0–1.15
+  lid: { y: 1.76, lift: 9.8 },
+  caps: { y: 1.93, lift: 8.6 }, // 1.64–2.22
+  switch: { y: 1.12, lift: 5.8 },
+  plate: { y: 1.045, lift: 3.1 }, // 0.97–1.12 (deck top at +0.70 -> 1.745)
+  foam: { y: 0.825, lift: 0.5 }, // 0.70–0.95
+  pcb: { y: 0.6, lift: -2.3 }, // 0.52–0.68
+  battery: { y: 0.3, lift: -5.0 },
+  base: { y: 0.575, lift: -7.8 }, // the case, 0–1.15
 };
 export type LayerName = keyof typeof LAYERS;
-export const LAYER_ORDER: LayerName[] = ["caps", "switch", "plate", "foam", "pcb", "battery", "base"];
+export const LAYER_ORDER: LayerName[] = ["lid", "caps", "switch", "plate", "foam", "pcb", "battery", "base"];
+
+export interface MacBookPose {
+  lidAngle: number;
+  magsafeSlide: number;
+  screenMode: number;
+  shieldBlur: number;
+  countdown: number;
+  sirenPulse: number;
+}
 
 // keycap: a hollow PBT shell, dished on top, with a cross socket inside
 const CAP = { h: 0.58, inset: 0.12, rBot: 0.13, rTop: 0.2, fillet: 0.07, dish: 0.032, wall: 0.1 };
@@ -70,8 +88,8 @@ function rrect<P extends THREE.Path>(p: P, w: number, h: number, r: number, cx =
 
 // A flat rounded slab centred on the origin, lying in XZ. Holes are paths in
 // shape space (x, -z) and are grown by the bevel so walls land on their size.
-function slab(w: number, d: number, h: number, r: number, bevel = 0, segs = 8, holes: THREE.Path[] = [], bevelSegs = 3) {
-  const shape = rrect(new THREE.Shape(), w - 2 * bevel, d - 2 * bevel, Math.max(r - bevel, 0.01));
+function slab(w: number, d: number, h: number, r: number, bevel = 0, segs = 8, holes: THREE.Path[] = [], bevelSegs = 3, cz = 0) {
+  const shape = rrect(new THREE.Shape(), w - 2 * bevel, d - 2 * bevel, Math.max(r - bevel, 0.01), 0, -cz);
   shape.holes = holes;
   const depth = h - 2 * bevel;
   const g = new THREE.ExtrudeGeometry(shape, {
@@ -347,7 +365,8 @@ function addSpill(mat: THREE.Material, kind: "FRAME" | "CAP", uniforms: SpillUni
         `#include <emissivemap_fragment>
   {
     vec2 guv = vec2(vKbPos.x / uGlowSize.x + 0.5, 0.5 - vKbPos.z / uGlowSize.y);
-    vec3 glow = texture2D(glowMap, guv, 1.0).rgb * 0.55 + texture2D(glowMap, guv, 3.5).rgb * 0.9;
+    float inWell = smoothstep(0.5, 0.46, max(abs(guv.x - 0.5), abs(guv.y - 0.5)));
+    vec3 glow = (texture2D(glowMap, clamp(guv, 0.01, 0.99), 1.0).rgb * 0.55 + texture2D(glowMap, clamp(guv, 0.01, 0.99), 3.5).rgb * 0.9) * inWell;
     // smoothstep edges must ascend: reversed edges are undefined in GLSL and
     // come out as NaN on Metal, which bloom then smears over the whole frame
     vec3 kbN = vKbNormal / max(length(vKbNormal), 1e-4);
@@ -388,15 +407,17 @@ export interface KeyboardInputs {
   padTexture: THREE.Texture;
   pcbTexture: THREE.Texture;
   batteryTexture: THREE.Texture;
+  wallpaper: HTMLImageElement | null;
   surface: SurfaceMaps;
 }
 
 export type Keyboard = ReturnType<typeof createKeyboard>;
 
-export function createKeyboard({ legend, padTexture, pcbTexture, batteryTexture, surface }: KeyboardInputs) {
+export function createKeyboard({ legend, padTexture, pcbTexture, batteryTexture, wallpaper, surface }: KeyboardInputs) {
   const root = new THREE.Group();
   const N = KEYS.length;
   const n2 = (v: number) => new THREE.Vector2(v, v);
+  const screenTex = createScreenTexture(wallpaper);
 
   const mats = {
     // white: each cap's colour comes from its instance (graphite, or ember for the vibe row)
@@ -428,8 +449,9 @@ export function createKeyboard({ legend, padTexture, pcbTexture, batteryTexture,
     // the case
     base: new THREE.MeshPhysicalMaterial({
       color: 0x1d1a17,
-      roughness: 0.36,
+      roughness: 0.44,
       metalness: 0.72,
+      envMapIntensity: 0.55,
       normalMap: surface.metalNormal,
       normalScale: n2(0.08),
       roughnessMap: surface.smudge,
@@ -507,6 +529,60 @@ export function createKeyboard({ legend, padTexture, pcbTexture, batteryTexture,
       emissiveIntensity: 0.12,
     }),
     batteryEdge: new THREE.MeshStandardMaterial({ color: 0x8f9296, roughness: 0.38, metalness: 0.9 }),
+    trackpad: new THREE.MeshPhysicalMaterial({
+      color: 0x181512,
+      roughness: 0.34,
+      metalness: 0.08,
+      clearcoat: 0.35,
+      clearcoatRoughness: 0.38,
+      envMapIntensity: 0.65,
+      normalMap: surface.metalNormal,
+      normalScale: n2(0.02),
+      roughnessMap: surface.smudge,
+    }),
+    chamfer: new THREE.MeshPhysicalMaterial({
+      color: 0x48433e,
+      roughness: 0.2,
+      metalness: 0.9,
+      clearcoat: 0.4,
+      envMapIntensity: 1.6,
+    }),
+    sapphire: new THREE.MeshPhysicalMaterial({
+      color: 0x07080c,
+      roughness: 0.05,
+      metalness: 0.05,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.04,
+      envMapIntensity: 2.2,
+    }),
+    siliconDie: new THREE.MeshPhysicalMaterial({
+      color: 0x161920,
+      roughness: 0.06,
+      metalness: 0.94,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.04,
+      envMapIntensity: 2.0,
+    }),
+    displayBezel: new THREE.MeshPhysicalMaterial({
+      color: 0x050507,
+      roughness: 0.14,
+      metalness: 0.05,
+      clearcoat: 0.9,
+      clearcoatRoughness: 0.1,
+    }),
+    screen: new THREE.MeshPhysicalMaterial({
+      map: screenTex.texture,
+      emissive: 0xffffff,
+      emissiveMap: screenTex.texture,
+      emissiveIntensity: 0.78,
+      roughness: 0.16,
+      metalness: 0,
+      clearcoat: 0.65,
+      clearcoatRoughness: 0.12,
+      envMapIntensity: 0.35,
+    }),
+    magsafeLed: new THREE.MeshBasicMaterial({ color: 0x30d158 }),
+    camLed: new THREE.MeshBasicMaterial({ color: 0x30d158 }),
   };
 
   // per-instance uv rect into the legend atlas; instance colour = glow only
@@ -584,6 +660,18 @@ export function createKeyboard({ legend, padTexture, pcbTexture, batteryTexture,
   const legendMesh = instanced(legendGeo, mats.legend, N);
   legendMesh.renderOrder = 2;
 
+  /* Touch ID biometric chamfer ring & sapphire sensor disc on HERO_KEY */
+  const touchIdGroup = new THREE.Group();
+  const touchRing = new THREE.Mesh(
+    slab(0.38, 0.38, 0.016, 0.189, 0.004, 14, [rrect(new THREE.Path(), 0.3, 0.3, 0.149)], 2),
+    mats.chamfer,
+  );
+  touchRing.position.set(0, CAP_H / 2 - 0.02, 0);
+  const touchDisc = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.012, 36), mats.sapphire);
+  touchDisc.position.set(0, CAP_H / 2 - 0.028, 0);
+  touchIdGroup.add(touchRing, touchDisc);
+  root.add(touchIdGroup);
+
   /* switches: top housing on the plate, bottom housing through it, stem, spring */
   const housingMesh = instanced(topHousingGeometry(), mats.housing, N, { shadow: true });
   const lowerMesh = instanced(bottomHousingGeometry(), mats.housingLow, N);
@@ -627,7 +715,8 @@ export function createKeyboard({ legend, padTexture, pcbTexture, batteryTexture,
   // how deep a key's switch is (the half-height function row gets squat ones)
   const fitOf = (k: Key) => Math.min(1, (k.d + 0.1) / TOP.base);
 
-  /* plate: 1.5 mm aluminium, a 14 mm cutout per switch and two per stabilizer */
+  /* plate: 1.5 mm aluminium well plate + extended CNC unibody palm-rest deck,
+     recessed Force Touch glass trackpad & flanking laser-drilled speaker grilles */
   const PW = BODY_W - 1.1;
   const PD = BODY_D - 1.1;
   const plateHoles = [
@@ -638,25 +727,83 @@ export function createKeyboard({ legend, padTexture, pcbTexture, batteryTexture,
   plateMesh.castShadow = plateMesh.receiveShadow = true;
   const plate = new THREE.Group().add(plateMesh);
 
-  /* foam: latex and IXPE between plate and board, cut around every switch */
+  const wellHole = rrect(new THREE.Path(), BODY_W - 0.82, BODY_D - 0.82, 0.32, 0, 0);
+  const deckMesh = new THREE.Mesh(
+    slab(DECK_W - 0.35, DECK_D - 0.35, 0.68, 0.82, 0.038, 8, [wellHole], 3, Z_CENTER),
+    mats.base,
+  );
+  deckMesh.position.y = 0.36;
+  deckMesh.castShadow = deckMesh.receiveShadow = true;
+  plate.add(deckMesh);
+
+  const Y_DECK = 0.7;
+  const TP_W = 11.4;
+  const TP_D = 6.8;
+  const TP_R = 0.36;
+  const tpRim = new THREE.Mesh(
+    slab(TP_W + 0.14, TP_D + 0.14, 0.028, TP_R + 0.04, 0.01, 8, [rrect(new THREE.Path(), TP_W, TP_D, TP_R)], 2),
+    mats.chamfer,
+  );
+  tpRim.position.set(0, Y_DECK + 0.006, Z_TRACKPAD);
+  const tpGlass = new THREE.Mesh(slab(TP_W - 0.02, TP_D - 0.02, 0.022, TP_R - 0.01, 0.006, 8), mats.trackpad);
+  tpGlass.position.set(0, Y_DECK + 0.002, Z_TRACKPAD);
+  tpGlass.receiveShadow = true;
+  plate.add(tpRim, tpGlass);
+
+  const grilleDots: THREE.BufferGeometry[] = [];
+  for (const sx of [-1, 1]) {
+    const gx = sx * (BODY_W / 2 + SIDE_DECK * 0.42);
+    for (let c = 0; c < 6; c++) {
+      for (let r = 0; r < 54; r++) {
+        const dx = (c - 2.5) * 0.145;
+        const dz = (r - 26.5) * 0.178;
+        grilleDots.push(new THREE.CylinderGeometry(0.032, 0.032, 0.012, 8).translate(gx + dx, Y_DECK + 0.002, dz));
+      }
+    }
+  }
+  const grilleMesh = new THREE.Mesh(merge(grilleDots.map(flat)), mats.port);
+  plate.add(grilleMesh);
+
+  /* foam: latex and IXPE between plate and board, plus palm-rest acoustic shield */
   const foamHoles = [
     ...KEYS.map((k) => rrect(new THREE.Path(), 1.5, 1.5 * fitOf(k), 0.08, k.x, -k.z)),
     ...STABS.flatMap(({ k, half }) => [-1, 1].map((s) => rrect(new THREE.Path(), 0.72, 1.1, 0.06, k.x + s * half, -k.z))),
   ];
   const foamMesh = new THREE.Mesh(slab(BODY_W - 1.2, BODY_D - 1.2, 0.25, 0.45, 0, 4, foamHoles), mats.foam);
   foamMesh.receiveShadow = true;
-  const foam = new THREE.Group().add(foamMesh);
+  const frontFoam = new THREE.Mesh(slab(DECK_W - 2.2, FRONT_DECK - 1.0, 0.2, 0.45, 0, 4, [], 1, BODY_D / 2 + FRONT_DECK / 2), mats.foam);
+  frontFoam.receiveShadow = true;
+  const foam = new THREE.Group().add(foamMesh, frontFoam);
 
-  /* logic board */
+  /* logic board + Apple Silicon M4 SoC package */
   const pcb = new THREE.Group();
   const board = new THREE.Mesh(slab(BODY_W - 1.3, BODY_D - 1.3, 0.16, 0.5, 0.012), mats.pcb);
+  const frontBoard = new THREE.Mesh(slab(DECK_W - 2.4, 3.2, 0.16, 0.4, 0.012, 6, [], 1, BODY_D / 2 + 1.4), mats.pcb);
   const boardTop = new THREE.Mesh(flatPlane(BODY_W - 1.34, BODY_D - 1.34), mats.pcbTop);
   boardTop.position.y = 0.081;
   const chip = new THREE.Mesh(slab(1.6, 1.6, 0.12, 0.1, 0.02), mats.chip);
   chip.position.set(9.6, 0.14, -2.9);
   const usb = new THREE.Mesh(slab(0.9, 0.75, 0.32, 0.12, 0.03), mats.can);
   usb.position.set(11.5, 0.24, -4.85);
-  pcb.add(board, boardTop, chip, usb);
+  pcb.add(board, frontBoard, boardTop, chip, usb);
+
+  // Apple Silicon M4 Pro / ANE SoC package
+  const socSubstrate = new THREE.Mesh(slab(3.2, 3.2, 0.08, 0.12, 0.015), mats.pcb);
+  socSubstrate.position.set(0, 0.11, 1.2);
+  const socRim = new THREE.Mesh(
+    slab(2.9, 2.9, 0.04, 0.08, 0.008, 4, [rrect(new THREE.Path(), 2.0, 2.0, 0.05)]),
+    mats.can,
+  );
+  socRim.position.set(0, 0.15, 1.2);
+  const socDie = new THREE.Mesh(slab(1.96, 1.96, 0.048, 0.04, 0.008), mats.siliconDie);
+  socDie.position.set(0, 0.158, 1.2);
+  pcb.add(socSubstrate, socRim, socDie);
+  for (const sx of [-1, 1]) {
+    const dram = new THREE.Mesh(slab(0.76, 1.8, 0.044, 0.04, 0.006), mats.chip);
+    dram.position.set(sx * 1.55, 0.148, 1.2);
+    pcb.add(dram);
+  }
+
   // a per-key LED north of each switch (under its LED window), a diode beside it
   const leds = new THREE.InstancedMesh(new THREE.BoxGeometry(0.3, 0.06, 0.14), mats.led, N);
   const diodes = new THREE.InstancedMesh(new THREE.BoxGeometry(0.2, 0.06, 0.1), mats.diode, N);
@@ -675,7 +822,7 @@ export function createKeyboard({ legend, padTexture, pcbTexture, batteryTexture,
   }
   pcb.traverse(shadows);
 
-  /* battery: two pouch cells */
+  /* battery: 100Wh 6-cell lithium-polymer array (rear + palm-rest cells) */
   const battery = new THREE.Group();
   for (const x of [-6.7, 6.7]) {
     const cell = new THREE.Mesh(slab(12.2, 3.6, 0.2, 0.3, 0.035), mats.batteryEdge);
@@ -684,32 +831,112 @@ export function createKeyboard({ legend, padTexture, pcbTexture, batteryTexture,
     label.position.set(x, 0.101, -1.4);
     battery.add(cell, label);
   }
+  for (const [bx, bw] of [[-9.4, 8.8], [0, 9.2], [9.4, 8.8]] as [number, number][]) {
+    const cell = new THREE.Mesh(slab(bw, 6.2, 0.22, 0.3, 0.035), mats.batteryEdge);
+    cell.position.set(bx, 0, Z_TRACKPAD);
+    const label = new THREE.Mesh(flatPlane(bw - 0.3, 5.9), mats.battery);
+    label.position.set(bx, 0.112, Z_TRACKPAD);
+    battery.add(cell, label);
+  }
   battery.traverse(shadows);
 
-  /* case: a machined aluminium tray the stack drops into, on rubber feet,
-     with the USB-C port in its back wall */
+  /* case: extended CNC unibody lower enclosure, front thumb scoop, left I/O & detachable MagSafe 3 */
   const base = new THREE.Group();
   const CASE_H = 1.15;
-  const walls = new THREE.Mesh(slab(BODY_W, BODY_D, CASE_H, 0.9, 0.045, 8, [rrect(new THREE.Path(), BODY_W - 0.9, BODY_D - 0.9, 0.48)], 3), mats.base);
-  const floor = new THREE.Mesh(slab(BODY_W - 0.4, BODY_D - 0.4, 0.15, 0.7, 0), mats.baseInner);
+  const walls = new THREE.Mesh(
+    slab(DECK_W, DECK_D, CASE_H, 0.9, 0.045, 8, [rrect(new THREE.Path(), DECK_W - 0.9, DECK_D - 0.9, 0.5, 0, -Z_CENTER)], 3, Z_CENTER),
+    mats.base,
+  );
+  const floor = new THREE.Mesh(slab(DECK_W - 0.4, DECK_D - 0.4, 0.15, 0.72, 0, 8, [], 1, Z_CENTER), mats.baseInner);
   floor.position.y = -CASE_H / 2 + 0.075;
-  base.add(walls, floor);
+  const scoop = new THREE.Mesh(slab(5.2, 0.34, 0.2, 0.14, 0.02), mats.baseInner);
+  scoop.position.set(0, CASE_H / 2 - 0.09, Z_FRONT - 0.05);
+  base.add(walls, floor, scoop);
   const feet: P2[] = [
-    [-12.2, 4.2],
-    [12.2, 4.2],
-    [-12.2, -4.2],
-    [12.2, -4.2],
+    [-13.4, Z_REAR + 2.2],
+    [13.4, Z_REAR + 2.2],
+    [-13.4, Z_FRONT - 2.2],
+    [13.4, Z_FRONT - 2.2],
   ];
   for (const [x, z] of feet) {
-    const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.45, 0.06, 24), mats.rubber);
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.58, 0.06, 24), mats.rubber);
     foot.position.set(x, -CASE_H / 2 - 0.03, z);
     base.add(foot);
   }
-  const port = new THREE.Mesh(new THREE.ShapeGeometry(rrect(new THREE.Shape(), 0.95, 0.34, 0.17), 6), mats.port);
-  port.rotation.y = Math.PI;
-  port.position.set(11.5, 0.6 - LAYERS.base.y, -BODY_D / 2 - 0.004);
-  base.add(port);
-  base.traverse((o) => o !== port && shadows(o));
+
+  // Left-side I/O port cutouts (MagSafe 3 + 2x Thunderbolt 4)
+  const portX = -DECK_W / 2 - 0.005;
+  const magsafePort = new THREE.Mesh(new THREE.ShapeGeometry(rrect(new THREE.Shape(), 1.18, 0.34, 0.12), 8), mats.port);
+  magsafePort.rotation.y = -Math.PI / 2;
+  magsafePort.position.set(portX, 0.04, -3.8);
+  base.add(magsafePort);
+  for (const tz of [-1.9, -0.6]) {
+    const tbPort = new THREE.Mesh(new THREE.ShapeGeometry(rrect(new THREE.Shape(), 0.74, 0.26, 0.13), 8), mats.port);
+    tbPort.rotation.y = -Math.PI / 2;
+    tbPort.position.set(portX, 0.04, tz);
+    base.add(tbPort);
+  }
+
+  // Detachable CNC MagSafe 3 magnetic connector + braided cord
+  const MAGSAFE_X = -DECK_W / 2 - 0.36;
+  const magsafe = new THREE.Group();
+  const magBody = new THREE.Mesh(slab(0.76, 1.22, 0.36, 0.14, 0.03, 6), mats.base);
+  const magTip = new THREE.Mesh(slab(0.22, 1.04, 0.26, 0.08, 0.015, 6), mats.can);
+  magTip.position.set(0.4, 0, 0);
+  const magLed = new THREE.Mesh(slab(0.14, 0.26, 0.02, 0.05), mats.magsafeLed);
+  magLed.position.set(-0.04, 0.185, 0);
+  const magBoot = new THREE.Mesh(new THREE.CylinderGeometry(0.125, 0.14, 0.44, 16).rotateZ(Math.PI / 2), mats.rubber);
+  magBoot.position.set(-0.56, 0, 0);
+  const cordCurve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(-0.75, 0, 0),
+    new THREE.Vector3(-2.3, -0.16, 0.25),
+    new THREE.Vector3(-4.6, -0.3, 1.1),
+    new THREE.Vector3(-7.4, -0.34, 2.7),
+  ]);
+  const magCord = new THREE.Mesh(new THREE.TubeGeometry(cordCurve, 32, 0.11, 12, false), mats.foam);
+  magsafe.add(magBody, magTip, magLed, magBoot, magCord);
+  magsafe.position.set(MAGSAFE_X, 0.04, -3.8);
+  base.add(magsafe);
+  base.traverse((o) => {
+    if (o instanceof THREE.Mesh && o.material !== mats.port) shadows(o);
+  });
+
+  /* lid: hinged 16" Liquid Retina XDR display assembly */
+  const LID_W = DECK_W;
+  const LID_H = DECK_D - 0.22;
+  const LID_T = 0.26;
+  const SCREEN_W = 30.72;
+  const SCREEN_H = 19.2;
+  const lid = new THREE.Group();
+  const lidShellGeo = slab(LID_W, LID_H, LID_T, 0.9, 0.045, 8);
+  lidShellGeo.rotateX(Math.PI / 2);
+  lidShellGeo.translate(0, LID_H / 2, -LID_T / 2);
+  const lidShell = new THREE.Mesh(lidShellGeo, mats.base);
+  lidShell.castShadow = lidShell.receiveShadow = true;
+
+  const emblemDisc = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, 0.012, 48).rotateX(Math.PI / 2), mats.siliconDie);
+  emblemDisc.position.set(0, LID_H * 0.52, -LID_T - 0.002);
+
+  const bezelGeo = slab(LID_W - 0.24, LID_H - 0.24, 0.02, 0.78, 0.006, 8);
+  bezelGeo.rotateX(Math.PI / 2);
+  bezelGeo.translate(0, LID_H / 2, 0.004);
+  const lidBezel = new THREE.Mesh(bezelGeo, mats.displayBezel);
+
+  const screenMesh = new THREE.Mesh(new THREE.PlaneGeometry(SCREEN_W, SCREEN_H), mats.screen);
+  screenMesh.position.set(0, LID_H / 2 + 0.1, 0.018);
+
+  const notchY = LID_H / 2 + 0.1 + SCREEN_H / 2 - 0.28;
+  const camLens = new THREE.Mesh(new THREE.CircleGeometry(0.11, 24), mats.sapphire);
+  camLens.position.set(-0.36, notchY, 0.024);
+  const camLed = new THREE.Mesh(new THREE.CircleGeometry(0.042, 16), mats.camLed);
+  camLed.position.set(0.42, notchY, 0.024);
+
+  const hingeBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 18.4, 24).rotateZ(Math.PI / 2), mats.baseInner);
+  hingeBarrel.position.set(0, 0.06, -0.08);
+  hingeBarrel.castShadow = hingeBarrel.receiveShadow = true;
+  lid.add(lidShell, emblemDisc, lidBezel, screenMesh, camLens, camLed, hingeBarrel);
+  lid.position.set(0, LAYERS.lid.y, HINGE_Z);
+  root.add(lid);
 
   const layerGroups = { plate, foam, pcb, battery, base };
   for (const [name, g] of Object.entries(layerGroups) as [keyof typeof layerGroups, THREE.Group][]) {
@@ -734,12 +961,20 @@ export function createKeyboard({ legend, padTexture, pcbTexture, batteryTexture,
     hover: 0,
     lift: { cap: 0, switch: 0, spring: 0, pad: 0 },
   }));
-  const explode: Record<LayerName, number> = { caps: 0, switch: 0, plate: 0, foam: 0, pcb: 0, battery: 0, base: 0 };
+  const explode: Record<LayerName, number> = { lid: 0, caps: 0, switch: 0, plate: 0, foam: 0, pcb: 0, battery: 0, base: 0 };
   // sideways offset (cm, along the keyboard's length) of the lower layers:
   // the preloader starts on the logic board slid out from under the keys
   const slide = { pcb: 0, battery: 0, base: 0 };
   // capGlowTop: how high up a cap's skirt the backlight reaches
   const look = { legendGlow: 1, mic: 0, capGlowTop: 1.9 };
+  const pose: MacBookPose = {
+    lidAngle: 0,
+    magsafeSlide: 0,
+    screenMode: 0,
+    shieldBlur: 0,
+    countdown: 15,
+    sirenPulse: 0,
+  };
 
   // no two caps sit perfectly level
   let seed = 3;
@@ -783,8 +1018,15 @@ export function createKeyboard({ legend, padTexture, pcbTexture, batteryTexture,
       s.setScalar(st.s);
       m.compose(p, qj.copy(st.q).multiply(jitter[i].q), s);
       capRefs[i].mesh.setMatrixAt(capRefs[i].slot, m);
-      // the legend fills the cap's dished face
-      m2.makeScale(k.w - 2 * faceInset, 1, k.d - 2 * faceInset).setPosition(0, CAP_H / 2 + 0.003, 0);
+      if (i === HERO_KEY) {
+        touchIdGroup.position.copy(p);
+        touchIdGroup.quaternion.copy(qj);
+        touchIdGroup.scale.copy(s);
+      }
+      // the legend fills the cap's dished face (scaled inside the Touch ID sapphire disc on HERO_KEY)
+      const lScale = i === HERO_KEY ? 0.48 : 1;
+      const lY = i === HERO_KEY ? CAP_H / 2 + 0.011 : CAP_H / 2 + 0.003;
+      m2.makeScale((k.w - 2 * faceInset) * lScale, 1, (k.d - 2 * faceInset) * lScale).setPosition(0, lY, 0);
       m2.premultiply(m);
       legendMesh.setMatrixAt(i, m2);
 
@@ -836,6 +1078,14 @@ export function createKeyboard({ legend, padTexture, pcbTexture, batteryTexture,
       grp.position.y = LAYERS[name].y + LAYERS[name].lift * explode[name];
       grp.position.x = name in slide ? slide[name as keyof typeof slide] : 0;
     }
+
+    // Hinged lid, detachable MagSafe 3 connector & Retina screen texture
+    lid.position.set(0, LAYERS.lid.y + LAYERS.lid.lift * explode.lid, HINGE_Z);
+    lid.rotation.x = THREE.MathUtils.lerp(-0.28, Math.PI / 2, pose.lidAngle);
+    magsafe.position.set(MAGSAFE_X - pose.magsafeSlide * 3.8, 0.04, -3.8);
+    mats.magsafeLed.color.setHex(pose.magsafeSlide > 0.08 ? 0xff453a : 0x30d158);
+    screenTex.update(pose);
+
     let ledsOn = true;
     for (let i = 0; i < N; i++) {
       const v = keys[i].led;
@@ -877,18 +1127,28 @@ export function createKeyboard({ legend, padTexture, pcbTexture, batteryTexture,
   // world-space corners of a layer at its current height, for label anchors
   const corners = [0, 1, 2, 3].map(() => new THREE.Vector3());
   const layerCorners = (name: LayerName) => {
-    const y =
-      name === "caps"
-        ? LAYERS.caps.y + LAYERS.caps.lift * capLift(5)
-        : name === "switch"
-          ? switchY() + TOP.h / 2
-          : LAYERS[name].y + LAYERS[name].lift * explode[name];
-    const hx = BODY_W / 2 - 0.4;
-    const hz = BODY_D / 2 - 0.5;
-    corners[0].set(-hx, y, hz);
-    corners[1].set(-hx, y, -hz);
-    corners[2].set(hx, y, hz);
-    corners[3].set(hx, y, -hz);
+    const hx = DECK_W / 2 - 0.4;
+    if (name === "lid") {
+      const y = LAYERS.lid.y + LAYERS.lid.lift * explode.lid + 6.5;
+      const z = HINGE_Z - 1.5;
+      corners[0].set(-hx, y, z);
+      corners[1].set(-hx, y, z - 0.5);
+      corners[2].set(hx, y, z);
+      corners[3].set(hx, y, z - 0.5);
+    } else {
+      const y =
+        name === "caps"
+          ? LAYERS.caps.y + LAYERS.caps.lift * capLift(5)
+          : name === "switch"
+            ? switchY() + TOP.h / 2
+            : LAYERS[name].y + LAYERS[name].lift * explode[name];
+      const zRear = Z_REAR + 0.5;
+      const zFront = Z_FRONT - 0.5;
+      corners[0].set(-hx, y, zFront);
+      corners[1].set(-hx, y, zRear);
+      corners[2].set(hx, y, zFront);
+      corners[3].set(hx, y, zRear);
+    }
     for (const c of corners) root.localToWorld(c);
     return corners;
   };
@@ -908,6 +1168,7 @@ export function createKeyboard({ legend, padTexture, pcbTexture, batteryTexture,
 
   function dispose() {
     glowRT.dispose();
+    screenTex.dispose();
     root.traverse((o) => {
       if (o instanceof THREE.Mesh) o.geometry.dispose();
       if (o instanceof THREE.InstancedMesh) o.dispose();
@@ -916,5 +1177,5 @@ export function createKeyboard({ legend, padTexture, pcbTexture, batteryTexture,
   }
 
   update();
-  return { root, keys, explode, slide, look, update, renderGlow, layerCorners, keyPart, mats, dispose };
+  return { root, keys, explode, slide, look, pose, update, renderGlow, layerCorners, keyPart, mats, dispose };
 }

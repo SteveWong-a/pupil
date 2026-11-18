@@ -42,7 +42,7 @@ export function createPreloader({ kb, rig, post, stage, ui, onDone }: { kb: Keyb
 
   // the orbit is parked on the hero shot from the start; the flight lands on
   // the same spot and hands over to it at the end
-  Object.assign(cam, { tx: 0, ty: 5.1, tz: 0.9, az: -0.06, el: 0.2, dist: 46, fov: 30, roll: 0, fit: 1, shiftX: 0, shiftY: -0.085, parallax: 0, shake: 0 });
+  Object.assign(cam, { tx: 0, ty: 9.4, tz: 1.5, az: -0.18, el: 0.22, dist: 76, fov: 30, roll: 0, fit: 1, shiftX: 0, shiftY: -0.05, parallax: 0, shake: 0 });
   // (motionBlur: a film shutter while the camera flies)
   Object.assign(fx, { bokeh: 1.5, focusRange: 3, bloom: 1.1, focusRow: 0, motionBlur: 1 });
   Object.assign(flight, { mix: 1, near: 0.04 });
@@ -53,7 +53,8 @@ export function createPreloader({ kb, rig, post, stage, ui, onDone }: { kb: Keyb
     kb.explode[name] = BOARD_DROP / -LAYERS[name].lift;
     kb.slide[name] = BOARD_SLIDE;
   }
-  Object.assign(kb.explode, { caps: 0, switch: 0, plate: 0, foam: 0 });
+  Object.assign(kb.explode, { lid: 0, caps: 0, switch: 0, plate: 0, foam: 0 });
+  kb.pose.lidAngle = 0.72;
   // the board reads a touch brighter than it does inside the closed case
   const board = kb.mats.pcbTop;
   const boardGlow = { v: 0.55 };
@@ -78,8 +79,9 @@ export function createPreloader({ kb, rig, post, stage, ui, onDone }: { kb: Keyb
   // the lens opens up as the camera rises out, then settles into product shot
   tl.to(fx, { bokeh: 1.2, focusRange: 6, duration: 0.5, ease: "sine.inOut" }, T.out - 0.2);
   tl.to(fx, { bokeh: 0.5, focusRange: 18, duration: 1.0, ease: "sine.inOut" }, T.edge);
-  // the keyboard tips toward us as it's revealed
-  tl.to(stage.kbPose, { rx: 0.36, duration: T.end - keyTimes[8] + 0.25, ease: "power2.inOut" }, keyTimes[8] - 0.25);
+  // the keyboard tips toward us as it's revealed and the 16" Retina lid swings open
+  tl.to(kb.pose, { lidAngle: 0, duration: 1.4, ease: "power2.out" }, T.out);
+  tl.to(stage.kbPose, { rx: 0.14, duration: T.end - keyTimes[8] + 0.25, ease: "power2.inOut" }, keyTimes[8] - 0.25);
   tl.to(flight, { mix: 0, duration: 1.0, ease: "power2.inOut" }, T.end - 1.0);
   tl.to(stage, { rim: 1, duration: 0.6, ease: "sine.inOut" }, T.end - 0.6);
   // the low light across the board fades as the camera leaves it

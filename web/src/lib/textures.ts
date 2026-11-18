@@ -30,6 +30,16 @@ function atlasRects(): [number, number, number, number][] {
   return rects;
 }
 
+async function loadWallpaper(): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = "./assets/macos-wallpaper.jpg";
+  });
+}
+
 export async function loadTextures(): Promise<KeyboardInputs> {
   const loader = new THREE.TextureLoader();
   const load = async (file: string, { srgb = true, aniso = 8 } = {}) => {
@@ -38,13 +48,14 @@ export async function loadTextures(): Promise<KeyboardInputs> {
     t.anisotropy = aniso;
     return t;
   };
-  const [legends, padTexture, pcbTexture, batteryTexture, grain, smudge] = await Promise.all([
+  const [legends, padTexture, pcbTexture, batteryTexture, grain, smudge, wallpaper] = await Promise.all([
     load("legends.png", { aniso: 16 }),
     load("light-pool.png", { srgb: false, aniso: 4 }),
     load("pcb.webp"),
     load("battery.webp"),
     load("grain-normal.png", { srgb: false }),
     load("smudge.png", { srgb: false, aniso: 4 }),
+    loadWallpaper(),
   ]);
   // the surface maps tile: ExtrudeGeometry UVs are in centimetres, so repeat sets the physical scale
   const tiled = (tex: THREE.Texture, cm: number) => {
@@ -59,6 +70,7 @@ export async function loadTextures(): Promise<KeyboardInputs> {
     padTexture,
     pcbTexture,
     batteryTexture,
+    wallpaper,
     surface: { metalNormal: tiled(grain, 1.6), capNormal: tiled(grain, 0.9), smudge: tiled(smudge, 14), capSmudge: tiled(smudge, 6) },
   };
 }

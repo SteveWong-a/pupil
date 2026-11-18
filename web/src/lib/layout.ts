@@ -134,8 +134,8 @@ const ROWS: { h: number; keys: KeyDef[] }[] = [
   },
 ];
 
-const rowsDepth = ROWS.reduce((s, r) => s + r.h, 0) * U;
-const rowsWidth = 14.5 * U;
+export const rowsDepth = ROWS.reduce((s, r) => s + r.h, 0) * U;
+export const rowsWidth = 14.5 * U;
 
 export const BODY_W = rowsWidth + MARGIN * 2;
 export const BODY_D = rowsDepth + MARGIN * 2;
@@ -180,4 +180,5 @@ export const KEYS: Key[] = (() => {
 
 const indexOf = (id: string) => KEYS.findIndex((k) => k.id === id);
 export const VIBE = (["prompt", "talk", "reject", "accept"] as const).map(indexOf);
-export const ACCEPT_INDEX = indexOf("accept");
+export const HERO_KEY = indexOf("power");
+export const ACCEPT_INDEX = HERO_KEY;

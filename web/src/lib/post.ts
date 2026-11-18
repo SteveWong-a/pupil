@@ -90,11 +90,11 @@ export function createPost(renderer: THREE.WebGLRenderer, scene: THREE.Scene, ca
   dof.target = focusTarget;
 
   const bloom = new BloomEffect({
-    intensity: 1.1,
-    luminanceThreshold: 0.85,
-    luminanceSmoothing: 0.25,
+    intensity: 0.95,
+    luminanceThreshold: 1.15,
+    luminanceSmoothing: 0.2,
     mipmapBlur: true,
-    radius: 0.62,
+    radius: 0.58,
   });
   const tone = new ToneMappingEffect({ mode: ToneMappingMode.AGX });
   const vignette = new VignetteEffect({ offset: 0.32, darkness: 0.62 });

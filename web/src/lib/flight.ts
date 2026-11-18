@@ -21,8 +21,8 @@ const rowZ = (r: number) => KEYS.find((k) => k.row === r)!.z;
 export const LANE_Z = (rowZ(3) + rowZ(4)) / 2; // 1.47
 const LANE_Y = 1.4; // between the switches' top housings, below their stems
 
-// the hero shot (rig orbit: target 0, 5.1, 0.9 · az -0.06 · el 0.2 · dist 46)
-export const HERO = { target: [0, 5.1, 0.9], az: -0.06, el: 0.2, dist: 46, fov: 30 };
+// the hero shot (rig orbit: target 0, 9.4, 1.5 · az -0.18 · el 0.22 · dist 76)
+export const HERO = { target: [0, 9.4, 1.5], az: -0.18, el: 0.22, dist: 76, fov: 30 };
 type V3 = [number, number, number];
 const heroPos: V3 = [
   HERO.target[0] + HERO.dist * Math.cos(HERO.el) * Math.sin(HERO.az),
@@ -72,8 +72,8 @@ const FEEL: [number, number][] = [
 // the parts the camera flies past, for the felt speed: the keyboard, and the
 // logic board where it starts
 const BOXES = [
-  { x0: -14.4, x1: 14.4, y0: 0, y1: 1.95, z0: -5.9, z1: 5.9 },
-  { x0: -14.4 + BOARD_SLIDE, x1: 14.4 + BOARD_SLIDE, y0: -1.3, y1: -0.8, z0: -5.9, z1: 5.9 },
+  { x0: -16.0, x1: 16.0, y0: 0, y1: 1.95, z0: -6.4, z1: 14.5 },
+  { x0: -16.0 + BOARD_SLIDE, x1: 16.0 + BOARD_SLIDE, y0: -1.3, y1: -0.8, z0: -6.4, z1: 14.5 },
 ];
 const NEAREST = 0.7;
 
