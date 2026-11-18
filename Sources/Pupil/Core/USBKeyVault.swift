@@ -15,6 +15,7 @@ public enum USBKeyStorageError: LocalizedError, Sendable, Equatable {
     case corruptedSealedRecord
     case encryptionFailed
     case noEnrolledKey
+    case enrollmentBlockedWhileActive
 
     public var errorDescription: String? {
         switch self {
@@ -26,6 +27,8 @@ public enum USBKeyStorageError: LocalizedError, Sendable, Equatable {
             return "Failed to encrypt the USB security key signature."
         case .noEnrolledKey:
             return "No USB security key is currently enrolled."
+        case .enrollmentBlockedWhileActive:
+            return "Disarm Pupil before enrolling a USB security key."
         }
     }
 }
@@ -280,7 +283,7 @@ extension KeychainManager {
         return enrolled.matches(device)
     }
 
-    nonisolated public static func clearEnrolledUSBKey(vault: USBKeyVault = .shared) {
-        try? vault.clear()
+    nonisolated public static func clearEnrolledUSBKey(vault: USBKeyVault = .shared) throws {
+        try vault.clear()
     }
 }

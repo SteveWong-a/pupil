@@ -90,7 +90,7 @@ private final class USBIOKitSession: @unchecked Sendable {
             terminatedResult = KERN_FAILURE
         }
 
-        guard matchedResult == KERN_SUCCESS || terminatedResult == KERN_SUCCESS else {
+        guard matchedResult == KERN_SUCCESS && terminatedResult == KERN_SUCCESS else {
             if localMatched != 0 { IOObjectRelease(localMatched) }
             if localTerminated != 0 { IOObjectRelease(localTerminated) }
             IONotificationPortDestroy(port)
@@ -164,8 +164,12 @@ private final class USBIOKitSession: @unchecked Sendable {
             isConnected ? USBDeviceEvent.connected(descriptor) : USBDeviceEvent.disconnected(descriptor)
         }
 
-        Task { @MainActor [weak monitor] in
-            guard let monitor else { return }
+        Task { @MainActor [weak monitor, self] in
+            guard let monitor,
+                  monitor.isMonitoring,
+                  monitor.iokitSession === self else {
+                return
+            }
             for event in events {
                 monitor.emitEvent(event)
             }
@@ -182,7 +186,7 @@ public final class USBKeyMonitor: USBDeviceMonitoring {
     }
     public var onUSBEvent: ((USBDeviceEvent) -> Void)?
 
-    private var iokitSession: USBIOKitSession?
+    fileprivate var iokitSession: USBIOKitSession?
 
     public init(startImmediately: Bool = false) {
         if startImmediately {

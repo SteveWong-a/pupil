@@ -504,7 +504,7 @@ struct USBKeyDisarmTests {
             try vault.load()
         }
 
-        KeychainManager.clearEnrolledUSBKey(vault: vault)
+        try KeychainManager.clearEnrolledUSBKey(vault: vault)
         #expect(!FileManager.default.fileExists(atPath: vaultURL.path))
     }
 
@@ -618,6 +618,31 @@ struct USBKeyDisarmTests {
             usbMonitor: monitor,
             usbKeyVault: env.vault
         )
+        let previousPinStoreData = UserDefaults.standard.data(forKey: KeychainManager.storeKey)
+        let previousFallbackPinData = UserDefaults.standard.data(forKey: "pupil.fallbackPinRecord")
+        let pinRecordURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("Pupil", isDirectory: true)
+            .appendingPathComponent("pin.record")
+        let previousPinFileData = pinRecordURL.flatMap { try? Data(contentsOf: $0) }
+        defer {
+            if let previousPinStoreData {
+                UserDefaults.standard.set(previousPinStoreData, forKey: KeychainManager.storeKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: KeychainManager.storeKey)
+            }
+            if let previousFallbackPinData {
+                UserDefaults.standard.set(previousFallbackPinData, forKey: "pupil.fallbackPinRecord")
+            } else {
+                UserDefaults.standard.removeObject(forKey: "pupil.fallbackPinRecord")
+            }
+            if let pinRecordURL {
+                if let previousPinFileData {
+                    try? previousPinFileData.write(to: pinRecordURL, options: [.atomic])
+                } else {
+                    try? FileManager.default.removeItem(at: pinRecordURL)
+                }
+            }
+        }
         try KeychainManager.enrollPin("4321")
         _ = try coordinator.enrollUSBKey(yubikey)
 
@@ -733,9 +758,65 @@ struct USBKeyDisarmTests {
 
         // Re-enabling and removing enrollment resets state cleanly.
         env.settings.usbKeyDisarmEnabled = true
-        coordinator.removeEnrolledUSBKey()
+        try coordinator.removeEnrolledUSBKey()
         #expect(coordinator.hasEnrolledUSBKey == false)
         #expect(env.settings.enrolledUSBKeySummary == nil)
         #expect(env.settings.usbKeyDisarmEnabled == false)
+    }
+
+    @MainActor
+    @Test("Coordinator refuses USB key enrollment while security state is active")
+    func testCoordinatorRefusesUSBKeyEnrollmentWhileSecurityStateIsActive() throws {
+        let env = makeIsolatedEnvironment()
+        defer {
+            SirenSynthesizer.shared.stop()
+            env.defaults.removePersistentDomain(forName: env.suiteName)
+            try? FileManager.default.removeItem(at: env.tempDir)
+        }
+
+        let monitor = USBKeyMonitor(startImmediately: false)
+        monitor.connectedDevicesProvider = { [yubikey, externalMouse] }
+        let powerMonitor = PowerAndLidMonitor(isOnACPower: true, batteryPercentage: 100)
+
+        let coordinator = SecurityCoordinator(
+            settings: env.settings,
+            powerMonitor: powerMonitor,
+            journalStore: env.journalStore,
+            usbMonitor: monitor,
+            usbKeyVault: env.vault
+        )
+
+        func assertEnrollmentBlocked() {
+            #expect(throws: USBKeyStorageError.enrollmentBlockedWhileActive) {
+                try coordinator.enrollUSBKey(yubikey)
+            }
+            let outcome = coordinator.enrollCurrentUSBKey()
+            #expect(outcome == .failed(USBKeyStorageError.enrollmentBlockedWhileActive.localizedDescription))
+            #expect(coordinator.hasEnrolledUSBKey == false)
+            #expect(coordinator.enrolledUSBKey == nil)
+            #expect(env.settings.enrolledUSBKeySummary == nil)
+            #expect(env.settings.usbKeyDisarmEnabled == false)
+        }
+
+        // .arming
+        env.settings.exitDelaySeconds = 10
+        coordinator.startArming(immediate: false)
+        #expect(coordinator.state == .arming)
+        assertEnrollmentBlocked()
+
+        // .armed
+        coordinator.completeArming()
+        #expect(coordinator.state == .armed)
+        assertEnrollmentBlocked()
+
+        // .tamperPending
+        coordinator.triggerTamper(source: .chargerUnplugged, immediateAlarm: false)
+        #expect(coordinator.state == .tamperPending)
+        assertEnrollmentBlocked()
+
+        // .alarm
+        coordinator.enterAlarm(source: .lidClosed)
+        #expect(coordinator.state == .alarm)
+        assertEnrollmentBlocked()
     }
 }

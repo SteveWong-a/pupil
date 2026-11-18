@@ -411,9 +411,14 @@ public struct SensorsSettingsPage: View {
                         HStack(spacing: 8) {
                             if coordinator.hasEnrolledUSBKey {
                                 PillActionButton(title: "Remove") {
-                                    coordinator.removeEnrolledUSBKey()
-                                    usbStatusIsPositive = true
-                                    usbStatusMessage = "Removed enrolled USB key."
+                                    do {
+                                        try coordinator.removeEnrolledUSBKey()
+                                        usbStatusIsPositive = true
+                                        usbStatusMessage = "Removed enrolled USB key."
+                                    } catch {
+                                        usbStatusIsPositive = false
+                                        usbStatusMessage = error.localizedDescription
+                                    }
                                 }
                             }
 
@@ -535,8 +540,12 @@ public struct SensorsSettingsPage: View {
                                 .foregroundStyle(SettingsMetrics.textSecondary)
                         }
                         Spacer(minLength: 10)
-                        Text(device.serialNumber != nil ? "Serial available" : "No serial")
-                            .font(.system(size: 10.5, weight: .medium))
+                        Text(usbCandidateIdentifierLabel(for: device))
+                            .font(.system(
+                                size: 10.5,
+                                weight: .medium,
+                                design: (device.serialNumber != nil || device.locationID != nil) ? .monospaced : .default
+                            ))
                             .foregroundStyle(device.serialNumber != nil ? PupilTheme.armedGreen : SettingsMetrics.textTertiary)
                     }
                     .padding(.horizontal, 8)
@@ -552,6 +561,20 @@ public struct SensorsSettingsPage: View {
         }
         .padding(12)
         .frame(width: 280)
+    }
+
+    private func usbCandidateIdentifierLabel(for device: USBDeviceDescriptor) -> String {
+        if let serial = device.serialNumber, !serial.isEmpty {
+            let suffix = String(serial.suffix(4))
+            return "SN ••••\(suffix)"
+        }
+        if let locationID = device.locationID {
+            return String(format: "Port 0x%08X", locationID)
+        }
+        if let registryEntryID = device.registryEntryID {
+            return "ID \(registryEntryID)"
+        }
+        return "No serial"
     }
 
     private func toggleTrigger(_ trigger: HardwareTrigger, isSelected: Bool) {
