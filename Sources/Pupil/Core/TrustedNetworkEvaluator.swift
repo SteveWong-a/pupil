@@ -249,6 +249,11 @@ public struct NetworkIdentitySnapshot: Sendable, Equatable {
         return .unavailable
     }
 
+    /// True when at least one stronger L2/Wi-Fi identifier (`ssidHash`, `bssidHash`, or `gatewayMACHash`) is present.
+    public var hasStrongerIdentifier: Bool {
+        ssidHash != nil || bssidHash != nil || gatewayMACHash != nil
+    }
+
     /// Stable session key used by debounce and streak-suppression tracking.
     /// Prefer `ssidHash` so roaming across mesh APs on the same SSID stays in the same session.
     public var sessionFingerprintKey: String? {
@@ -298,6 +303,10 @@ public struct TrustedNetworkEntry: Identifiable, Codable, Sendable, Equatable {
 
     public var hasUsableIdentifier: Bool {
         ssidHash != nil || gatewayMACHash != nil || interfaceHash != nil
+    }
+
+    public var hasStrongerIdentifier: Bool {
+        ssidHash != nil || bssidHash != nil || gatewayMACHash != nil
     }
 }
 

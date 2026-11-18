@@ -15,6 +15,7 @@ public struct SensorsSettingsPage: View {
     @State private var usbStatusIsPositive: Bool = true
     @State private var showUSBDeviceChooser: Bool = false
     @State private var usbChooserCandidates: [USBDeviceDescriptor] = []
+    @State private var trustedNetworkEnrollmentError: String?
 
     public init(coordinator: SecurityCoordinator) {
         self.coordinator = coordinator
@@ -652,13 +653,26 @@ public struct SensorsSettingsPage: View {
                         } else {
                             PillActionButton(title: "Trust current Wi-Fi") {
                                 if let snapshot = coordinator.trustedNetworkMonitor.latestSnapshot {
-                                    settings.enrollTrustedSnapshot(snapshot)
+                                    switch settings.enrollTrustedSnapshot(snapshot) {
+                                    case .success:
+                                        trustedNetworkEnrollmentError = nil
+                                    case .failure(let error):
+                                        trustedNetworkEnrollmentError = error.localizedDescription
+                                    }
                                 }
                             }
                             .fixedSize()
                             .disabled(!canEnrollCurrentNetwork)
                             .opacity(canEnrollCurrentNetwork ? 1.0 : 0.45)
                         }
+                    }
+
+                    if let trustedNetworkEnrollmentError {
+                        Text(trustedNetworkEnrollmentError)
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(PupilTheme.warningAmber)
+                            .padding(.horizontal, SettingsMetrics.rowHorizontalInset)
+                            .padding(.bottom, 8)
                     }
 
                     if !settings.trustedNetworks.isEmpty {
@@ -670,17 +684,19 @@ public struct SensorsSettingsPage: View {
 
                             ForEach(settings.trustedNetworks) { entry in
                                 HStack(spacing: 8) {
-                                    Image(systemName: "checkmark.shield.fill")
+                                    Image(systemName: entry.hasStrongerIdentifier ? "checkmark.shield.fill" : "exclamationmark.triangle.fill")
                                         .font(.system(size: 12))
-                                        .foregroundStyle(PupilTheme.armedGreen)
+                                        .foregroundStyle(entry.hasStrongerIdentifier ? PupilTheme.armedGreen : PupilTheme.warningAmber)
                                     VStack(alignment: .leading, spacing: 1) {
                                         Text(entry.displayName)
                                             .font(SettingsMetrics.rowFont)
                                             .foregroundStyle(SettingsMetrics.textPrimary)
                                             .lineLimit(1)
-                                        Text(entry.enrolledSource.displayTitle)
+                                        Text(entry.hasStrongerIdentifier
+                                             ? entry.enrolledSource.displayTitle
+                                             : "Unsupported interface-only entry — re-enroll with Location or gateway MAC")
                                             .font(.system(size: 11))
-                                            .foregroundStyle(SettingsMetrics.textTertiary)
+                                            .foregroundStyle(entry.hasStrongerIdentifier ? SettingsMetrics.textTertiary : PupilTheme.warningAmber)
                                     }
                                     Spacer()
                                     PillActionButton(title: "Remove") {
@@ -744,7 +760,7 @@ public struct SensorsSettingsPage: View {
         guard let snapshot = coordinator.trustedNetworkMonitor.latestSnapshot else { return false }
         return snapshot.isSatisfied
             && snapshot.primaryInterface == .wifi
-            && snapshot.sessionFingerprintKey != nil
+            && snapshot.hasStrongerIdentifier
             && !isCurrentNetworkTrusted
     }
 

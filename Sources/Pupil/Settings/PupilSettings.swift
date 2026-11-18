@@ -704,17 +704,36 @@ self.usbKeyDisarmEnabled = defaults.object(forKey: Keys.usbKeyDisarmEnabled) as?
         }
     }
 
+    public enum TrustedNetworkEnrollmentError: Error, LocalizedError, Equatable, Sendable {
+        case notOnWiFi
+        case missingStrongerIdentifier
+
+        public var errorDescription: String? {
+            switch self {
+            case .notOnWiFi:
+                return "Connect to a Wi-Fi network before trusting it."
+            case .missingStrongerIdentifier:
+                return "Cannot trust this Wi-Fi network using only an interface/subnet fingerprint. Grant Location permission for SSID/BSSID access or ensure your router's gateway MAC is available."
+            }
+        }
+    }
+
     public func enrollTrustedNetwork(_ entry: TrustedNetworkEntry) {
-        guard entry.hasUsableIdentifier else { return }
+        guard entry.hasUsableIdentifier, entry.hasStrongerIdentifier else { return }
         if let existingIndex = trustedNetworks.firstIndex(where: { existing in
-            if let entrySSID = entry.ssidHash {
-                return existing.ssidHash == entrySSID
+            if let entrySSID = entry.ssidHash, existing.ssidHash == entrySSID {
+                return true
             }
-            if let entryGW = entry.gatewayMACHash {
-                return existing.ssidHash == nil && existing.gatewayMACHash == entryGW
+            if let entryGW = entry.gatewayMACHash,
+               existing.ssidHash == nil,
+               existing.gatewayMACHash == entryGW {
+                return true
             }
-            if let entryIF = entry.interfaceHash {
-                return existing.ssidHash == nil && existing.gatewayMACHash == nil && existing.interfaceHash == entryIF
+            if !existing.hasStrongerIdentifier,
+               let existingIF = existing.interfaceHash,
+               let entryIF = entry.interfaceHash,
+               existingIF == entryIF {
+                return true
             }
             return false
         }) {
@@ -744,11 +763,12 @@ self.usbKeyDisarmEnabled = defaults.object(forKey: Keys.usbKeyDisarmEnabled) as?
     public func enrollTrustedSnapshot(
         _ snapshot: NetworkIdentitySnapshot,
         customDisplayName: String? = nil
-    ) -> TrustedNetworkEntry? {
-        guard snapshot.isSatisfied,
-              snapshot.primaryInterface == .wifi,
-              snapshot.sessionFingerprintKey != nil else {
-            return nil
+    ) -> Result<TrustedNetworkEntry, TrustedNetworkEnrollmentError> {
+        guard snapshot.isSatisfied, snapshot.primaryInterface == .wifi else {
+            return .failure(.notOnWiFi)
+        }
+        guard snapshot.hasStrongerIdentifier else {
+            return .failure(.missingStrongerIdentifier)
         }
         let trimmedCustom = customDisplayName?.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedName = (trimmedCustom?.isEmpty == false ? trimmedCustom : nil)
@@ -764,7 +784,7 @@ self.usbKeyDisarmEnabled = defaults.object(forKey: Keys.usbKeyDisarmEnabled) as?
             lastMatchedAt: Date()
         )
         enrollTrustedNetwork(entry)
-        return entry
+        return .success(entry)
     }
 
     public func bindMenuBarVisibility(_ handler: @escaping (Bool) -> Void) {
