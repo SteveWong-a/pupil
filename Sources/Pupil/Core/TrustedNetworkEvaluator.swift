@@ -643,16 +643,17 @@ public struct TrustedNetworkEvaluator: Sendable, Equatable {
         for entry in enrolled {
             guard entry.hasUsableIdentifier else { continue }
 
+            if entry.requireBSSIDPinning {
+                guard let snapBSSID = snapshot.bssidHash,
+                      let entryBSSID = entry.bssidHash,
+                      snapBSSID == entryBSSID else {
+                    continue
+                }
+            }
+
             // 1. Authoritative SSID check when both sides carry an ssidHash
             if let snapSSID = snapshot.ssidHash, let entrySSID = entry.ssidHash {
                 if snapSSID == entrySSID {
-                    if entry.requireBSSIDPinning {
-                        guard let snapBSSID = snapshot.bssidHash,
-                              let entryBSSID = entry.bssidHash,
-                              snapBSSID == entryBSSID else {
-                            continue
-                        }
-                    }
                     return (entry, .ssid)
                 } else {
                     // Explicit SSID mismatch never falls back to gateway MAC or interface hash
@@ -662,15 +663,25 @@ public struct TrustedNetworkEvaluator: Sendable, Equatable {
 
             // 2. Fallback when SSID is absent on either side
             if let snapGW = snapshot.gatewayMACHash,
-               let entryGW = entry.gatewayMACHash,
-               snapGW == entryGW {
-                return (entry, .gatewayMAC)
+               let entryGW = entry.gatewayMACHash {
+                if snapGW == entryGW {
+                    return (entry, .gatewayMAC)
+                } else {
+                    // Explicit gateway MAC mismatch never falls back to ambiguous L3 interface hash
+                    continue
+                }
             }
 
+            // 3. Interface/subnet fingerprint requires corroboration from an available stronger identifier
+            //    and must reject when any stronger identifier conflicts.
             if let snapIF = snapshot.interfaceHash,
                let entryIF = entry.interfaceHash,
                snapIF == entryIF {
-                return (entry, .interfaceHash)
+                if let snapBSSID = snapshot.bssidHash,
+                   let entryBSSID = entry.bssidHash,
+                   snapBSSID == entryBSSID {
+                    return (entry, .interfaceHash)
+                }
             }
         }
         return nil
@@ -679,7 +690,7 @@ public struct TrustedNetworkEvaluator: Sendable, Equatable {
     /// Suppresses auto-arm/escalation for the current untrusted Wi-Fi session or offline disconnect
     /// until a trusted network is observed again (or the user moves to a different untrusted network).
     public mutating func suppressCurrentUntrustedSession() {
-        suppressedUntrustedKey = activeUntrustedKey ?? pendingUntrustedKey
+        suppressedUntrustedKey = pendingUntrustedKey ?? activeUntrustedKey
         suppressedOfflineDisconnect = true
         pendingUntrustedKey = nil
         pendingUntrustedSince = nil

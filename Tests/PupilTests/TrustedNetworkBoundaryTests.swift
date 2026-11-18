@@ -288,27 +288,51 @@ struct TrustedNetworkBoundaryTests {
         )
         #expect(gwOut.posture == .trusted(entryID: homeWithGW.id, displayName: "Home Wi-Fi", matchedBy: .gatewayMAC))
 
-        // 2. Interface hash match when both SSID and gatewayMAC are nil
-        let ifSnap = makeWiFiSnapshot(
+        // 2. Interface hash alone (no SSID, no BSSID, no gatewayMAC) must NOT grant trust
+        let ifAloneSnap = makeWiFiSnapshot(
             ssid: nil,
+            bssid: nil,
             gatewayMAC: nil,
             interfaceHash: ifHash,
             suggestedDisplayName: "Wi-Fi (en0 • Subnet 123456)",
             permission: .denied,
             at: 110.0
         )
+        #expect(evaluator.matchTrustedEntry(for: ifAloneSnap, in: [homeWithGW]) == nil)
+
+        // 3. Interface hash with corroborating BSSID (and no conflicting gateway MAC) matches .interfaceHash
+        let ifCorroboratedSnap = makeWiFiSnapshot(
+            ssid: nil,
+            bssid: "aa:bb:cc:11:22:33",
+            gatewayMAC: nil,
+            interfaceHash: ifHash,
+            suggestedDisplayName: "Wi-Fi (en0 • Subnet 123456)",
+            permission: .denied,
+            at: 112.0
+        )
         let ifOut = evaluator.evaluate(
-            snapshot: ifSnap,
+            snapshot: ifCorroboratedSnap,
             enrolledNetworks: [homeWithGW],
             configuration: TrustedNetworkPolicyConfiguration(isEnabled: true),
             securityState: .disarmed,
             currentGazeSensitivity: .balanced,
             savedBaselineSensitivity: nil,
-            at: 110.0
+            at: 112.0
         )
         #expect(ifOut.posture == .trusted(entryID: homeWithGW.id, displayName: "Home Wi-Fi", matchedBy: .interfaceHash))
 
-        // 3. Fail-closed when interface has no router/subnet/DHCP entropy
+        // 4. Interface hash with conflicting gateway MAC is rejected even if BSSID matches
+        let ifConflictingGWSnap = makeWiFiSnapshot(
+            ssid: nil,
+            bssid: "aa:bb:cc:11:22:33",
+            gatewayMAC: "de:ad:be:ef:99:99",
+            interfaceHash: ifHash,
+            permission: .denied,
+            at: 114.0
+        )
+        #expect(evaluator.matchTrustedEntry(for: ifConflictingGWSnap, in: [homeWithGW]) == nil)
+
+        // 5. Fail-closed when interface has no router/subnet/DHCP entropy
         let bareInterfaceHash = NetworkIdentifierHasher.hashInterfaceFingerprint(
             interfaceName: "en0",
             localHardwareMAC: "aa:bb:cc:dd:ee:ff",
@@ -866,6 +890,101 @@ struct TrustedNetworkBoundaryTests {
 
         // Subsequent poll on same untrusted Wi-Fi must stay disarmed (suppressed)
         simTime = 310.0
+        monitor.refreshCurrentNetwork(at: simTime)
+        #expect(coordinator.state == .disarmed)
+    }
+
+    @Test("BSSID pinning is enforced across fallback gatewayMAC and interfaceHash matches")
+    func bssidPinningEnforcedAcrossFallbackMatches() {
+        let evaluator = TrustedNetworkEvaluator()
+        let ifHash = NetworkIdentifierHasher.hashInterfaceFingerprint(
+            interfaceName: "en0",
+            localHardwareMAC: "aa:bb:cc:dd:ee:ff",
+            routerIP: "10.0.0.1",
+            subnetCIDR: "10.0.0.0/24",
+            dhcpServerID: "10.0.0.1"
+        )
+        let pinnedHome = makeHomeEntry(
+            ssid: "HomeWiFi",
+            bssid: "aa:bb:cc:11:22:33",
+            gatewayMAC: "00:11:22:33:44:55",
+            interfaceHash: ifHash,
+            requireBSSIDPinning: true
+        )
+
+        // Absent BSSID with matching gateway MAC -> rejected
+        let noBSSID = makeWiFiSnapshot(ssid: nil, bssid: nil, gatewayMAC: "00:11:22:33:44:55", interfaceHash: ifHash)
+        #expect(evaluator.matchTrustedEntry(for: noBSSID, in: [pinnedHome]) == nil)
+
+        // Wrong BSSID with matching gateway MAC -> rejected
+        let wrongBSSID = makeWiFiSnapshot(ssid: nil, bssid: "ff:ee:dd:cc:bb:aa", gatewayMAC: "00:11:22:33:44:55", interfaceHash: ifHash)
+        #expect(evaluator.matchTrustedEntry(for: wrongBSSID, in: [pinnedHome]) == nil)
+
+        // Matching BSSID with matching gateway MAC -> trusted
+        let matchingBSSID = makeWiFiSnapshot(ssid: nil, bssid: "aa:bb:cc:11:22:33", gatewayMAC: "00:11:22:33:44:55", interfaceHash: ifHash)
+        let matched = evaluator.matchTrustedEntry(for: matchingBSSID, in: [pinnedHome])
+        #expect(matched?.entry.id == pinnedHome.id)
+        #expect(matched?.matchedBy == .gatewayMAC)
+    }
+
+    @Test("Switching untrusted networks during exit delay and canceling suppresses the pending network")
+    @MainActor
+    func exitDelayCancelSuppressesPendingNetworkAfterSwitch() {
+        let (settings, defaults, suiteName) = makeIsolatedSettings()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        settings.exitDelaySeconds = 10
+        settings.gazeSensitivity = .balanced
+        settings.trustedNetworkPolicyMode = .autoArmAndEscalate
+
+        let homeEntry = makeHomeEntry(ssid: "HomeWiFi")
+        settings.enrollTrustedNetwork(homeEntry)
+
+        let provider = MockTrustedNetworkIdentityProvider(
+            permission: .authorized,
+            snapshot: makeWiFiSnapshot(ssid: "HomeWiFi", at: 100.0)
+        )
+
+        var simTime: TimeInterval = 100.0
+        let monitor = TrustedNetworkMonitor(identityProvider: provider, clock: { simTime })
+        let coordinator = SecurityCoordinator(
+            settings: settings,
+            alertNotifier: AlertNotifier(backoffSeconds: [], transport: { _ in .notConfigured }),
+            trustedNetworkMonitor: monitor
+        )
+        coordinator.clock = { simTime }
+        defer {
+            settings.trustedNetworkAutoArmEnabled = false
+            coordinator.syncTrustedNetworkMonitoring()
+        }
+
+        settings.trustedNetworkAutoArmEnabled = true
+        #expect(coordinator.state == .disarmed)
+
+        // Move to untrusted network A and wait past debounce to enter exit-delay (.arming)
+        simTime = 200.0
+        provider.setSnapshot(makeWiFiSnapshot(ssid: "UntrustedA", at: simTime))
+        monitor.refreshCurrentNetwork(at: simTime)
+        simTime = 203.0
+        monitor.refreshCurrentNetwork(at: simTime)
+        #expect(coordinator.state == .arming)
+
+        // Switch to untrusted network B while still in exit delay
+        simTime = 204.0
+        provider.setSnapshot(makeWiFiSnapshot(ssid: "UntrustedB", at: simTime))
+        monitor.refreshCurrentNetwork(at: simTime)
+        #expect(coordinator.state == .arming)
+
+        // Cancel during exit delay -> disarms and suppresses pending network B
+        coordinator.cancelArmingDuringExitDelay()
+        #expect(coordinator.state == .disarmed)
+
+        // Advance past B's debounce window -> B must remain suppressed and NOT auto-arm
+        simTime = 207.5
+        monitor.refreshCurrentNetwork(at: simTime)
+        #expect(coordinator.state == .disarmed)
+
+        simTime = 215.0
         monitor.refreshCurrentNetwork(at: simTime)
         #expect(coordinator.state == .disarmed)
     }
