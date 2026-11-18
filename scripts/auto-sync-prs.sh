@@ -18,8 +18,6 @@ echo "📍 Current main HEAD: $LATEST_MAIN"
 
 PAIRS=(
   "siren:feat/siren-escalation-curve"
-  "usb:feat/usb-security-key"
-  "wifi:feat/trusted-wifi-boundary"
 )
 
 SYNCED_COUNT=0
