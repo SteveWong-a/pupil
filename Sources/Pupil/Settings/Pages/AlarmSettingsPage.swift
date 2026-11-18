@@ -39,6 +39,28 @@ public struct AlarmSettingsPage: View {
                 SettingsGroupDivider()
                 locationEnvironmentRow
                 SettingsGroupDivider()
+                SettingsRowContent(
+                    title: "Progressive siren escalation",
+                    subtitle: "Starts the alarm at 30% and builds to your configured volume instead of blasting immediately."
+                ) {
+                    PupilToggle(isOn: $settings.sirenEscalationCurveEnabled)
+                }
+                if settings.sirenEscalationCurveEnabled {
+                    SettingsGroupDivider()
+                    SettingsRowContent(
+                        title: "Escalation curve",
+                        subtitle: settings.sirenEscalationProfile.subtitle
+                    ) {
+                        SettingsMenuPickerPill(label: settings.sirenEscalationProfile.title) {
+                            ForEach(SirenEscalationProfile.allCases) { profile in
+                                Button(profile.title) {
+                                    settings.sirenEscalationProfile = profile
+                                }
+                            }
+                        }
+                    }
+                }
+                SettingsGroupDivider()
                 SettingsRowContent(title: "Test speaker") {
                     PillActionButton(title: "Play sound") {
                         SirenSynthesizer.shared.playTestChirp(baseFrequencyHz: Double(settings.sirenFrequencyHz))
@@ -64,6 +86,7 @@ public struct AlarmSettingsPage: View {
                     }
                 }
             }
+            .animation(SettingsMetrics.stateTransitionAnimation, value: settings.sirenEscalationCurveEnabled)
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack {

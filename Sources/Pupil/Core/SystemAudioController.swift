@@ -294,6 +294,7 @@ public final class SystemAudioController: @unchecked Sendable {
     private let lock = NSLock()
     private let backend: any AudioHardwareBackend
     private var snapshot: SystemAudioSnapshot?
+    private var activeOverrideDeviceID: AudioDeviceID?
 
     public init(
         backend: any AudioHardwareBackend = SecurityCoordinator.isRunningUnderTests
@@ -334,6 +335,7 @@ public final class SystemAudioController: @unchecked Sendable {
 
         let targetDeviceID = backend.builtInSpeakerDeviceID() ?? currentDefault
         guard let targetDeviceID else { return }
+        activeOverrideDeviceID = targetDeviceID
 
         if currentDefault != targetDeviceID {
             _ = backend.setDefaultOutputDeviceID(targetDeviceID)
@@ -342,13 +344,35 @@ public final class SystemAudioController: @unchecked Sendable {
         _ = backend.setVirtualMainVolume(clampedVolume, deviceID: targetDeviceID)
     }
 
+    public func updateOverrideVolume(_ volume: Float) {
+        let clampedVolume = min(max(volume, 0.1), 1.0)
+
+        lock.lock()
+        if snapshot == nil {
+            lock.unlock()
+            forceBuiltInSpeakers(volume: clampedVolume)
+            return
+        }
+        let deviceID = activeOverrideDeviceID ?? backend.builtInSpeakerDeviceID() ?? backend.defaultOutputDeviceID()
+        if let deviceID, activeOverrideDeviceID == nil {
+            activeOverrideDeviceID = deviceID
+        }
+        defer { lock.unlock() }
+
+        guard let deviceID else { return }
+        _ = backend.setMuted(false, deviceID: deviceID)
+        _ = backend.setVirtualMainVolume(clampedVolume, deviceID: deviceID)
+    }
+
     public func restoreIfNeeded() {
         lock.lock()
         guard let saved = snapshot else {
+            activeOverrideDeviceID = nil
             lock.unlock()
             return
         }
         snapshot = nil
+        activeOverrideDeviceID = nil
         lock.unlock()
 
         if backend.defaultOutputDeviceID() != saved.deviceID {

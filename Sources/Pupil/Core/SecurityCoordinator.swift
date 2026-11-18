@@ -149,11 +149,26 @@ public final class SecurityCoordinator {
     public let bluetoothMonitor: BluetoothProximityMonitor
     public let journalStore: TamperJournalStore
     public let networkSentinel: NetworkPathSentinel
+    public let audioVolumeManager: any SystemAudioVolumeManaging
+    public let usbMonitor: USBKeyMonitor
+    public let usbKeyVault: USBKeyVault
+    public internal(set) var usbKeyEvaluator = USBKeyDisarmEvaluator()
+    public private(set) var enrolledUSBKey: EnrolledUSBKeySignature?
+    public var hasEnrolledUSBKey: Bool { enrolledUSBKey != nil }
+    public private(set) var availableUSBDevicesForEnrollment: [USBDeviceDescriptor] = []
+    public let trustedNetworkMonitor: TrustedNetworkMonitor
+    public internal(set) var trustedNetworkEvaluator = TrustedNetworkEvaluator()
+    public private(set) var trustedNetworkPosture: TrustedNetworkPosture = .disabled
+    public var isUntrustedNetworkEscalationActive: Bool {
+        settings.trustedNetworkBaselineGazeSensitivity != nil
+    }
+    private var lastRecordedTrustedMatchEntryID: UUID?
     /// Injectable clock (epoch seconds) so corroboration windows are testable.
     public var clock: () -> TimeInterval = { Date().timeIntervalSince1970 }
     /// Injectable thermal state provider for deterministic testing.
     public var thermalStateProvider: () -> ProcessInfo.ThermalState = { ProcessInfo.processInfo.thermalState }
 
+    public private(set) var currentSirenVolumeFactor: Float = 1.0
     public private(set) var idleEvaluator = IdleInactivityEvaluator()
     private var idleInactivityTimer: Timer?
     private var lastSleepWakeOrLidTransitionTime: TimeInterval?
@@ -175,7 +190,10 @@ public final class SecurityCoordinator {
     private var lastSurroundingsAlertTime: TimeInterval = 0
     private var countdownTimer: Timer?
     private var alarmReminderTimer: Timer?
+    private var alarmEscalationTimer: Timer?
     private var alarmStartTime: TimeInterval?
+    private var activeAudioSessionID: UInt64 = 0
+    private var lastEscalationEvaluation: SirenEscalationEvaluation?
     private var gazeWarningDismissWorkItem: DispatchWorkItem?
     private var liveCalibrationProfiler = RoomNoiseProfiler()
     private var liveCalibrationTimer: Timer?
@@ -203,7 +221,8 @@ public final class SecurityCoordinator {
             webPushManager: nil,
             alertNotifier: nil,
             bluetoothMonitor: nil,
-            journalStore: nil
+            journalStore: nil,
+            audioVolumeManager: nil
         )
     }
 
@@ -216,7 +235,11 @@ public final class SecurityCoordinator {
         alertNotifier: AlertNotifier? = nil,
         bluetoothMonitor: BluetoothProximityMonitor? = nil,
         networkSentinel: NetworkPathSentinel? = nil,
-        journalStore: TamperJournalStore? = nil
+        trustedNetworkMonitor: TrustedNetworkMonitor? = nil,
+        journalStore: TamperJournalStore? = nil,
+        audioVolumeManager: (any SystemAudioVolumeManaging)? = nil,
+        usbMonitor: USBKeyMonitor? = nil,
+        usbKeyVault: USBKeyVault? = nil
     ) {
         let resolvedJournalStore: TamperJournalStore
         if let journalStore {
@@ -228,13 +251,27 @@ public final class SecurityCoordinator {
                 .appendingPathComponent("pupil-test-journal-\(UUID().uuidString).enc.json")
             resolvedJournalStore = TamperJournalStore(fileURL: tempURL, symmetricKey: SymmetricKey(size: .bits256))
         }
+        let resolvedUSBKeyVault: USBKeyVault
+        if let usbKeyVault {
+            resolvedUSBKeyVault = usbKeyVault
+        } else if settings === PupilSettings.shared {
+            resolvedUSBKeyVault = .shared
+        } else {
+            let tempUSBURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("pupil-test-usb-key-\(UUID().uuidString).record")
+            resolvedUSBKeyVault = USBKeyVault(fileURL: tempUSBURL, symmetricKey: SymmetricKey(size: .bits256))
+        }
         self.journalStore = resolvedJournalStore
+        self.usbKeyVault = resolvedUSBKeyVault
         self.settings = settings
         self.powerMonitor = powerMonitor
         self.lockMonitor = lockMonitor
         self.cameraManager = cameraManager
         self.bluetoothMonitor = bluetoothMonitor ?? BluetoothProximityMonitor()
         self.networkSentinel = networkSentinel ?? NetworkPathSentinel()
+        self.audioVolumeManager = audioVolumeManager ?? SystemAudioVolumeManager.shared
+        self.usbMonitor = usbMonitor ?? USBKeyMonitor(startImmediately: false)
+        self.trustedNetworkMonitor = trustedNetworkMonitor ?? TrustedNetworkMonitor()
         let pushManager = webPushManager ?? WebPushManager(settings: settings)
         self.webPushManager = pushManager
         self.alertNotifier = alertNotifier ?? AlertNotifier { message in
@@ -267,9 +304,15 @@ public final class SecurityCoordinator {
             self.hasEnrolledPin = true
         }
 
+        let loadedUSBKey = KeychainManager.loadEnrolledUSBKey(vault: resolvedUSBKeyVault)
+        self.enrolledUSBKey = loadedUSBKey
+        settings.enrolledUSBKeySummary = loadedUSBKey?.summary
+
         bindSensors()
         syncBluetoothProximityMonitoring()
         syncIdleInactivityMonitoring()
+        syncUSBKeyMonitoring()
+        syncTrustedNetworkMonitoring()
 
         NotificationCenter.default.addObserver(
             forName: .screenShieldSync,
@@ -284,6 +327,8 @@ public final class SecurityCoordinator {
                 self.syncCameraLifecycle()
                 self.syncBluetoothProximityMonitoring()
                 self.syncIdleInactivityMonitoring()
+                self.syncUSBKeyMonitoring()
+                self.syncTrustedNetworkMonitoring()
                 if self.state == .armed {
                     if self.settings.lockOnInputWhenArmed {
                         self.startArmedInputMonitoring()
@@ -339,6 +384,7 @@ public final class SecurityCoordinator {
         if let topology = PowerAndLidMonitor.readActiveDisplayTopology() {
             armedDisplayTopologyEvaluator.latchBaseline(topology)
         }
+        usbKeyEvaluator.latchBaseline(usbMonitor.connectedDevicesProvider())
 
         if settings.holdSleepOnLidClose {
             powerMonitor.acquireSleepHoldAssertion()
@@ -382,6 +428,7 @@ public final class SecurityCoordinator {
         if let topology = PowerAndLidMonitor.readActiveDisplayTopology() {
             armedDisplayTopologyEvaluator.latchBaseline(topology)
         }
+        usbKeyEvaluator.latchBaseline(usbMonitor.connectedDevicesProvider())
         state = .armed
         cameraManager.shouldReanchorOnFaceAcquisition = false
         if let profile = roomProfiler.finalizeCalibration() {
@@ -446,6 +493,7 @@ public final class SecurityCoordinator {
             return false
         }
 
+        trustedNetworkEvaluator.suppressCurrentUntrustedSession()
         performValidatedDisarm(method: "PIN")
         return true
     }
@@ -483,6 +531,7 @@ public final class SecurityCoordinator {
 
         let ok = await KeychainManager.authenticateWithTouchID(reason: "Disarm Pupil laptop security")
         if ok {
+            trustedNetworkEvaluator.suppressCurrentUntrustedSession()
             performValidatedDisarm(method: "Touch ID")
         }
         return ok
@@ -494,12 +543,14 @@ public final class SecurityCoordinator {
         stopArmedInputMonitoring()
         isInteractiveUnlockRequested = false
         idleEvaluator.suppressCurrentStreak()
+        trustedNetworkEvaluator.suppressCurrentUntrustedSession()
         performValidatedDisarm(method: "Exit Delay Cancel")
     }
 
     @discardableResult
     public func disarmViaRemotePhone() -> Bool {
         guard state == .armed || state == .tamperPending || state == .alarm else { return false }
+        trustedNetworkEvaluator.suppressCurrentUntrustedSession()
         performValidatedDisarm(method: "Remote Phone")
         logEvent("Disarmed Remotely via Phone", detail: "Authenticated remote disarm command received from paired phone.")
         return true
@@ -510,6 +561,7 @@ public final class SecurityCoordinator {
         guard settings.bluetoothProximityEnabled,
               settings.bluetoothAutoDisarmEnabled,
               state == .armed else { return false }
+        trustedNetworkEvaluator.suppressCurrentUntrustedSession()
         performValidatedDisarm(method: "Bluetooth Proximity")
         let deviceName = settings.trustedBluetoothDeviceName.isEmpty ? "Trusted Device" : settings.trustedBluetoothDeviceName
         logEvent("Disarmed via Bluetooth Proximity", detail: "\(deviceName) returned within proximity.")
@@ -523,6 +575,101 @@ public final class SecurityCoordinator {
             bluetoothMonitor.startMonitoring(deviceUUID: uuid)
         } else {
             bluetoothMonitor.stopMonitoring()
+        }
+    }
+
+    // MARK: - USB Security Key Fast Disarm
+
+    public func syncUSBKeyMonitoring() {
+        if settings.usbKeyDisarmEnabled && hasEnrolledUSBKey {
+            usbMonitor.startMonitoring()
+        } else {
+            usbMonitor.stopMonitoring()
+            usbKeyEvaluator.reset()
+        }
+    }
+
+    public func handleUSBKeyEvent(_ event: USBDeviceEvent) {
+        let decision = usbKeyEvaluator.evaluate(
+            event: event,
+            enrolledSignature: enrolledUSBKey,
+            featureEnabled: settings.usbKeyDisarmEnabled,
+            securityState: state,
+            at: clock()
+        )
+        if case .disarm(_, let signature) = decision {
+            performValidatedDisarm(method: "USB Security Key (\(signature.displayName))")
+        }
+    }
+
+    @discardableResult
+    public func refreshEnrollableUSBDevices() -> [USBDeviceDescriptor] {
+        let candidates = usbMonitor.connectedDevicesProvider()
+            .filter(\.isEligibleForEnrollment)
+            .sorted { lhs, rhs in
+                if lhs.isKnownSecurityTokenVendor != rhs.isKnownSecurityTokenVendor {
+                    return lhs.isKnownSecurityTokenVendor && !rhs.isKnownSecurityTokenVendor
+                }
+                let cmp = lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName)
+                if cmp != .orderedSame {
+                    return cmp == .orderedAscending
+                }
+                return lhs.id < rhs.id
+            }
+        availableUSBDevicesForEnrollment = candidates
+        return candidates
+    }
+
+    @discardableResult
+    public func enrollCurrentUSBKey() -> USBEnrollmentOutcome {
+        guard state == .disarmed else {
+            return .failed(USBKeyStorageError.enrollmentBlockedWhileActive.localizedDescription)
+        }
+        let candidates = refreshEnrollableUSBDevices()
+        if candidates.isEmpty {
+            return .noDeviceFound
+        }
+        if candidates.count == 1 {
+            do {
+                let signature = try enrollUSBKey(candidates[0])
+                return .enrolled(signature)
+            } catch {
+                return .failed(error.localizedDescription)
+            }
+        }
+        return .requiresSelection(candidates)
+    }
+
+    @discardableResult
+    public func enrollUSBKey(_ device: USBDeviceDescriptor) throws -> EnrolledUSBKeySignature {
+        guard state == .disarmed else {
+            throw USBKeyStorageError.enrollmentBlockedWhileActive
+        }
+        let signature = try KeychainManager.enrollUSBKey(device, vault: usbKeyVault)
+        enrolledUSBKey = signature
+        settings.enrolledUSBKeySummary = signature.summary
+        settings.usbKeyDisarmEnabled = true
+        usbKeyEvaluator.latchBaseline(usbMonitor.connectedDevicesProvider())
+        syncUSBKeyMonitoring()
+        let matchMode = signature.isSerialPinned ? "serial-pinned" : "model-matched"
+        logEvent(
+            "USB Key Enrolled",
+            detail: "\(signature.displayName) (\(signature.formattedVIDPID), \(matchMode)) enrolled for fast disarm."
+        )
+        return signature
+    }
+
+    public func removeEnrolledUSBKey() throws {
+        let previousName = enrolledUSBKey?.displayName ?? settings.enrolledUSBKeySummary?.displayName
+        try KeychainManager.clearEnrolledUSBKey(vault: usbKeyVault)
+        enrolledUSBKey = nil
+        settings.enrolledUSBKeySummary = nil
+        settings.usbKeyDisarmEnabled = false
+        syncUSBKeyMonitoring()
+        if let previousName {
+            logEvent("USB Key Removed", detail: "\(previousName) removed from fast disarm.")
+        } else {
+            logEvent("USB Key Removed", detail: "Enrolled USB security key removed.")
         }
     }
 
@@ -597,6 +744,116 @@ public final class SecurityCoordinator {
         }
     }
 
+    public func syncTrustedNetworkMonitoring() {
+        if settings.trustedNetworkAutoArmEnabled {
+            if !trustedNetworkMonitor.isMonitoring {
+                trustedNetworkMonitor.startMonitoring()
+            } else if let snapshot = trustedNetworkMonitor.latestSnapshot {
+                handleTrustedNetworkSnapshot(snapshot)
+            }
+        } else {
+            trustedNetworkMonitor.stopMonitoring()
+            lastRecordedTrustedMatchEntryID = nil
+            if trustedNetworkPosture != .disabled || settings.trustedNetworkBaselineGazeSensitivity != nil {
+                let fallbackSnapshot = trustedNetworkMonitor.latestSnapshot ?? NetworkIdentitySnapshot(
+                    isSatisfied: false,
+                    primaryInterface: .none,
+                    interfaceName: nil,
+                    locationPermission: trustedNetworkMonitor.locationPermission,
+                    capturedAt: clock()
+                )
+                handleTrustedNetworkSnapshot(fallbackSnapshot)
+            }
+        }
+    }
+
+    public func handleTrustedNetworkSnapshot(
+        _ snapshot: NetworkIdentitySnapshot,
+        at timestamp: TimeInterval? = nil
+    ) {
+        let config = TrustedNetworkPolicyConfiguration(
+            isEnabled: settings.trustedNetworkAutoArmEnabled,
+            policyMode: settings.trustedNetworkPolicyMode,
+            armOnOfflineDisconnect: settings.trustedNetworkArmOnOfflineDisconnect
+        )
+
+        let output = trustedNetworkEvaluator.evaluate(
+            snapshot: snapshot,
+            enrolledNetworks: settings.trustedNetworks,
+            configuration: config,
+            securityState: state,
+            currentGazeSensitivity: settings.gazeSensitivity,
+            savedBaselineSensitivity: settings.trustedNetworkBaselineGazeSensitivity,
+            at: timestamp ?? clock()
+        )
+
+        trustedNetworkPosture = output.posture
+        trustedNetworkMonitor.applyPosture(output.posture)
+
+        if let baseline = output.newBaselineSensitivityToSave {
+            settings.trustedNetworkBaselineGazeSensitivity = baseline
+        }
+        if let nextSensitivity = output.updatedGazeSensitivity {
+            settings.gazeSensitivity = nextSensitivity
+        }
+        if output.shouldClearSavedBaseline {
+            settings.trustedNetworkBaselineGazeSensitivity = nil
+        }
+
+        if case .trusted(let entryID, _, _) = output.posture {
+            if lastRecordedTrustedMatchEntryID != entryID {
+                lastRecordedTrustedMatchEntryID = entryID
+                if let index = settings.trustedNetworks.firstIndex(where: { $0.id == entryID }) {
+                    settings.trustedNetworks[index].lastMatchedAt = Date()
+                }
+            }
+        } else {
+            lastRecordedTrustedMatchEntryID = nil
+        }
+
+        trustedNetworkMonitor.scheduleDebounceReevaluation(after: output.pendingReevaluationDelay)
+
+        if let event = output.event {
+            switch event {
+            case .enteredTrustedNetwork(_, let displayName, _, let restoredSensitivity):
+                let suffix = restoredSensitivity.map { " Restored gaze sensitivity to \($0.title)." } ?? ""
+                logEvent("Trusted Wi-Fi Connected", detail: "On trusted Wi-Fi (\(displayName)).\(suffix)")
+            case .leftTrustedForUntrusted(let displayLabel, let source, let armed, let escalated):
+                var actions: [String] = []
+                if escalated { actions.append("Sensitivity set to Strict.") }
+                if armed { actions.append("Auto-arming Pupil.") }
+                let actionSummary = actions.isEmpty ? "" : " " + actions.joined(separator: " ")
+                logEvent(
+                    "Untrusted Wi-Fi Policy",
+                    detail: "Connected to untrusted Wi-Fi via \(source.displayTitle) (\(displayLabel)).\(actionSummary)"
+                )
+            case .leftTrustedToOffline(let armed):
+                if armed {
+                    logEvent("Trusted Wi-Fi Left", detail: "Disconnected from trusted Wi-Fi. Auto-arming Pupil.")
+                }
+            case .enteredUnavailableIdentity(let permission):
+                logEvent(
+                    "Wi-Fi Identity Unavailable",
+                    detail: "Cannot verify trusted Wi-Fi (\(permission.rawValue)). Failing closed."
+                )
+            }
+        }
+
+        trustedNetworkMonitor.onEvaluationResult?(output)
+
+        if output.shouldAutoArm && state == .disarmed {
+            startArming()
+            if settings.relayEnabled {
+                alertNotifier.send(AlertMessage(
+                    title: "Pupil Network Boundary Auto-Arm",
+                    body: "Left trusted Wi-Fi network. Auto-arming protection.",
+                    severity: "normal",
+                    tag: "pupil-network"
+                ))
+            }
+        }
+    }
+
     public func updatePin(newPin: String) throws {
         try KeychainManager.enrollPin(newPin)
         hasEnrolledPin = KeychainManager.hasEnrolledPin
@@ -616,6 +873,7 @@ public final class SecurityCoordinator {
             logEvent("PIN Reset via Mac Password", detail: "Security PIN reset after macOS owner verification.")
         }
         if state != .disarmed || isInteractiveUnlockRequested {
+            trustedNetworkEvaluator.suppressCurrentUntrustedSession()
             performValidatedDisarm(method: "Mac Password")
         }
         return true
@@ -631,8 +889,18 @@ public final class SecurityCoordinator {
         countdownSecondsRemaining = 0
         alarmReminderTimer?.invalidate()
         alarmReminderTimer = nil
+        stopSirenEscalationTimer()
         alarmStartTime = nil
-        SirenSynthesizer.shared.stop()
+        currentSirenVolumeFactor = 1.0
+        lastEscalationEvaluation = nil
+        if wasAlarm || activeAudioSessionID != 0 {
+            let endedSessionID = activeAudioSessionID
+            activeAudioSessionID &+= 1
+            if activeAudioSessionID == 0 {
+                activeAudioSessionID = 1
+            }
+            audioVolumeManager.endAlarmAudio(sessionID: endedSessionID)
+        }
         powerMonitor.releaseSleepHoldAssertion()
 
         state = .disarmed
@@ -652,6 +920,7 @@ public final class SecurityCoordinator {
         motionAggregator.reset()
         tamperScorer.reset()
         armedDisplayTopologyEvaluator.reset()
+        usbKeyEvaluator.reset()
         cameraManager.shouldReanchorOnFaceAcquisition = true
         cameraManager.resetMotionAnchor()
         hasMotionAnchor = false
@@ -663,6 +932,12 @@ public final class SecurityCoordinator {
         logEvent("Disarmed", detail: "Session disarmed via \(method).")
         onStateChanged?(state)
         onNotchUpdateNeeded?()
+        NotificationCenter.default.post(name: .screenShieldSync, object: nil)
+
+        if settings.trustedNetworkAutoArmEnabled,
+           let snapshot = trustedNetworkMonitor.latestSnapshot {
+            handleTrustedNetworkSnapshot(snapshot)
+        }
 
         if wasAlarm {
             alertNotifier.send(AlertMessage(
@@ -895,6 +1170,7 @@ public final class SecurityCoordinator {
         countdownTimer?.invalidate()
         countdownTimer = nil
         countdownSecondsRemaining = 0
+        stopSirenEscalationTimer()
         activeTamperSource = source
         activeAlarmTime = Date()
         state = .alarm
@@ -915,15 +1191,40 @@ public final class SecurityCoordinator {
         }
 
         powerMonitor.acquireSleepHoldAssertion(reason: "Pupil Active Theft Siren")
-        SirenSynthesizer.shared.start(
+
+        activeAudioSessionID &+= 1
+        if activeAudioSessionID == 0 {
+            activeAudioSessionID = 1
+        }
+        let sessionID = activeAudioSessionID
+        let initialEval = SirenEscalationEvaluator.evaluate(
+            elapsedSeconds: 0,
+            profile: settings.sirenEscalationProfile,
+            maxVolume: Float(settings.sirenOverrideVolume),
+            enabled: settings.sirenEscalationCurveEnabled
+        )
+        currentSirenVolumeFactor = initialEval.volumeFactor
+        lastEscalationEvaluation = initialEval
+
+        audioVolumeManager.beginAlarmAudio(
+            sessionID: sessionID,
             baseFrequencyHz: Double(settings.sirenFrequencyHz),
             overrideSpeakers: settings.sirenSpeakerOverrideEnabled,
-            targetVolume: Float(settings.sirenOverrideVolume)
+            initialEvaluation: initialEval
         )
+        startSirenEscalationTimerIfNeeded(for: initialEval)
+
+        let escalationNote: String
+        if settings.sirenEscalationCurveEnabled && settings.sirenEscalationProfile != .immediate {
+            let startPct = Int((initialEval.volumeFactor * 100).rounded())
+            escalationNote = " Escalation: \(settings.sirenEscalationProfile.title) (starting at \(startPct)%)."
+        } else {
+            escalationNote = ""
+        }
 
         logEvent(
             "ALARM LATCHED",
-            detail: "Triggered by \(source.rawValue). Audible siren active until PIN or Touch ID disarm.",
+            detail: "Triggered by \(source.rawValue). Audible siren active until PIN or Touch ID disarm.\(escalationNote)",
             simulated: simulated
         )
         onStateChanged?(state)
@@ -935,6 +1236,82 @@ public final class SecurityCoordinator {
             severity: "critical",
             tag: "pupil-alarm"
         )
+    }
+
+    public func tickSirenEscalationIfNeeded() {
+        guard state == .alarm, let start = alarmStartTime else {
+            stopSirenEscalationTimer()
+            return
+        }
+        let elapsed = max(0, clock() - start)
+        let evaluation = SirenEscalationEvaluator.evaluate(
+            elapsedSeconds: elapsed,
+            profile: settings.sirenEscalationProfile,
+            maxVolume: Float(settings.sirenOverrideVolume),
+            enabled: settings.sirenEscalationCurveEnabled
+        )
+        currentSirenVolumeFactor = evaluation.volumeFactor
+        if evaluation != lastEscalationEvaluation {
+            lastEscalationEvaluation = evaluation
+            audioVolumeManager.applyEscalationStep(
+                sessionID: activeAudioSessionID,
+                overrideSpeakers: settings.sirenSpeakerOverrideEnabled,
+                evaluation: evaluation
+            )
+        }
+        if evaluation.isComplete {
+            stopSirenEscalationTimer()
+        }
+    }
+
+    private func resumeAlarmAudioAtCurrentElapsedTime() {
+        guard state == .alarm else { return }
+        let now = clock()
+        let start = alarmStartTime ?? now
+        if alarmStartTime == nil {
+            alarmStartTime = start
+        }
+        let elapsed = max(0, now - start)
+        let evaluation = SirenEscalationEvaluator.evaluate(
+            elapsedSeconds: elapsed,
+            profile: settings.sirenEscalationProfile,
+            maxVolume: Float(settings.sirenOverrideVolume),
+            enabled: settings.sirenEscalationCurveEnabled
+        )
+
+        activeAudioSessionID &+= 1
+        if activeAudioSessionID == 0 {
+            activeAudioSessionID = 1
+        }
+        let sessionID = activeAudioSessionID
+        currentSirenVolumeFactor = evaluation.volumeFactor
+        lastEscalationEvaluation = evaluation
+
+        audioVolumeManager.beginAlarmAudio(
+            sessionID: sessionID,
+            baseFrequencyHz: Double(settings.sirenFrequencyHz),
+            overrideSpeakers: settings.sirenSpeakerOverrideEnabled,
+            initialEvaluation: evaluation
+        )
+        startSirenEscalationTimerIfNeeded(for: evaluation)
+    }
+
+    private func startSirenEscalationTimerIfNeeded(for evaluation: SirenEscalationEvaluation) {
+        stopSirenEscalationTimer()
+        guard !evaluation.isComplete else { return }
+        alarmEscalationTimer = Timer.scheduledTimer(
+            withTimeInterval: SirenEscalationEvaluator.evaluationTickIntervalSeconds,
+            repeats: true
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.tickSirenEscalationIfNeeded()
+            }
+        }
+    }
+
+    private func stopSirenEscalationTimer() {
+        alarmEscalationTimer?.invalidate()
+        alarmEscalationTimer = nil
     }
 
     private func handleRemoteSnapshotRequest() {
@@ -1555,11 +1932,7 @@ public final class SecurityCoordinator {
             case .wake:
                 self.recordIdleSleepWakeTransition()
                 if self.isMonitoring && self.state == .alarm {
-                    SirenSynthesizer.shared.start(
-                        baseFrequencyHz: Double(self.settings.sirenFrequencyHz),
-                        overrideSpeakers: self.settings.sirenSpeakerOverrideEnabled,
-                        targetVolume: Float(self.settings.sirenOverrideVolume)
-                    )
+                    self.resumeAlarmAudioAtCurrentElapsedTime()
                 }
             case .screenUnlocked:
                 self.recordIdleSleepWakeTransition()
@@ -1567,6 +1940,7 @@ public final class SecurityCoordinator {
                     if self.state == .arming {
                         self.cancelArmingDuringExitDelay()
                     } else if self.state == .armed || self.state == .tamperPending || self.state == .alarm {
+                        self.trustedNetworkEvaluator.suppressCurrentUntrustedSession()
                         self.performValidatedDisarm(method: "macOS Screen Unlock")
                     }
                 }
@@ -1598,6 +1972,10 @@ public final class SecurityCoordinator {
                   !self.settings.trustedBluetoothDeviceUUID.isEmpty,
                   self.state == .armed else { return }
             self.disarmFromTrustedProximity()
+        }
+
+        usbMonitor.onUSBEvent = { [weak self] event in
+            self?.handleUSBKeyEvent(event)
         }
 
         networkSentinel.onTransition = { [weak self] transition in
@@ -1635,6 +2013,10 @@ public final class SecurityCoordinator {
                 )
                 self.alertNotifier.flushPendingNow()
             }
+        }
+
+        trustedNetworkMonitor.onSnapshotUpdated = { [weak self] snapshot in
+            self?.handleTrustedNetworkSnapshot(snapshot)
         }
     }
 
