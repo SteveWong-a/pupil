@@ -300,6 +300,7 @@ public final class TrustedNetworkMonitor: NSObject, CLLocationManagerDelegate, C
     @ObservationIgnored private var debounceTimer: Timer?
     @ObservationIgnored private nonisolated(unsafe) var wakeObserver: NSObjectProtocol?
     @ObservationIgnored private var isCoreWLANRegistered = false
+    @ObservationIgnored private var monitoringSessionID: UUID?
 
     /// Evaluates true only outside XCTest / Swift Testing runners so unit tests never trigger TCC prompts.
     nonisolated public static var isLiveSystemAccessEnabled: Bool {
@@ -312,7 +313,8 @@ public final class TrustedNetworkMonitor: NSObject, CLLocationManagerDelegate, C
 
     nonisolated public static var canRequestLocationAuthorization: Bool {
         isLiveSystemAccessEnabled
-            && Bundle.main.object(forInfoDictionaryKey: "NSLocationWhenInUseUsageDescription") != nil
+            && (Bundle.main.object(forInfoDictionaryKey: "NSLocationUsageDescription") != nil
+                || Bundle.main.object(forInfoDictionaryKey: "NSLocationWhenInUseUsageDescription") != nil)
     }
 
     public init(
@@ -331,6 +333,8 @@ public final class TrustedNetworkMonitor: NSObject, CLLocationManagerDelegate, C
             return
         }
         isMonitoring = true
+        let sessionID = UUID()
+        monitoringSessionID = sessionID
         locationPermission = identityProvider.currentLocationPermission()
 
         if Self.isLiveSystemAccessEnabled && identityProvider is SystemNetworkIdentityProvider {
@@ -338,7 +342,7 @@ public final class TrustedNetworkMonitor: NSObject, CLLocationManagerDelegate, C
             pathMonitor = pathMon
             pathMon.pathUpdateHandler = { [weak self] path in
                 Task { @MainActor [weak self] in
-                    guard let self, self.isMonitoring else { return }
+                    guard let self, self.isMonitoring, self.monitoringSessionID == sessionID else { return }
                     self.latestPath = path
                     self.refreshCurrentNetwork(path: path)
                 }
@@ -367,7 +371,8 @@ public final class TrustedNetworkMonitor: NSObject, CLLocationManagerDelegate, C
                 queue: .main
             ) { [weak self] _ in
                 Task { @MainActor [weak self] in
-                    self?.refreshCurrentNetwork()
+                    guard let self, self.isMonitoring, self.monitoringSessionID == sessionID else { return }
+                    self.refreshCurrentNetwork()
                 }
             }
         }
@@ -378,6 +383,7 @@ public final class TrustedNetworkMonitor: NSObject, CLLocationManagerDelegate, C
     public func stopMonitoring() {
         guard isMonitoring else { return }
         isMonitoring = false
+        monitoringSessionID = nil
 
         debounceTimer?.invalidate()
         debounceTimer = nil

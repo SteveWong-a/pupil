@@ -445,6 +445,7 @@ public final class SecurityCoordinator {
             return false
         }
 
+        trustedNetworkEvaluator.suppressCurrentUntrustedSession()
         performValidatedDisarm(method: "PIN")
         return true
     }
@@ -482,6 +483,7 @@ public final class SecurityCoordinator {
 
         let ok = await KeychainManager.authenticateWithTouchID(reason: "Disarm Pupil laptop security")
         if ok {
+            trustedNetworkEvaluator.suppressCurrentUntrustedSession()
             performValidatedDisarm(method: "Touch ID")
         }
         return ok
@@ -500,6 +502,7 @@ public final class SecurityCoordinator {
     @discardableResult
     public func disarmViaRemotePhone() -> Bool {
         guard state == .armed || state == .tamperPending || state == .alarm else { return false }
+        trustedNetworkEvaluator.suppressCurrentUntrustedSession()
         performValidatedDisarm(method: "Remote Phone")
         logEvent("Disarmed Remotely via Phone", detail: "Authenticated remote disarm command received from paired phone.")
         return true
@@ -510,6 +513,7 @@ public final class SecurityCoordinator {
         guard settings.bluetoothProximityEnabled,
               settings.bluetoothAutoDisarmEnabled,
               state == .armed else { return false }
+        trustedNetworkEvaluator.suppressCurrentUntrustedSession()
         performValidatedDisarm(method: "Bluetooth Proximity")
         let deviceName = settings.trustedBluetoothDeviceName.isEmpty ? "Trusted Device" : settings.trustedBluetoothDeviceName
         logEvent("Disarmed via Bluetooth Proximity", detail: "\(deviceName) returned within proximity.")
@@ -726,6 +730,7 @@ public final class SecurityCoordinator {
             logEvent("PIN Reset via Mac Password", detail: "Security PIN reset after macOS owner verification.")
         }
         if state != .disarmed || isInteractiveUnlockRequested {
+            trustedNetworkEvaluator.suppressCurrentUntrustedSession()
             performValidatedDisarm(method: "Mac Password")
         }
         return true
@@ -733,7 +738,6 @@ public final class SecurityCoordinator {
 
     private func performValidatedDisarm(method: String) {
         idleEvaluator.suppressCurrentStreak()
-        trustedNetworkEvaluator.suppressCurrentUntrustedSession()
         let wasAlarm = (state == .alarm)
         resetPinLockout()
         KeychainManager.cancelPendingAuthentication()
@@ -1682,6 +1686,7 @@ public final class SecurityCoordinator {
                     if self.state == .arming {
                         self.cancelArmingDuringExitDelay()
                     } else if self.state == .armed || self.state == .tamperPending || self.state == .alarm {
+                        self.trustedNetworkEvaluator.suppressCurrentUntrustedSession()
                         self.performValidatedDisarm(method: "macOS Screen Unlock")
                     }
                 }
