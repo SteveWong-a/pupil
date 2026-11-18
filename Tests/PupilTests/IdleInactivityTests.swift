@@ -259,7 +259,8 @@ struct IdleInactivityTests {
         settings.idleAutoArmEnabled = true
         settings.idleAutoArmMinutes = 5 // 300 seconds
 
-        let coordinator = SecurityCoordinator(settings: settings)
+        let powerMonitor = PowerAndLidMonitor(isOnACPower: true, batteryPercentage: 100, isLidClosed: false)
+        let coordinator = SecurityCoordinator(settings: settings, powerMonitor: powerMonitor)
         defer {
             settings.idleAutoArmEnabled = false
             coordinator.syncIdleInactivityMonitoring()
@@ -317,7 +318,8 @@ struct IdleInactivityTests {
         settings.idleAutoArmEnabled = true
         settings.idleAutoArmMinutes = 5 // 300s
 
-        let coordinator = SecurityCoordinator(settings: settings)
+        let powerMonitor = PowerAndLidMonitor(isOnACPower: true, batteryPercentage: 100, isLidClosed: false)
+        let coordinator = SecurityCoordinator(settings: settings, powerMonitor: powerMonitor)
         defer {
             settings.idleAutoArmEnabled = false
             coordinator.syncIdleInactivityMonitoring()
@@ -352,7 +354,8 @@ struct IdleInactivityTests {
         settings.idleAutoArmEnabled = false
         settings.idleAutoArmMinutes = 5
 
-        let coordinator = SecurityCoordinator(settings: settings)
+        let powerMonitor = PowerAndLidMonitor(isOnACPower: true, batteryPercentage: 100, isLidClosed: false)
+        let coordinator = SecurityCoordinator(settings: settings, powerMonitor: powerMonitor)
         defer {
             coordinator.syncIdleInactivityMonitoring()
         }
