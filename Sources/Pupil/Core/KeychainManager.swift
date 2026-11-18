@@ -217,7 +217,7 @@ public enum KeychainManager {
         return digest.map { String(format: "%02x", $0) }.joined()
     }
 
-    nonisolated private static func constantTimeEqual(_ a: String, _ b: String) -> Bool {
+    nonisolated public static func constantTimeEqual(_ a: String, _ b: String) -> Bool {
         let aBytes = Array(a.utf8)
         let bBytes = Array(b.utf8)
         guard aBytes.count == bBytes.count else { return false }

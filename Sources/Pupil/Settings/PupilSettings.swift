@@ -454,6 +454,69 @@ public final class PupilSettings {
         didSet { defaults.set(bluetoothAutoDisarmEnabled, forKey: Keys.bluetoothAutoDisarmEnabled) }
     }
 
+    public var usbKeyDisarmEnabled: Bool {
+        didSet {
+            defaults.set(usbKeyDisarmEnabled, forKey: Keys.usbKeyDisarmEnabled)
+            NotificationCenter.default.post(name: .screenShieldSync, object: nil)
+        }
+    }
+
+    /// Non-sensitive UI display projection (never contains `serialNumber`).
+    /// Authoritative matching always reads `EnrolledUSBKeySignature` from `KeychainManager` / `USBKeyVault`.
+    public var enrolledUSBKeySummary: EnrolledUSBKeySummary? {
+        didSet {
+            if let enrolledUSBKeySummary,
+               let encoded = try? JSONEncoder().encode(enrolledUSBKeySummary) {
+                defaults.set(encoded, forKey: Keys.enrolledUSBKeySummary)
+            } else {
+                defaults.removeObject(forKey: Keys.enrolledUSBKeySummary)
+            }
+        }
+    }
+
+    public var trustedNetworkAutoArmEnabled: Bool {
+        didSet {
+            defaults.set(trustedNetworkAutoArmEnabled, forKey: Keys.trustedNetworkAutoArmEnabled)
+            NotificationCenter.default.post(name: .screenShieldSync, object: nil)
+        }
+    }
+
+    public var trustedNetworks: [TrustedNetworkEntry] {
+        didSet {
+            if !trustedNetworks.isEmpty,
+               let encoded = try? JSONEncoder().encode(trustedNetworks) {
+                defaults.set(encoded, forKey: Keys.trustedNetworks)
+            } else {
+                defaults.removeObject(forKey: Keys.trustedNetworks)
+            }
+            NotificationCenter.default.post(name: .screenShieldSync, object: nil)
+        }
+    }
+
+    public var trustedNetworkPolicyMode: TrustedNetworkPolicyMode {
+        didSet {
+            defaults.set(trustedNetworkPolicyMode.rawValue, forKey: Keys.trustedNetworkPolicyMode)
+            NotificationCenter.default.post(name: .screenShieldSync, object: nil)
+        }
+    }
+
+    public var trustedNetworkArmOnOfflineDisconnect: Bool {
+        didSet {
+            defaults.set(trustedNetworkArmOnOfflineDisconnect, forKey: Keys.trustedNetworkArmOnOfflineDisconnect)
+            NotificationCenter.default.post(name: .screenShieldSync, object: nil)
+        }
+    }
+
+    public var trustedNetworkBaselineGazeSensitivity: GazeSensitivity? {
+        didSet {
+            if let trustedNetworkBaselineGazeSensitivity {
+                defaults.set(trustedNetworkBaselineGazeSensitivity.rawValue, forKey: Keys.trustedNetworkBaselineGazeSensitivity)
+            } else {
+                defaults.removeObject(forKey: Keys.trustedNetworkBaselineGazeSensitivity)
+            }
+        }
+    }
+
     public var cameraRoi: CameraROI {
         didSet {
             if let encoded = try? JSONEncoder().encode(cameraRoi) {
@@ -606,12 +669,122 @@ public final class PupilSettings {
         self.trustedBluetoothDeviceUUID = defaults.string(forKey: Keys.trustedBluetoothDeviceUUID) ?? ""
         self.trustedBluetoothDeviceName = defaults.string(forKey: Keys.trustedBluetoothDeviceName) ?? ""
         self.bluetoothAutoDisarmEnabled = defaults.object(forKey: Keys.bluetoothAutoDisarmEnabled) as? Bool ?? false
+self.usbKeyDisarmEnabled = defaults.object(forKey: Keys.usbKeyDisarmEnabled) as? Bool ?? false
+        if let summaryData = defaults.data(forKey: Keys.enrolledUSBKeySummary),
+           let summary = try? JSONDecoder().decode(EnrolledUSBKeySummary.self, from: summaryData) {
+            self.enrolledUSBKeySummary = summary
+        } else {
+            self.enrolledUSBKeySummary = nil
+        }
+        self.trustedNetworkAutoArmEnabled = defaults.object(forKey: Keys.trustedNetworkAutoArmEnabled) as? Bool ?? false
+        if let networkData = defaults.data(forKey: Keys.trustedNetworks),
+           let decodedNetworks = try? JSONDecoder().decode([TrustedNetworkEntry].self, from: networkData) {
+            self.trustedNetworks = decodedNetworks
+        } else {
+            self.trustedNetworks = []
+        }
+        if let rawPolicy = defaults.string(forKey: Keys.trustedNetworkPolicyMode),
+           let policy = TrustedNetworkPolicyMode(rawValue: rawPolicy) {
+            self.trustedNetworkPolicyMode = policy
+        } else {
+            self.trustedNetworkPolicyMode = .autoArmAndEscalate
+        }
+        self.trustedNetworkArmOnOfflineDisconnect = defaults.object(forKey: Keys.trustedNetworkArmOnOfflineDisconnect) as? Bool ?? false
+        if let rawBaseline = defaults.string(forKey: Keys.trustedNetworkBaselineGazeSensitivity),
+           let baseline = GazeSensitivity(rawValue: rawBaseline) {
+            self.trustedNetworkBaselineGazeSensitivity = baseline
+        } else {
+            self.trustedNetworkBaselineGazeSensitivity = nil
+        }
         if let roiData = defaults.data(forKey: Keys.cameraRoi),
            let decoded = try? JSONDecoder().decode(CameraROI.self, from: roiData) {
             self.cameraRoi = decoded
         } else {
             self.cameraRoi = .default
         }
+    }
+
+    public enum TrustedNetworkEnrollmentError: Error, LocalizedError, Equatable, Sendable {
+        case notOnWiFi
+        case missingStrongerIdentifier
+
+        public var errorDescription: String? {
+            switch self {
+            case .notOnWiFi:
+                return "Connect to a Wi-Fi network before trusting it."
+            case .missingStrongerIdentifier:
+                return "Cannot trust this Wi-Fi network using only an interface/subnet fingerprint. Grant Location permission for SSID/BSSID access or ensure your router's gateway MAC is available."
+            }
+        }
+    }
+
+    public func enrollTrustedNetwork(_ entry: TrustedNetworkEntry) {
+        guard entry.hasUsableIdentifier, entry.hasStrongerIdentifier else { return }
+        if let existingIndex = trustedNetworks.firstIndex(where: { existing in
+            if let entrySSID = entry.ssidHash, existing.ssidHash == entrySSID {
+                return true
+            }
+            if let entryGW = entry.gatewayMACHash,
+               existing.ssidHash == nil,
+               existing.gatewayMACHash == entryGW {
+                return true
+            }
+            if !existing.hasStrongerIdentifier,
+               let existingIF = existing.interfaceHash,
+               let entryIF = entry.interfaceHash,
+               existingIF == entryIF {
+                return true
+            }
+            return false
+        }) {
+            let existing = trustedNetworks[existingIndex]
+            trustedNetworks[existingIndex] = TrustedNetworkEntry(
+                id: existing.id,
+                displayName: entry.displayName,
+                ssidHash: entry.ssidHash,
+                bssidHash: entry.bssidHash,
+                gatewayMACHash: entry.gatewayMACHash,
+                interfaceHash: entry.interfaceHash,
+                enrolledSource: entry.enrolledSource,
+                requireBSSIDPinning: entry.requireBSSIDPinning,
+                enrolledAt: existing.enrolledAt,
+                lastMatchedAt: entry.lastMatchedAt ?? existing.lastMatchedAt
+            )
+        } else {
+            trustedNetworks.append(entry)
+        }
+    }
+
+    public func removeTrustedNetwork(id: UUID) {
+        trustedNetworks.removeAll { $0.id == id }
+    }
+
+    @discardableResult
+    public func enrollTrustedSnapshot(
+        _ snapshot: NetworkIdentitySnapshot,
+        customDisplayName: String? = nil
+    ) -> Result<TrustedNetworkEntry, TrustedNetworkEnrollmentError> {
+        guard snapshot.isSatisfied, snapshot.primaryInterface == .wifi else {
+            return .failure(.notOnWiFi)
+        }
+        let trimmedCustom = customDisplayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedName = (trimmedCustom?.isEmpty == false ? trimmedCustom : nil)
+            ?? snapshot.suggestedDisplayName
+            ?? "Trusted Wi-Fi"
+        let entry = TrustedNetworkEntry(
+            displayName: resolvedName,
+            ssidHash: snapshot.ssidHash,
+            bssidHash: snapshot.bssidHash,
+            gatewayMACHash: snapshot.gatewayMACHash,
+            interfaceHash: snapshot.interfaceHash,
+            enrolledSource: snapshot.activeFingerprintSource,
+            lastMatchedAt: Date()
+        )
+        guard entry.hasUsableIdentifier, entry.hasStrongerIdentifier else {
+            return .failure(.missingStrongerIdentifier)
+        }
+        enrollTrustedNetwork(entry)
+        return .success(entry)
     }
 
     public func bindMenuBarVisibility(_ handler: @escaping (Bool) -> Void) {
@@ -664,6 +837,13 @@ public final class PupilSettings {
         static let trustedBluetoothDeviceUUID = "pupil.trustedBluetoothDeviceUUID"
         static let trustedBluetoothDeviceName = "pupil.trustedBluetoothDeviceName"
         static let bluetoothAutoDisarmEnabled = "pupil.bluetoothAutoDisarmEnabled"
+        static let usbKeyDisarmEnabled = "pupil.usbKeyDisarmEnabled"
+        static let enrolledUSBKeySummary = "pupil.enrolledUSBKeySummary"
+        static let trustedNetworkAutoArmEnabled = "pupil.trustedNetworkAutoArmEnabled"
+        static let trustedNetworks = "pupil.trustedNetworks"
+        static let trustedNetworkPolicyMode = "pupil.trustedNetworkPolicyMode"
+        static let trustedNetworkArmOnOfflineDisconnect = "pupil.trustedNetworkArmOnOfflineDisconnect"
+        static let trustedNetworkBaselineGazeSensitivity = "pupil.trustedNetworkBaselineGazeSensitivity"
         static let cameraRoi = "pupil.cameraRoi"
     }
 }

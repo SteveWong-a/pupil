@@ -11,6 +11,11 @@ import SwiftUI
 public struct SensorsSettingsPage: View {
     @Bindable var coordinator: SecurityCoordinator
     @Bindable private var settings = PupilSettings.shared
+    @State private var usbStatusMessage: String?
+    @State private var usbStatusIsPositive: Bool = true
+    @State private var showUSBDeviceChooser: Bool = false
+    @State private var usbChooserCandidates: [USBDeviceDescriptor] = []
+    @State private var trustedNetworkEnrollmentError: String?
 
     public init(coordinator: SecurityCoordinator) {
         self.coordinator = coordinator
@@ -386,10 +391,72 @@ public struct SensorsSettingsPage: View {
                     }
                 }
             }
+
+            VStack(alignment: .leading, spacing: 8) {
+                SettingsSectionTitle(text: "USB security key")
+                SettingsGroup {
+                    SettingsRowContent(
+                        title: "Disarm with USB key",
+                        subtitle: "Automatically and silently disarms Pupil when your enrolled USB security key is inserted.",
+                        info: "Matches your enrolled key by USB vendor ID, product ID, and serial number (when exposed by the token) via native IOKit hotplug events."
+                    ) {
+                        PupilToggle(isOn: $settings.usbKeyDisarmEnabled)
+                    }
+
+                    SettingsGroupDivider()
+
+                    SettingsRowContent(
+                        title: "Enrolled key",
+                        subtitle: enrolledUSBKeySubtitle
+                    ) {
+                        HStack(spacing: 8) {
+                            if coordinator.hasEnrolledUSBKey {
+                                PillActionButton(title: "Remove") {
+                                    do {
+                                        try coordinator.removeEnrolledUSBKey()
+                                        usbStatusIsPositive = true
+                                        usbStatusMessage = "Removed enrolled USB key."
+                                    } catch {
+                                        usbStatusIsPositive = false
+                                        usbStatusMessage = error.localizedDescription
+                                    }
+                                }
+                            }
+
+                            PillActionButton(title: "Enroll current USB key") {
+                                handleEnrollCurrentUSBKey()
+                            }
+                            .popover(isPresented: $showUSBDeviceChooser, arrowEdge: .bottom) {
+                                usbDeviceChooserPopover
+                            }
+                        }
+                    }
+
+                    if let status = usbStatusMessage, !status.isEmpty {
+                        SettingsGroupDivider()
+                        HStack(spacing: 6) {
+                            Image(systemName: usbStatusIsPositive ? "checkmark.circle.fill" : "info.circle.fill")
+                                .font(.system(size: 11))
+                                .foregroundStyle(usbStatusIsPositive ? PupilTheme.armedGreen : PupilTheme.warningAmber)
+                            Text(status)
+                                .font(.system(size: 11.5))
+                                .foregroundStyle(SettingsMetrics.textSecondary)
+                            Spacer()
+                        }
+                        .padding(.horizontal, SettingsMetrics.rowHorizontalInset)
+                        .padding(.vertical, 8)
+                    }
+                }
+            }
+
+            trustedWifiSection
         }
         .onAppear {
             if !coordinator.webPushManager.isPaired {
                 coordinator.webPushManager.startPairingListener()
+            }
+            if settings.trustedNetworkAutoArmEnabled {
+                coordinator.trustedNetworkMonitor.refreshCurrentNetwork()
             }
         }
         .onDisappear {
@@ -412,6 +479,105 @@ public struct SensorsSettingsPage: View {
         return name
     }
 
+    private var enrolledUSBKeySubtitle: String {
+        if let enrolled = coordinator.enrolledUSBKey {
+            let matchLabel = enrolled.isSerialPinned ? "Serial pinned" : "Model match"
+            return "\(enrolled.displayName) · \(enrolled.formattedVIDPID) · \(matchLabel)"
+        }
+        if let summary = settings.enrolledUSBKeySummary {
+            return "\(summary.displayName) · \(summary.formattedVIDPID)"
+        }
+        return "No USB key enrolled. Plug in your YubiKey, Nitrokey, or USB token."
+    }
+
+    private func handleEnrollCurrentUSBKey() {
+        switch coordinator.enrollCurrentUSBKey() {
+        case .enrolled(let signature):
+            showUSBDeviceChooser = false
+            usbStatusIsPositive = true
+            usbStatusMessage = "Enrolled \(signature.displayName)."
+        case .noDeviceFound:
+            showUSBDeviceChooser = false
+            usbStatusIsPositive = false
+            usbStatusMessage = "No external USB key detected. Insert your USB key and try again."
+        case .requiresSelection(let devices):
+            usbChooserCandidates = devices
+            usbStatusMessage = nil
+            showUSBDeviceChooser = true
+        case .failed(let message):
+            showUSBDeviceChooser = false
+            usbStatusIsPositive = false
+            usbStatusMessage = message
+        }
+    }
+
+    private var usbDeviceChooserPopover: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Choose USB key")
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(SettingsMetrics.textPrimary)
+
+            ForEach(usbChooserCandidates) { device in
+                Button {
+                    do {
+                        let signature = try coordinator.enrollUSBKey(device)
+                        showUSBDeviceChooser = false
+                        usbStatusIsPositive = true
+                        usbStatusMessage = "Enrolled \(signature.displayName)."
+                    } catch {
+                        showUSBDeviceChooser = false
+                        usbStatusIsPositive = false
+                        usbStatusMessage = error.localizedDescription
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(device.displayName)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(SettingsMetrics.textPrimary)
+                                .lineLimit(1)
+                            Text(device.formattedVIDPID)
+                                .font(.system(size: 10.5, design: .monospaced))
+                                .foregroundStyle(SettingsMetrics.textSecondary)
+                        }
+                        Spacer(minLength: 10)
+                        Text(usbCandidateIdentifierLabel(for: device))
+                            .font(.system(
+                                size: 10.5,
+                                weight: .medium,
+                                design: (device.serialNumber != nil || device.locationID != nil) ? .monospaced : .default
+                            ))
+                            .foregroundStyle(device.serialNumber != nil ? PupilTheme.armedGreen : SettingsMetrics.textTertiary)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(SettingsMetrics.neutralButtonFill)
+                    )
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(12)
+        .frame(width: 280)
+    }
+
+    private func usbCandidateIdentifierLabel(for device: USBDeviceDescriptor) -> String {
+        if let serial = device.serialNumber, !serial.isEmpty {
+            let suffix = String(serial.suffix(4))
+            return "SN ••••\(suffix)"
+        }
+        if let locationID = device.locationID {
+            return String(format: "Port 0x%08X", locationID)
+        }
+        if let registryEntryID = device.registryEntryID {
+            return "ID \(registryEntryID)"
+        }
+        return "No serial"
+    }
+
     private func toggleTrigger(_ trigger: HardwareTrigger, isSelected: Bool) {
         if isSelected {
             guard settings.hardwareTriggers.count > 1 else { return }
@@ -432,5 +598,238 @@ public struct SensorsSettingsPage: View {
                     .foregroundStyle(SettingsMetrics.textSecondary)
             }
         }
+    }
+
+    private var trustedWifiSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SettingsSectionTitle(text: "Trusted Wi-Fi")
+            SettingsGroup {
+                SettingsRowContent(
+                    title: "Auto-arm on untrusted Wi-Fi",
+                    subtitle: "Protects your Mac automatically when you leave a trusted network or join public Wi-Fi.",
+                    info: "Compares hashed Wi-Fi identifiers locally on your Mac. Never auto-disarms an armed session."
+                ) {
+                    PupilToggle(isOn: $settings.trustedNetworkAutoArmEnabled)
+                }
+
+                if settings.trustedNetworkAutoArmEnabled {
+                    SettingsGroupDivider()
+                    SettingsRowContent(title: "Untrusted Wi-Fi action") {
+                        SettingsMenuPickerPill(label: settings.trustedNetworkPolicyMode.title) {
+                            ForEach(TrustedNetworkPolicyMode.allCases) { mode in
+                                Button(mode.title) {
+                                    settings.trustedNetworkPolicyMode = mode
+                                }
+                            }
+                        }
+                    }
+
+                    SettingsGroupDivider()
+                    SettingsRowContent(
+                        title: "Arm when leaving trusted Wi-Fi",
+                        subtitle: "Also starts arming if Wi-Fi disconnects completely after leaving a trusted network."
+                    ) {
+                        PupilToggle(isOn: $settings.trustedNetworkArmOnOfflineDisconnect)
+                    }
+
+                    SettingsGroupDivider()
+                    SettingsRowContent(
+                        title: "Current network",
+                        subtitle: currentNetworkSubtitle
+                    ) {
+                        if isCurrentNetworkTrusted {
+                            HStack(spacing: 5) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(PupilTheme.armedGreen)
+                                Text("Trusted")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(PupilTheme.armedGreen)
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(PupilTheme.armedGreen.opacity(0.12))
+                            .clipShape(Capsule())
+                        } else {
+                            PillActionButton(title: "Trust current Wi-Fi") {
+                                if let snapshot = coordinator.trustedNetworkMonitor.latestSnapshot {
+                                    switch settings.enrollTrustedSnapshot(snapshot) {
+                                    case .success:
+                                        trustedNetworkEnrollmentError = nil
+                                    case .failure(let error):
+                                        trustedNetworkEnrollmentError = error.localizedDescription
+                                    }
+                                }
+                            }
+                            .fixedSize()
+                            .disabled(!canEnrollCurrentNetwork)
+                            .opacity(canEnrollCurrentNetwork ? 1.0 : 0.45)
+                        }
+                    }
+
+                    if let trustedNetworkEnrollmentError {
+                        Text(trustedNetworkEnrollmentError)
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(PupilTheme.warningAmber)
+                            .padding(.horizontal, SettingsMetrics.rowHorizontalInset)
+                            .padding(.bottom, 8)
+                    }
+
+                    if !settings.trustedNetworks.isEmpty {
+                        SettingsGroupDivider()
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Enrolled networks")
+                                .font(SettingsMetrics.sectionTitleFont)
+                                .foregroundStyle(SettingsMetrics.textSecondary)
+
+                            ForEach(settings.trustedNetworks) { entry in
+                                HStack(spacing: 8) {
+                                    Image(systemName: entry.hasStrongerIdentifier ? "checkmark.shield.fill" : "exclamationmark.triangle.fill")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(entry.hasStrongerIdentifier ? PupilTheme.armedGreen : PupilTheme.warningAmber)
+                                    VStack(alignment: .leading, spacing: 1) {
+                                        Text(entry.displayName)
+                                            .font(SettingsMetrics.rowFont)
+                                            .foregroundStyle(SettingsMetrics.textPrimary)
+                                            .lineLimit(1)
+                                        Text(entry.hasStrongerIdentifier
+                                             ? entry.enrolledSource.displayTitle
+                                             : "Unsupported interface-only entry — re-enroll with Location or gateway MAC")
+                                            .font(.system(size: 11))
+                                            .foregroundStyle(entry.hasStrongerIdentifier ? SettingsMetrics.textTertiary : PupilTheme.warningAmber)
+                                    }
+                                    Spacer()
+                                    PillActionButton(title: "Remove") {
+                                        settings.removeTrustedNetwork(id: entry.id)
+                                    }
+                                }
+                                .padding(.vertical, 3)
+                            }
+                        }
+                        .padding(.horizontal, SettingsMetrics.rowHorizontalInset)
+                        .padding(.vertical, 10)
+                    }
+
+                    if coordinator.trustedNetworkMonitor.locationPermission != .authorized {
+                        SettingsGroupDivider()
+                        locationPermissionAdvisoryRow
+                    }
+                }
+            }
+            .animation(SettingsMetrics.stateTransitionAnimation, value: settings.trustedNetworkAutoArmEnabled)
+
+            SettingsCaption(text: trustedWifiCaptionText)
+        }
+    }
+
+    private var currentNetworkSubtitle: String {
+        guard let snapshot = coordinator.trustedNetworkMonitor.latestSnapshot else {
+            return "Checking Wi-Fi status…"
+        }
+        if !snapshot.isSatisfied || snapshot.primaryInterface == .none {
+            return "No Wi-Fi connected"
+        }
+        if snapshot.primaryInterface != .wifi {
+            return "\(snapshot.primaryInterface.rawValue) (neutral)"
+        }
+        if snapshot.sessionFingerprintKey == nil {
+            return "Wi-Fi identity unavailable"
+        }
+        let label = snapshot.suggestedDisplayName ?? "Wi-Fi network"
+        let sourceTitle = snapshot.activeFingerprintSource.displayTitle
+        switch coordinator.trustedNetworkPosture {
+        case .trusted(_, let displayName, let matchedBy):
+            return "\(displayName) (trusted • \(matchedBy.displayTitle))"
+        case .untrusted(_, let source, let displayLabel):
+            return "\(displayLabel) (untrusted • \(source.displayTitle))"
+        case .unconfigured:
+            return "\(label) (\(sourceTitle))"
+        default:
+            return "\(label) (\(sourceTitle))"
+        }
+    }
+
+    private var isCurrentNetworkTrusted: Bool {
+        if case .trusted = coordinator.trustedNetworkPosture {
+            return true
+        }
+        return false
+    }
+
+    private var canEnrollCurrentNetwork: Bool {
+        guard let snapshot = coordinator.trustedNetworkMonitor.latestSnapshot else { return false }
+        return snapshot.isSatisfied
+            && snapshot.primaryInterface == .wifi
+            && snapshot.hasStrongerIdentifier
+            && !isCurrentNetworkTrusted
+    }
+
+    private var locationPermissionAdvisoryRow: some View {
+        let permission = coordinator.trustedNetworkMonitor.locationPermission
+        let isUnavailable = coordinator.trustedNetworkMonitor.latestSnapshot?.activeFingerprintSource == .unavailable
+        let message: String
+        let buttonTitle: String
+        let isRequestAction: Bool
+
+        if isUnavailable && permission == .notDetermined {
+            message = "Network fingerprint unavailable in this environment. Grant Location permission so Pupil can verify trusted Wi-Fi networks."
+            buttonTitle = "Allow SSID access"
+            isRequestAction = true
+        } else if isUnavailable {
+            message = "Network fingerprint unavailable in this environment. Grant Location permission so Pupil can verify trusted Wi-Fi networks."
+            buttonTitle = "Open Location settings…"
+            isRequestAction = false
+        } else {
+            switch permission {
+            case .notDetermined:
+                message = "Location access is optional. Without it, Pupil identifies trusted networks using your router's gateway MAC fingerprint."
+                buttonTitle = "Allow SSID access"
+                isRequestAction = true
+            case .denied, .restricted:
+                message = "Location permission denied. Using router gateway MAC fallback. Some mesh routers or strict sandboxes may require Location access for reliable matching."
+                buttonTitle = "Open Location settings…"
+                isRequestAction = false
+            case .servicesDisabled:
+                message = "macOS Location Services are turned off. Using router gateway MAC fallback."
+                buttonTitle = "Open Location settings…"
+                isRequestAction = false
+            case .unavailableInTest:
+                message = "Location access is unavailable in this test environment."
+                buttonTitle = "Open Location settings…"
+                isRequestAction = false
+            case .authorized:
+                message = "Location authorized. Identifying networks by Wi-Fi SSID hash."
+                buttonTitle = "Allow SSID access"
+                isRequestAction = false
+            }
+        }
+
+        return HStack(alignment: .center, spacing: 10) {
+            Image(systemName: isUnavailable ? "exclamationmark.triangle.fill" : "info.circle.fill")
+                .font(.system(size: 12))
+                .foregroundStyle(PupilTheme.warningAmber)
+            Text(message)
+                .font(.system(size: 11.5))
+                .foregroundStyle(SettingsMetrics.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            PillActionButton(title: buttonTitle) {
+                if isRequestAction {
+                    coordinator.trustedNetworkMonitor.requestLocationPermission()
+                } else if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+            .fixedSize()
+        }
+        .padding(.horizontal, SettingsMetrics.rowHorizontalInset)
+        .padding(.vertical, 10)
+    }
+
+    private var trustedWifiCaptionText: String {
+        if settings.trustedNetworkAutoArmEnabled && settings.trustedNetworks.isEmpty {
+            return "Enroll at least one trusted Wi-Fi network (such as home or office) before boundary auto-arm activates."
+        }
+        return "Trusted network hashes stay on-device. Returning to a trusted network restores gaze sensitivity when disarmed, but never bypasses an active lock or alarm."
     }
 }
