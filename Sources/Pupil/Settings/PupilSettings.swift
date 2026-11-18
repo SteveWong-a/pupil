@@ -725,9 +725,6 @@ public final class PupilSettings {
         guard snapshot.isSatisfied, snapshot.primaryInterface == .wifi else {
             return .failure(.notOnWiFi)
         }
-        guard snapshot.hasStrongerIdentifier else {
-            return .failure(.missingStrongerIdentifier)
-        }
         let trimmedCustom = customDisplayName?.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedName = (trimmedCustom?.isEmpty == false ? trimmedCustom : nil)
             ?? snapshot.suggestedDisplayName
@@ -741,6 +738,9 @@ public final class PupilSettings {
             enrolledSource: snapshot.activeFingerprintSource,
             lastMatchedAt: Date()
         )
+        guard entry.hasUsableIdentifier, entry.hasStrongerIdentifier else {
+            return .failure(.missingStrongerIdentifier)
+        }
         enrollTrustedNetwork(entry)
         return .success(entry)
     }
