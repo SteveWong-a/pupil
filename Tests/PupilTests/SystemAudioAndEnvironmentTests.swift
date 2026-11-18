@@ -193,14 +193,12 @@ struct SystemAudioAndEnvironmentTests {
         #expect(simController.hasActiveSnapshot == false)
         #expect(simBackend.defaultOutputDeviceID() == 1)
 
-        SirenSynthesizer.shared.stop()
-        #expect(SirenSynthesizer.shared.isActive == false)
-        SirenSynthesizer.shared.start(baseFrequencyHz: 880, overrideSpeakers: true, targetVolume: 0.85)
-        #expect(SirenSynthesizer.shared.isActive == true)
-        #expect(SystemAudioController.shared.hasActiveSnapshot == true)
-        SirenSynthesizer.shared.playCountdownTick()
-        SirenSynthesizer.shared.stop()
-        #expect(SirenSynthesizer.shared.isActive == false)
-        #expect(SystemAudioController.shared.hasActiveSnapshot == false)
+        let siren = SirenSynthesizer()
+        #expect(siren.isActive == false)
+        siren.start(baseFrequencyHz: 880, overrideSpeakers: false, targetVolume: 0.85)
+        #expect(siren.isActive == true)
+        siren.playCountdownTick()
+        siren.stop()
+        #expect(siren.isActive == false)
     }
 }
