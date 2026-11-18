@@ -95,6 +95,7 @@ public final class NetworkPathSentinel {
 
     private var evaluator = NetworkTransitionEvaluator()
     private var pathMonitor: NWPathMonitor?
+    private var monitoringSessionID: UInt64 = 0
     private let monitorQueue = DispatchQueue(label: "com.pupil.network.sentinel", qos: .utility)
 
     public init() {}
@@ -102,13 +103,16 @@ public final class NetworkPathSentinel {
     public func startMonitoring() {
         guard !isMonitoring else { return }
         isMonitoring = true
+        monitoringSessionID &+= 1
+        let sessionID = monitoringSessionID
         evaluator.reset()
         let monitor = NWPathMonitor()
         pathMonitor = monitor
         monitor.pathUpdateHandler = { [weak self] path in
             let snapshot = Self.makeSnapshot(from: path)
             Task { @MainActor [weak self] in
-                self?.ingestSnapshot(snapshot)
+                guard let self, self.isMonitoring, self.monitoringSessionID == sessionID else { return }
+                self.ingestSnapshot(snapshot)
             }
         }
         monitor.start(queue: monitorQueue)
@@ -117,6 +121,7 @@ public final class NetworkPathSentinel {
     public func stopMonitoring() {
         guard isMonitoring else { return }
         isMonitoring = false
+        monitoringSessionID &+= 1
         pathMonitor?.cancel()
         pathMonitor = nil
         evaluator.reset()

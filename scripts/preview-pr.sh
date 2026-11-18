@@ -48,25 +48,38 @@ case "${TARGET}" in
         TEST_APP="${MAIN_REPO}/dist/test.pupil.app"
         if [[ ! -d "${PREVIEW_DIR}" ]]; then
             cd "${MAIN_REPO}"
+            git fetch pupil main
             git branch -D factory/preview-all 2>/dev/null || true
             git worktree add -b factory/preview-all "${PREVIEW_DIR}" pupil/main
             cd "${PREVIEW_DIR}"
-            for br in \
-                feat/encrypted-tamper-journal \
-                feat/adaptive-vision-governor \
-                feat/network-path-tripwire \
-                feat/idle-inactivity-auto-arm \
-                feat/display-hotplug-sentry \
-                feat/pin-brute-force-lockout
-            do
-                if git show-ref --verify --quiet "refs/heads/${br}"; then
-                    echo "==> Merging ${br} into preview-all..."
-                    git merge --no-edit "${br}"
-                fi
-            done
         else
             cd "${PREVIEW_DIR}"
+            if [[ -n "$(git status --porcelain --untracked-files=no)" ]] || git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+                echo "Error: ${PREVIEW_DIR} has uncommitted tracked changes or an in-progress merge." >&2
+                exit 1
+            fi
+            echo "==> Refreshing existing preview-all worktree from pupil/main..."
+            git fetch pupil main
+            git checkout -B factory/preview-all pupil/main
         fi
+
+        for br in \
+            feat/encrypted-tamper-journal \
+            feat/adaptive-vision-governor \
+            feat/network-path-tripwire \
+            feat/idle-inactivity-auto-arm \
+            feat/display-hotplug-sentry \
+            feat/pin-brute-force-lockout
+        do
+            if git show-ref --verify --quiet "refs/heads/${br}"; then
+                echo "==> Merging ${br} into preview-all..."
+                if ! git merge --no-edit "${br}"; then
+                    echo "Error: Failed to merge ${br} into preview-all; aborting merge." >&2
+                    git merge --abort >/dev/null 2>&1 || true
+                    exit 1
+                fi
+            fi
+        done
         echo "==> Running unit tests on combined preview-all..."
         swift test
         echo "==> Bundling release app..."
