@@ -185,6 +185,7 @@ public final class SecurityCoordinator {
     private var liveCalibrationProfiler = RoomNoiseProfiler()
     private var liveCalibrationTimer: Timer?
     private var pinLockoutTimer: Timer?
+    private var canPersistJournal = true
 
     nonisolated public static var isRunningUnderTests: Bool {
         let env = ProcessInfo.processInfo.environment
@@ -258,8 +259,13 @@ public final class SecurityCoordinator {
         }
         self.cameraManager.motionDetector.surroundingsWatchEnabled = settings.surroundingsWatchEnabled
 
-        if let persisted = try? resolvedJournalStore.loadRecords(), !persisted.isEmpty {
-            self.events = Array(persisted.prefix(TamperJournalStore.maxRecords))
+        do {
+            let persisted = try resolvedJournalStore.loadRecords()
+            if !persisted.isEmpty {
+                self.events = Array(persisted.prefix(TamperJournalStore.maxRecords))
+            }
+        } catch {
+            handleJournalLoadFailure(error, journalStore: resolvedJournalStore)
         }
 
         // Ensure a default PIN ("1234") is enrolled on first launch if none exists so the user can test immediately,
@@ -337,7 +343,10 @@ public final class SecurityCoordinator {
         activeTamperSource = nil
         activeTamperTime = nil
         activeAlarmTime = nil
-        armedDisplayTopologyEvaluator.latchBaseline(PowerAndLidMonitor.readActiveDisplayTopology())
+        armedDisplayTopologyEvaluator.reset()
+        if let topology = PowerAndLidMonitor.readActiveDisplayTopology() {
+            armedDisplayTopologyEvaluator.latchBaseline(topology)
+        }
 
         if settings.holdSleepOnLidClose {
             powerMonitor.acquireSleepHoldAssertion()
@@ -377,7 +386,10 @@ public final class SecurityCoordinator {
         latestMotionDisplacementScore = 0
         continuousMotionSeconds = 0
         motionAnchorDepthMeters = nil
-        armedDisplayTopologyEvaluator.latchBaseline(PowerAndLidMonitor.readActiveDisplayTopology())
+        armedDisplayTopologyEvaluator.reset()
+        if let topology = PowerAndLidMonitor.readActiveDisplayTopology() {
+            armedDisplayTopologyEvaluator.latchBaseline(topology)
+        }
         state = .armed
         cameraManager.shouldReanchorOnFaceAcquisition = false
         if let profile = roomProfiler.finalizeCalibration() {
@@ -1563,6 +1575,7 @@ public final class SecurityCoordinator {
     public func clearEventLog() {
         events.removeAll()
         try? journalStore.clear()
+        canPersistJournal = true
     }
 
     public func exportIncidentReportMarkdown() -> String {
@@ -1763,6 +1776,36 @@ public final class SecurityCoordinator {
         }
     }
 
+    private func handleJournalLoadFailure(_ error: Error, journalStore: TamperJournalStore) {
+        let fileURL = journalStore.fileURL
+        let fileExists = FileManager.default.fileExists(atPath: fileURL.path)
+        var detail = "Existing tamper journal failed validation (\(error.localizedDescription))."
+
+        if fileExists {
+            let timestamp = Int(Date().timeIntervalSince1970)
+            let quarantineName = "\(fileURL.lastPathComponent).quarantined-\(timestamp)-\(UUID().uuidString.prefix(8))"
+            let quarantineURL = fileURL.deletingLastPathComponent().appendingPathComponent(quarantineName)
+            do {
+                try FileManager.default.moveItem(at: fileURL, to: quarantineURL)
+                detail += " Original file quarantined as \(quarantineName)."
+            } catch let moveError {
+                canPersistJournal = false
+                detail += " Failed to quarantine original file (\(moveError.localizedDescription)); journal writes paused to preserve evidence."
+            }
+        }
+
+        NSLog("[Pupil] Tamper journal load failure: %@", detail)
+        let record = SecurityEventRecord(
+            title: "Journal Validation Failed",
+            detail: detail,
+            stateAtEvent: state
+        )
+        events.insert(record, at: 0)
+        if canPersistJournal {
+            try? journalStore.saveRecords(events)
+        }
+    }
+
     private func logEvent(_ title: String, detail: String, simulated: Bool = false) {
         let record = SecurityEventRecord(
             title: title,
@@ -1774,6 +1817,8 @@ public final class SecurityCoordinator {
         if events.count > TamperJournalStore.maxRecords {
             events.removeLast(events.count - TamperJournalStore.maxRecords)
         }
-        try? journalStore.saveRecords(events)
+        if canPersistJournal {
+            try? journalStore.saveRecords(events)
+        }
     }
 }

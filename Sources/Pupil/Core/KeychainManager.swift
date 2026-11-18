@@ -113,6 +113,12 @@ public enum KeychainManager {
     }
 
     nonisolated public static func clearEnrolledPin() {
+        #if DEBUG
+        if let store = isolatedTestStore {
+            store.clear()
+            return
+        }
+        #endif
         UserDefaults.standard.removeObject(forKey: storeKey)
         UserDefaults.standard.removeObject(forKey: "pupil.fallbackPinRecord")
         if let fileURL = recordFileURL {
@@ -121,6 +127,44 @@ public enum KeychainManager {
     }
 
     #if DEBUG
+    public final class TestPinStore: @unchecked Sendable {
+        private let lock = NSLock()
+        private var data: Data?
+
+        nonisolated public init() {}
+
+        nonisolated fileprivate func load() -> StoredPinRecord? {
+            lock.lock()
+            defer { lock.unlock() }
+            guard let data else { return nil }
+            return try? JSONDecoder().decode(StoredPinRecord.self, from: data)
+        }
+
+        nonisolated fileprivate func save(_ data: Data) {
+            lock.lock()
+            defer { lock.unlock() }
+            self.data = data
+        }
+
+        nonisolated fileprivate func clear() {
+            lock.lock()
+            defer { lock.unlock() }
+            self.data = nil
+        }
+    }
+
+    @TaskLocal
+    nonisolated private static var isolatedTestStore: TestPinStore?
+
+    /// Runs `operation` with PIN storage routed to an isolated in-memory store so tests
+    /// never read or overwrite the user's installed PIN record.
+    nonisolated public static func withIsolatedStore<T>(
+        _ store: TestPinStore = TestPinStore(),
+        operation: () throws -> T
+    ) rethrows -> T {
+        try $isolatedTestStore.withValue(store, operation: operation)
+    }
+
     nonisolated(unsafe) public static var mockTouchIDResult: Bool?
     nonisolated(unsafe) public static var mockDeviceOwnerResult: Bool?
     #endif
@@ -198,6 +242,11 @@ public enum KeychainManager {
     }
 
     nonisolated private static func loadStoredRecord() -> StoredPinRecord? {
+        #if DEBUG
+        if let store = isolatedTestStore {
+            return store.load()
+        }
+        #endif
         if let data = UserDefaults.standard.data(forKey: storeKey),
            let record = try? JSONDecoder().decode(StoredPinRecord.self, from: data) {
             return record
@@ -215,6 +264,12 @@ public enum KeychainManager {
     }
 
     nonisolated private static func saveStoredRecord(_ data: Data) {
+        #if DEBUG
+        if let store = isolatedTestStore {
+            store.save(data)
+            return
+        }
+        #endif
         UserDefaults.standard.set(data, forKey: storeKey)
         UserDefaults.standard.set(data, forKey: "pupil.fallbackPinRecord")
         if let fileURL = recordFileURL {
