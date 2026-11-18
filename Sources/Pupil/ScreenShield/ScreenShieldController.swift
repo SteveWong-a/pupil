@@ -96,7 +96,9 @@ public final class ScreenShieldController {
         for window in shieldWindows {
             window.ignoresMouseEvents = false
             window.alphaValue = 1.0
-            window.orderFrontRegardless()
+            if !SecurityCoordinator.isRunningUnderTests {
+                window.orderFrontRegardless()
+            }
         }
 
         // Make the primary screen's shield key and activate the application for immediate keyboard PIN input
@@ -119,13 +121,16 @@ public final class ScreenShieldController {
             let window = makeShieldWindow(for: screen, isPrimary: index == 0, coordinator: coordinator)
             window.ignoresMouseEvents = false
             window.alphaValue = 1.0
-            window.orderFrontRegardless()
+            if !SecurityCoordinator.isRunningUnderTests {
+                window.orderFrontRegardless()
+            }
             shieldWindows.append(window)
         }
         activatePrimary()
     }
 
     private func activatePrimary() {
+        guard !SecurityCoordinator.isRunningUnderTests else { return }
         guard !(coordinator?.isTouchIDActive ?? false) else { return }
         NSApp.activate(ignoringOtherApps: true)
         if let primary = shieldWindows.first {

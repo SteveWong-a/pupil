@@ -214,14 +214,92 @@ public final class CoreAudioHardwareBackend: AudioHardwareBackend, @unchecked Se
     }
 }
 
+/// In-memory audio hardware backend used during automated test runs so unit tests
+/// never mutate physical macOS CoreAudio device selection, mute state, or volume.
+public final class SimulatedAudioHardwareBackend: AudioHardwareBackend, @unchecked Sendable {
+    private let lock = NSLock()
+    private var currentDefaultDevice: AudioDeviceID
+    private let builtInDevice: AudioDeviceID?
+    private var mutedByDevice: [AudioDeviceID: Bool]
+    private var volumeByDevice: [AudioDeviceID: Float]
+
+    public init(
+        defaultDevice: AudioDeviceID = 1,
+        builtInDevice: AudioDeviceID? = 2,
+        mutedByDevice: [AudioDeviceID: Bool] = [1: false, 2: false],
+        volumeByDevice: [AudioDeviceID: Float] = [1: 0.5, 2: 0.5]
+    ) {
+        self.currentDefaultDevice = defaultDevice
+        self.builtInDevice = builtInDevice
+        self.mutedByDevice = mutedByDevice
+        self.volumeByDevice = volumeByDevice
+    }
+
+    public func defaultOutputDeviceID() -> AudioDeviceID? {
+        lock.lock()
+        defer { lock.unlock() }
+        return currentDefaultDevice
+    }
+
+    @discardableResult
+    public func setDefaultOutputDeviceID(_ deviceID: AudioDeviceID) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        currentDefaultDevice = deviceID
+        return true
+    }
+
+    public func builtInSpeakerDeviceID() -> AudioDeviceID? {
+        lock.lock()
+        defer { lock.unlock() }
+        return builtInDevice
+    }
+
+    public func isMuted(deviceID: AudioDeviceID) -> Bool? {
+        lock.lock()
+        defer { lock.unlock() }
+        return mutedByDevice[deviceID]
+    }
+
+    @discardableResult
+    public func setMuted(_ muted: Bool, deviceID: AudioDeviceID) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        mutedByDevice[deviceID] = muted
+        return true
+    }
+
+    public func virtualMainVolume(deviceID: AudioDeviceID) -> Float? {
+        lock.lock()
+        defer { lock.unlock() }
+        return volumeByDevice[deviceID]
+    }
+
+    @discardableResult
+    public func setVirtualMainVolume(_ volume: Float, deviceID: AudioDeviceID) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        volumeByDevice[deviceID] = volume
+        return true
+    }
+}
+
 public final class SystemAudioController: @unchecked Sendable {
-    public static let shared = SystemAudioController()
+    public static let shared = SystemAudioController(
+        backend: SecurityCoordinator.isRunningUnderTests
+            ? SimulatedAudioHardwareBackend()
+            : CoreAudioHardwareBackend()
+    )
 
     private let lock = NSLock()
     private let backend: any AudioHardwareBackend
     private var snapshot: SystemAudioSnapshot?
 
-    public init(backend: any AudioHardwareBackend = CoreAudioHardwareBackend()) {
+    public init(
+        backend: any AudioHardwareBackend = SecurityCoordinator.isRunningUnderTests
+            ? SimulatedAudioHardwareBackend()
+            : CoreAudioHardwareBackend()
+    ) {
         self.backend = backend
     }
 
