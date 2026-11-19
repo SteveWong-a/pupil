@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Experience } from "./scene/director";
 import type { SectionName } from "./scene/uiHandles";
 import { Nav } from "./components/Nav";
+import { Loader } from "./components/Loader";
 import { Hero } from "./components/Hero";
 import { Panel } from "./components/Panel";
 import { Labels } from "./components/Labels";
@@ -68,6 +69,7 @@ export function App() {
   const experience = useRef<Experience | null>(null);
   const [active, setActive] = useState<SectionName | null>("overview");
   const [modalView, setModalView] = useState<ModalView | null>(null);
+  const [loadState, setLoadState] = useState({ progress: 0.14, label: "Initializing 3D engine" });
 
   useEffect(() => {
     if ("serviceWorker" in navigator && window.isSecureContext) {
@@ -92,6 +94,7 @@ export function App() {
             labels: labels.current!,
           },
           onSection: setActive,
+          onProgress: (progress, label) => setLoadState({ progress, label }),
           cancelled: cancelled.signal,
         }),
       )
@@ -110,7 +113,7 @@ export function App() {
     <>
       <canvas ref={canvas} className={styles.gl} aria-hidden="true" />
       <div className={styles.ui}>
-        <div ref={veil} className={styles.veil} />
+        <Loader ref={veil} progress={loadState.progress} label={loadState.label} />
         <Nav
           ref={nav}
           active={active}

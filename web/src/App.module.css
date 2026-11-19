@@ -15,12 +15,6 @@
   overflow: hidden;
 }
 
-.veil {
-  position: absolute;
-  inset: 0;
-  background: var(--bg);
-}
-
 .scroll {
   position: relative;
   height: var(--scroll-length);

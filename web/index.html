@@ -15,7 +15,36 @@
     <link rel="manifest" href="./manifest.json" />
     <link rel="apple-touch-icon" href="./assets/pupil-icon.png" />
     <link rel="icon" type="image/png" href="./assets/pupil-icon.png" />
-    <style>html { background: #000; }</style>
+    <style>
+      html { background: #000; }
+      .boot-veil {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: radial-gradient(circle at 50% 46%, rgba(156, 194, 255, 0.07) 0%, rgba(0, 0, 0, 0) 48%), #000;
+      }
+      .boot-iris {
+        position: relative;
+        width: 78px;
+        height: 78px;
+        border-radius: 50%;
+        border: 1px solid rgba(243, 242, 240, 0.14);
+        display: grid;
+        place-items: center;
+      }
+      .boot-sweep {
+        position: absolute;
+        inset: -1px;
+        border-radius: 50%;
+        background: conic-gradient(from 0deg, transparent 0deg 210deg, rgba(156, 194, 255, 0.28) 285deg, #9cc2ff 356deg, transparent 360deg);
+        -webkit-mask-image: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+        mask-image: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+        animation: boot-spin 1.65s linear infinite;
+      }
+      @keyframes boot-spin { to { rotate: 1turn; } }
+      @media (prefers-reduced-motion: reduce) { .boot-sweep { animation-duration: 8s; } }
+    </style>
     <script>
       /* Preserve 100% QR pairing & iOS Home Screen PWA compatibility */
       (function () {
@@ -63,7 +92,11 @@
     />
   </head>
   <body class="is-locked">
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot-veil" aria-label="Loading Pupil">
+        <div class="boot-iris"><span class="boot-sweep"></span></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

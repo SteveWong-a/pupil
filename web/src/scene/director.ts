@@ -33,14 +33,18 @@ export async function startExperience({
   canvas,
   ui,
   onSection,
+  onProgress,
   cancelled,
 }: {
   canvas: HTMLCanvasElement;
   ui: UiRefs;
   onSection: (name: SectionName | null) => void;
+  onProgress?: (progress: number, label: string) => void;
   cancelled: AbortSignal;
 }): Promise<Experience | null> {
+  onProgress?.(0.28, "Loading studio fonts");
   await Promise.all(FONTS.map((f) => document.fonts.load(f)));
+  onProgress?.(0.45, "Loading studio assets");
   const assets = await loadSceneAssets();
   if (cancelled.aborted) {
     assets.legend.texture.dispose();
@@ -51,6 +55,7 @@ export async function startExperience({
     assets.surface.capSmudge.dispose();
     return null;
   }
+  onProgress?.(0.75, "Building hardware scene");
 
   const abort = new AbortController();
   const { signal } = abort;
@@ -240,7 +245,20 @@ export async function startExperience({
     post.composer.render(dt);
   }
 
+  onProgress?.(0.92, "Compiling WebGL optics");
+  await new Promise<void>((r) => requestAnimationFrame(() => r()));
+  if (cancelled.aborted) {
+    abort.abort();
+    post.composer.dispose();
+    mb.dispose();
+    env.dispose();
+    deskMat.dispose();
+    desk.geometry.dispose();
+    renderer.dispose();
+    return null;
+  }
   renderer.compile(scene, camera);
+  onProgress?.(1, "Ready");
 
   let slowFor = 0;
   let fastFor = 0;

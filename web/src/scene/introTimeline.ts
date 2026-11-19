@@ -71,7 +71,7 @@ export function createIntroTimeline({
 
   gsap.set([ui.hero, ui.gaze, ui.tamper, ui.phone, ui.macos, ui.final], { autoAlpha: 0 });
   gsap.set(ui.nav, { autoAlpha: 1 });
-  tl.fromTo(ui.veil, { autoAlpha: 1 }, { autoAlpha: 0, duration: 0.4, ease: "power1.out" }, 0);
+  tl.fromTo(ui.veil, { autoAlpha: 1 }, { autoAlpha: 0, duration: 0.55, ease: "power2.out" }, 0);
   tl.fromTo(ui.hero, { autoAlpha: 0, y: 24, filter: "blur(12px)" }, { autoAlpha: 1, y: 0, filter: "blur(0px)", duration: 0.9, ease: "power3.out" }, FLIGHT_END - 0.85);
   tl.call(() => onDone(), undefined, FLIGHT_END);
 
