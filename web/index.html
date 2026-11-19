@@ -22,28 +22,15 @@
         inset: 0;
         display: grid;
         place-items: center;
-        background: radial-gradient(circle at 50% 46%, rgba(156, 194, 255, 0.07) 0%, rgba(0, 0, 0, 0) 48%), #000;
+        background:
+          radial-gradient(circle at 62% 38%, rgba(156, 194, 255, 0.085) 0%, rgba(156, 194, 255, 0.02) 26%, rgba(0, 0, 0, 0) 56%),
+          #000;
       }
-      .boot-iris {
-        position: relative;
-        width: 78px;
-        height: 78px;
-        border-radius: 50%;
-        border: 1px solid rgba(243, 242, 240, 0.14);
-        display: grid;
-        place-items: center;
+      .boot-logo {
+        width: clamp(148px, 18vw, 196px);
+        height: clamp(148px, 18vw, 196px);
+        display: block;
       }
-      .boot-sweep {
-        position: absolute;
-        inset: -1px;
-        border-radius: 50%;
-        background: conic-gradient(from 0deg, transparent 0deg 210deg, rgba(156, 194, 255, 0.28) 285deg, #9cc2ff 356deg, transparent 360deg);
-        -webkit-mask-image: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
-        mask-image: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
-        animation: boot-spin 1.65s linear infinite;
-      }
-      @keyframes boot-spin { to { rotate: 1turn; } }
-      @media (prefers-reduced-motion: reduce) { .boot-sweep { animation-duration: 8s; } }
     </style>
     <script>
       /* Preserve 100% QR pairing & iOS Home Screen PWA compatibility */
@@ -94,7 +81,34 @@
   <body class="is-locked">
     <div id="root">
       <div class="boot-veil" aria-label="Loading Pupil">
-        <div class="boot-iris"><span class="boot-sweep"></span></div>
+        <svg class="boot-logo" viewBox="0 0 200 200" fill="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="b-blk" x1="178" y1="14" x2="22" y2="186" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#3c4960" />
+              <stop offset="45%" stop-color="#161920" />
+              <stop offset="100%" stop-color="#0d0f13" />
+            </linearGradient>
+            <linearGradient id="b-gry" x1="150" y1="46" x2="50" y2="154" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#c5d6f0" />
+              <stop offset="52%" stop-color="#868f9c" />
+              <stop offset="100%" stop-color="#636a75" />
+            </linearGradient>
+            <linearGradient id="b-wht" x1="134" y1="64" x2="66" y2="136" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#ffffff" />
+              <stop offset="58%" stop-color="#d7e1f0" />
+              <stop offset="100%" stop-color="#bac4d4" />
+            </linearGradient>
+          </defs>
+          <g transform="translate(100 100)">
+            <path d="M 0 0 L 77.585 56.369 A 95.9 95.9 0 1 1 95.9 0 Z" fill="url(#b-blk)" />
+          </g>
+          <g transform="translate(100 100) rotate(120)">
+            <path d="M 0 0 L 58.014 18.85 A 61 61 0 1 1 58.014 -18.85 Z" fill="url(#b-gry)" />
+          </g>
+          <g transform="translate(100 100) rotate(240)">
+            <path d="M 0 0 L 38.604 -6.807 A 39.2 39.2 0 1 1 27.23 -28.198 Z" fill="url(#b-wht)" />
+          </g>
+        </svg>
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>

@@ -69,7 +69,15 @@ export function App() {
   const experience = useRef<Experience | null>(null);
   const [active, setActive] = useState<SectionName | null>("overview");
   const [modalView, setModalView] = useState<ModalView | null>(null);
-  const [loadState, setLoadState] = useState({ progress: 0.14, label: "Initializing 3D engine" });
+  const [sceneReady, setSceneReady] = useState(false);
+  const lockResolveRef = useRef<(() => void) | null>(null);
+  const lockedEarlyRef = useRef(false);
+
+  const handleLocked = () => {
+    lockedEarlyRef.current = true;
+    lockResolveRef.current?.();
+    lockResolveRef.current = null;
+  };
 
   useEffect(() => {
     if ("serviceWorker" in navigator && window.isSecureContext) {
@@ -94,7 +102,13 @@ export function App() {
             labels: labels.current!,
           },
           onSection: setActive,
-          onProgress: (progress, label) => setLoadState({ progress, label }),
+          waitForLoaderLock: (skipWait) => {
+            setSceneReady(true);
+            if (skipWait || lockedEarlyRef.current) return Promise.resolve();
+            return new Promise<void>((resolve) => {
+              lockResolveRef.current = resolve;
+            });
+          },
           cancelled: cancelled.signal,
         }),
       )
@@ -113,7 +127,7 @@ export function App() {
     <>
       <canvas ref={canvas} className={styles.gl} aria-hidden="true" />
       <div className={styles.ui}>
-        <Loader ref={veil} progress={loadState.progress} label={loadState.label} />
+        <Loader ref={veil} sceneReady={sceneReady} onLocked={handleLocked} />
         <Nav
           ref={nav}
           active={active}

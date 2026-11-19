@@ -33,18 +33,16 @@ export async function startExperience({
   canvas,
   ui,
   onSection,
-  onProgress,
+  waitForLoaderLock,
   cancelled,
 }: {
   canvas: HTMLCanvasElement;
   ui: UiRefs;
   onSection: (name: SectionName | null) => void;
-  onProgress?: (progress: number, label: string) => void;
+  waitForLoaderLock?: (skipWait: boolean) => Promise<void>;
   cancelled: AbortSignal;
 }): Promise<Experience | null> {
-  onProgress?.(0.28, "Loading studio fonts");
   await Promise.all(FONTS.map((f) => document.fonts.load(f)));
-  onProgress?.(0.45, "Loading studio assets");
   const assets = await loadSceneAssets();
   if (cancelled.aborted) {
     assets.legend.texture.dispose();
@@ -55,7 +53,6 @@ export async function startExperience({
     assets.surface.capSmudge.dispose();
     return null;
   }
-  onProgress?.(0.75, "Building hardware scene");
 
   const abort = new AbortController();
   const { signal } = abort;
@@ -245,20 +242,7 @@ export async function startExperience({
     post.composer.render(dt);
   }
 
-  onProgress?.(0.92, "Compiling WebGL optics");
-  await new Promise<void>((r) => requestAnimationFrame(() => r()));
-  if (cancelled.aborted) {
-    abort.abort();
-    post.composer.dispose();
-    mb.dispose();
-    env.dispose();
-    deskMat.dispose();
-    desk.geometry.dispose();
-    renderer.dispose();
-    return null;
-  }
   renderer.compile(scene, camera);
-  onProgress?.(1, "Ready");
 
   let slowFor = 0;
   let fastFor = 0;
@@ -293,9 +277,31 @@ export async function startExperience({
   }
 
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const hash = location.hash.slice(1);
+  const directReveal =
+    params.has("t") ||
+    params.has("p") ||
+    (isSection(hash) && hash !== "overview") ||
+    hash === "waitlist" ||
+    reduced;
+
+  if (waitForLoaderLock) {
+    await waitForLoaderLock(directReveal);
+    if (cancelled.aborted) {
+      abort.abort();
+      intro.tl.kill();
+      post.composer.dispose();
+      mb.dispose();
+      env.dispose();
+      deskMat.dispose();
+      desk.geometry.dispose();
+      renderer.dispose();
+      return null;
+    }
+  }
+
   renderer.setAnimationLoop(loop);
 
-  const hash = location.hash.slice(1);
   if (params.has("t")) {
     intro.tl.seek(Number(params.get("t")));
   } else if (params.has("p")) {
