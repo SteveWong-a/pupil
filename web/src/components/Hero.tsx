@@ -1,6 +1,5 @@
 import type { Ref } from "react";
 import { Button } from "./Button";
-import { FeatureIcon } from "./FeatureIcon";
 import styles from "./Hero.module.css";
 
 interface HeroProps {
@@ -13,10 +12,6 @@ interface HeroProps {
 export function Hero({ ref, cueRef, onWaitlist, onOpenModal }: HeroProps) {
   return (
     <header ref={ref} className={styles.hero}>
-      <p className={styles.pill} data-icon-hover="true">
-        <FeatureIcon kind="shield" size={13} />
-        <span>macOS Menu Bar App · Crowded library? It only takes one.</span>
-      </p>
       <h1 className={styles.title}>
         Step away without <br />
         <em>packing up.</em>
