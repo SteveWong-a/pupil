@@ -87,7 +87,7 @@ export function createScrollStory({
   tl.to(mb.pose, { phoneLift: 1, duration: 1.0, ease: "power3.inOut" }, 6.45);
   tl.to(
     cam,
-    { tx: 14.5, ty: kbY + 5.8, tz: 4.5, az: 0.14, el: 0.16, dist: 44, shiftX: -0.08, shiftY: -0.02, fit: 0.78, duration: 1.45 },
+    { tx: 16.2, ty: kbY + 5.8, tz: 4.8, az: 0.12, el: 0.16, dist: 45, shiftX: -0.08, shiftY: -0.02, fit: 0.78, duration: 1.45 },
     6.4,
   );
   tl.set(mb.pose, { phoneMode: 1 }, 6.6);

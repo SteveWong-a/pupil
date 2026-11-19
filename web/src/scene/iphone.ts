@@ -144,13 +144,13 @@ export function createIPhone(surface: SurfaceMaps, pupilIcon: HTMLImageElement |
   function update(pose: MacBookPose) {
     const lift = Math.min(1, Math.max(0, pose.phoneLift));
     group.position.set(
-      THREE.MathUtils.lerp(PHONE_POS.x, 19.2, lift),
-      THREE.MathUtils.lerp(PHONE_POS.y, 5.2, lift),
-      THREE.MathUtils.lerp(PHONE_POS.z, 4.8, lift),
+      THREE.MathUtils.lerp(PHONE_POS.x, 22.8, lift),
+      THREE.MathUtils.lerp(PHONE_POS.y, 5.4, lift),
+      THREE.MathUtils.lerp(PHONE_POS.z, 5.4, lift),
     );
     group.rotation.set(
-      THREE.MathUtils.lerp(0, 1.06, lift),
-      THREE.MathUtils.lerp(PHONE_RY, -0.1, lift),
+      THREE.MathUtils.lerp(0, 1.04, lift),
+      THREE.MathUtils.lerp(PHONE_RY, -0.16, lift),
       0,
     );
     phoneTex.update(pose);
