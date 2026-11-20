@@ -157,7 +157,7 @@ def main():
     output_data = {
         "repository": "pupil",
         "description": "Native macOS menu bar & notch security sentinel for solo study sessions",
-        "platform": "macOS 15+ (Sequoia), Swift 6, AppKit + SwiftUI",
+        "platform": "macOS 14+, Swift 6, AppKit + SwiftUI",
         "total_indexed_files": len(chunks),
         "total_source_lines": total_lines,
         "symbol_directory": all_symbols,
