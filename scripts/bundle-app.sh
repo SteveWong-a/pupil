@@ -22,6 +22,8 @@ if [[ ! -f "${PROJECT_DIR}/Resources/AppIcon.icns" ]]; then
     swift "${PROJECT_DIR}/scripts/generate-icon.swift"
 fi
 cp "${PROJECT_DIR}/Resources/AppIcon.icns" "${APP_BUNDLE}/Contents/Resources/AppIcon.icns"
+cp "${PROJECT_DIR}/LICENSE" "${APP_BUNDLE}/Contents/Resources/LICENSE"
+cp "${PROJECT_DIR}/NOTICE" "${APP_BUNDLE}/Contents/Resources/NOTICE"
 
 cp "${BIN_PATH}" "${APP_BUNDLE}/Contents/MacOS/Pupil"
 chmod +x "${APP_BUNDLE}/Contents/MacOS/Pupil"
