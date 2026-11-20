@@ -1,9 +1,13 @@
+import gsap from "gsap";
 import * as THREE from "three";
 import { KEYS, TOUCH_ID_KEY } from "./ansiLayout";
 import { createCalloutProjector, createKeyHover } from "./calloutAnchors";
 import { createCameraRig } from "./cameraRig";
+import { CHAPTER_FEATURES, FEATURE_SHOTS } from "./featureShots";
+import { createSceneInteraction } from "./interaction";
 import { createIntroTimeline } from "./introTimeline";
-import { createMacBook } from "./macbook";
+import { createMacBook, type FeatureId } from "./macbook";
+import { createPasserbyShadows } from "./passerbyShadows";
 import { createPostPipeline } from "./postPipeline";
 import { createStudioEnvironment, loadSceneAssets } from "./proceduralMaps";
 import { createScrollStory, type ScrollStory } from "./scrollStory";
@@ -26,6 +30,10 @@ const FONTS = ['400 1em "Instrument Sans"', '500 1em "Instrument Sans"', '600 1e
 export interface Experience {
   goToSection: (name: string) => void;
   goToEnd: () => void;
+  focusFeature: (id: FeatureId) => void;
+  clearFocus: () => void;
+  triggerFeatureDemo: (id: FeatureId) => void;
+  hoverFeature: (id: FeatureId | null) => void;
   dispose: () => void;
 }
 
@@ -33,12 +41,14 @@ export async function startExperience({
   canvas,
   ui,
   onSection,
+  onFocusChange,
   waitForLoaderLock,
   cancelled,
 }: {
   canvas: HTMLCanvasElement;
   ui: UiRefs;
   onSection: (name: SectionName | null) => void;
+  onFocusChange?: (id: FeatureId | null) => void;
   waitForLoaderLock?: (skipWait: boolean) => Promise<void>;
   cancelled: AbortSignal;
 }): Promise<Experience | null> {
@@ -104,6 +114,11 @@ export async function startExperience({
   keyLight.shadow.radius = 4;
   scene.add(keyLight, keyLight.target);
 
+  const passerby = createPasserbyShadows();
+  keyLight.map = passerby.goboTexture;
+  mb.setScreenShadowMap(passerby.screenTexture);
+  mb.setDeckShadowMap(passerby.deckTexture);
+
   const rim = new THREE.DirectionalLight(0xffffff, 0.9);
   const RIM_HOME = new THREE.Vector3(5, 10, -26);
   const RAKE_DIR = new THREE.Vector3(14, 1.7, 8);
@@ -168,14 +183,239 @@ export async function startExperience({
     finishIntro();
   }
 
+  let focusedFeature: FeatureId | null = null;
+  let hoveredFeature: FeatureId | null = null;
+  const focusAnchor = new THREE.Vector3();
+  const focusTargetLive = new THREE.Vector3();
+  let focusAnchorSnapped = false;
+
+  const demo = {
+    blurMix: 0,
+    blurState: false,
+    magsafeMix: 0,
+    magsafeState: false,
+    lidMix: 0,
+    lidState: false,
+    sirenBurst: 0,
+    phoneMix: 0,
+    phoneState: false,
+    touchPress: 0,
+    touchWave: 0,
+  };
+  let demoTweenCount = 0;
+
+  function resetDemoOverrides() {
+    gsap.killTweensOf(demo);
+    demo.blurState = false;
+    demo.magsafeState = false;
+    demo.lidState = false;
+    demo.phoneState = false;
+    demoTweenCount++;
+    gsap.to(demo, {
+      blurMix: 0,
+      magsafeMix: 0,
+      lidMix: 0,
+      sirenBurst: 0,
+      phoneMix: 0,
+      touchPress: 0,
+      touchWave: 0,
+      duration: 0.45,
+      ease: "power2.out",
+      onComplete: () => {
+        demoTweenCount = Math.max(0, demoTweenCount - 1);
+      },
+    });
+  }
+
+  function computeFeatureAnchor(id: FeatureId, out: THREE.Vector3) {
+    mb.featurePoint(id, out);
+    const off = FEATURE_SHOTS[id].targetOffset;
+    if (off) out.x += off[0];
+    if (off) out.y += off[1];
+    if (off) out.z += off[2];
+    return out;
+  }
+
+  function focusFeature(id: FeatureId) {
+    skipIntro();
+    if (focusedFeature === id) {
+      clearFocus();
+      return;
+    }
+    const spec = FEATURE_SHOTS[id];
+    const currentSec = scroll ? sectionAt(scroll.progress()) : "overview";
+    if (currentSec !== spec.section) {
+      scroll!.goTo(SECTIONS[spec.section]);
+    }
+
+    const wasFocused = focusedFeature !== null && rig.focus.mix > 0.25;
+    focusedFeature = id;
+    onFocusChange?.(id);
+    resetDemoOverrides();
+    rig.resetOrbit();
+
+    computeFeatureAnchor(id, focusAnchor);
+    gsap.killTweensOf(rig.focus);
+
+    if (!wasFocused) {
+      rig.focus.tx = focusAnchor.x;
+      rig.focus.ty = focusAnchor.y;
+      rig.focus.tz = focusAnchor.z;
+      rig.focus.az = spec.az;
+      rig.focus.el = spec.el;
+      rig.focus.dist = spec.dist;
+      rig.focus.fov = spec.fov;
+      rig.focus.shiftX = spec.shiftX ?? 0;
+      rig.focus.shiftY = spec.shiftY ?? 0;
+      rig.focus.bokeh = spec.bokeh;
+      rig.focus.focusRange = spec.focusRange;
+      focusAnchorSnapped = true;
+      gsap.to(rig.focus, {
+        mix: 1,
+        duration: 0.85,
+        ease: "power3.inOut",
+      });
+    } else {
+      focusAnchorSnapped = false;
+      gsap.to(rig.focus, {
+        mix: 1,
+        az: spec.az,
+        el: spec.el,
+        dist: spec.dist,
+        fov: spec.fov,
+        shiftX: spec.shiftX ?? 0,
+        shiftY: spec.shiftY ?? 0,
+        bokeh: spec.bokeh,
+        focusRange: spec.focusRange,
+        duration: 0.72,
+        ease: "power3.inOut",
+      });
+    }
+  }
+
+  function clearFocus() {
+    if (focusedFeature === null && rig.focus.mix <= 0.001) return;
+    focusedFeature = null;
+    onFocusChange?.(null);
+    resetDemoOverrides();
+    rig.resetOrbit();
+    gsap.killTweensOf(rig.focus);
+    gsap.to(rig.focus, {
+      mix: 0,
+      duration: 0.65,
+      ease: "power2.inOut",
+    });
+  }
+
+  function triggerFeatureDemo(id: FeatureId) {
+    lastInput = performance.now();
+    if (id.startsWith("gaze-")) {
+      demo.blurState = !demo.blurState;
+      demoTweenCount++;
+      gsap.to(demo, {
+        blurMix: demo.blurState ? 1 : 0,
+        duration: 0.45,
+        ease: "power2.out",
+        onComplete: () => {
+          demoTweenCount = Math.max(0, demoTweenCount - 1);
+        },
+      });
+    } else if (id === "tamper-magsafe") {
+      demo.magsafeState = !demo.magsafeState;
+      demoTweenCount++;
+      gsap.to(demo, {
+        magsafeMix: demo.magsafeState ? 1 : 0,
+        duration: 0.5,
+        ease: "back.out(1.4)",
+        onComplete: () => {
+          demoTweenCount = Math.max(0, demoTweenCount - 1);
+        },
+      });
+    } else if (id === "tamper-hinge") {
+      demo.lidState = !demo.lidState;
+      demoTweenCount++;
+      gsap.to(demo, {
+        lidMix: demo.lidState ? 1 : 0,
+        duration: 0.65,
+        ease: "power2.inOut",
+        onComplete: () => {
+          demoTweenCount = Math.max(0, demoTweenCount - 1);
+        },
+      });
+    } else if (id === "tamper-siren") {
+      demoTweenCount++;
+      gsap.killTweensOf(demo, "sirenBurst");
+      gsap.fromTo(
+        demo,
+        { sirenBurst: 1 },
+        {
+          sirenBurst: 0,
+          duration: 1.2,
+          ease: "power2.out",
+          onComplete: () => {
+            demoTweenCount = Math.max(0, demoTweenCount - 1);
+          },
+        },
+      );
+    } else if (id.startsWith("phone-")) {
+      demo.phoneState = !demo.phoneState;
+      demoTweenCount++;
+      gsap.to(demo, {
+        phoneMix: demo.phoneState ? 1 : 0,
+        duration: 0.4,
+        ease: "power2.out",
+        onComplete: () => {
+          demoTweenCount = Math.max(0, demoTweenCount - 1);
+        },
+      });
+    } else if (id === "macos-touchid") {
+      demoTweenCount++;
+      gsap.killTweensOf(demo, "touchPress,touchWave");
+      gsap.fromTo(
+        demo,
+        { touchPress: 0.08, touchWave: 0.01 },
+        {
+          touchPress: 0,
+          touchWave: 1,
+          duration: 0.85,
+          ease: "power2.out",
+          onComplete: () => {
+            demo.touchWave = 0;
+            demoTweenCount = Math.max(0, demoTweenCount - 1);
+          },
+        },
+      );
+    }
+  }
+
+  function hoverFeature(id: FeatureId | null) {
+    hoveredFeature = id;
+    lastInput = performance.now();
+  }
+
+  createSceneInteraction({
+    canvas,
+    camera,
+    mb,
+    rig,
+    signal,
+    isReady: () => scroll !== null,
+    getFocused: () => focusedFeature,
+    onFocusFeature: focusFeature,
+    onTriggerDemo: triggerFeatureDemo,
+    onClearFocus: clearFocus,
+  });
+
   function goToSection(name: string) {
     if (!isSection(name)) return;
+    clearFocus();
     skipIntro();
     scroll!.goTo(SECTIONS[name]);
     history.replaceState(null, "", name === "overview" ? location.pathname : `#${name}`);
   }
 
   function goToEnd() {
+    clearFocus();
     skipIntro();
     scroll!.goTo(1);
     history.replaceState(null, "", "#waitlist");
@@ -190,9 +430,36 @@ export async function startExperience({
   }
 
   const impatient = () => intro.tl.time() > 1 && skipIntro();
-  addEventListener("wheel", (e) => e.deltaY > 30 && impatient(), { passive: true, signal });
-  addEventListener("touchmove", impatient, { passive: true, signal });
-  addEventListener("keydown", (e) => ["ArrowDown", "PageDown", " ", "Escape"].includes(e.key) && impatient(), { signal });
+  addEventListener(
+    "wheel",
+    (e) => {
+      if (e.deltaY > 30) impatient();
+      if (Math.abs(e.deltaY) > 24) {
+        if (focusedFeature !== null) clearFocus();
+        else rig.resetOrbit();
+      }
+    },
+    { passive: true, signal },
+  );
+  addEventListener(
+    "touchmove",
+    () => {
+      impatient();
+      if (focusedFeature !== null && !rig.orbit.dragging) clearFocus();
+    },
+    { passive: true, signal },
+  );
+  addEventListener(
+    "keydown",
+    (e) => {
+      if (e.key === "Escape" && focusedFeature !== null) {
+        clearFocus();
+        return;
+      }
+      if (["ArrowDown", "PageDown", " ", "Escape"].includes(e.key)) impatient();
+    },
+    { signal },
+  );
 
   let last = performance.now();
 
@@ -210,9 +477,68 @@ export async function startExperience({
     const p = scroll ? scroll.progress() : 0;
     document.documentElement.style.setProperty("--scroll-progress", p.toFixed(4));
 
-    const idle = stage.idle;
+    const overviewWeight = scroll
+      ? 1 - THREE.MathUtils.smoothstep(p, 0.05, 0.13)
+      : THREE.MathUtils.smoothstep(intro.tl.time(), 2.35, 3.15);
+    const gazeWeight = scroll ? scroll.glow.gazeShadow : 0;
+    passerby.update(dt, t, {
+      overviewWeight,
+      gazeWeight,
+      gazeRetreat: demo.blurState,
+      frozen: FROZEN,
+    });
+
+    if (gazeWeight > 0.02 && Math.round(mb.pose.screenMode) <= 1) {
+      const gb = passerby.getGazeBlurTrigger();
+      mb.pose.shieldBlur = gb;
+      mb.pose.screenMode = gb > 0.12 ? 1 : 0;
+    }
+
+    // Apply live hardware micro-demo overrides cleanly on top of scrollStory pose
+    if (demo.blurMix > 0.001) {
+      mb.pose.shieldBlur = THREE.MathUtils.lerp(mb.pose.shieldBlur, 0, demo.blurMix);
+      if (demo.blurMix > 0.5) mb.pose.screenMode = 0;
+    }
+    if (demo.magsafeMix > 0.001) {
+      mb.pose.magsafeSlide = THREE.MathUtils.lerp(mb.pose.magsafeSlide, 0, demo.magsafeMix);
+    }
+    if (demo.lidMix > 0.001) {
+      mb.pose.lidAngle = THREE.MathUtils.lerp(mb.pose.lidAngle, 0.04, demo.lidMix);
+    }
+    if (demo.sirenBurst > 0.001) {
+      mb.pose.sirenPulse = Math.min(1, mb.pose.sirenPulse + demo.sirenBurst * 0.85);
+      const pulseGlow = demo.sirenBurst * 0.9;
+      for (let i = 0; i < KEYS.length; i++) {
+        mb.keys[i].orange += pulseGlow;
+      }
+    }
+    if (demo.phoneMix > 0.001) {
+      mb.pose.phonePress = THREE.MathUtils.lerp(mb.pose.phonePress, 0, demo.phoneMix);
+      if (demo.phoneMix > 0.5) {
+        mb.pose.phoneMode = 1;
+        mb.pose.screenMode = 3;
+      }
+    }
+    if (demo.touchPress > 0.001 || demo.touchWave > 0.001) {
+      const heroKey = mb.keys[TOUCH_ID_KEY];
+      heroKey.press += demo.touchPress;
+      heroKey.white += demo.touchPress * 22;
+      heroKey.orange += demo.touchPress * 22;
+      if (demo.touchWave > 0.001) {
+        const waveR = demo.touchWave * 36;
+        for (let i = 0; i < KEYS.length; i++) {
+          const d = Math.hypot(KEYS[i].x - touchIdKey.x, KEYS[i].z - touchIdKey.z);
+          const front = Math.max(0, Math.min(1, (waveR - d) / 3.5));
+          const crest = front * Math.exp(-Math.max(0, waveR - d) / 5.5);
+          mb.keys[i].white += crest * 1.6;
+          mb.keys[i].orange += crest * 1.6;
+        }
+      }
+    }
+
+    const idle = stage.idle * (1 - rig.focus.mix * 0.85);
     springLean(dt);
-    const tilt = stage.tilt;
+    const tilt = stage.tilt * (1 - rig.focus.mix);
     mb.root.position.y = stage.mbPose.y + Math.sin(t * 0.9) * 0.16 * idle - lean.y * 0.3 * tilt;
     mb.root.rotation.set(
       stage.mbPose.rx + Math.sin(t * 0.7 + 1) * 0.012 * idle + lean.y * 0.07 * tilt,
@@ -220,8 +546,26 @@ export async function startExperience({
       stage.mbPose.rz + Math.sin(t * 0.55) * 0.012 * idle - lean.x * 0.03 * tilt,
     );
     mb.root.updateMatrixWorld();
-    hover.update(dt, stage.hoverKeys);
+    const keyHoverWeight = Math.max(stage.hoverKeys, focusedFeature === "macos-touchid" ? rig.focus.mix : 0);
+    hover.update(dt, keyHoverWeight);
     mb.update();
+
+    if (focusedFeature !== null) {
+      computeFeatureAnchor(focusedFeature, focusTargetLive);
+      if (focusAnchorSnapped) {
+        rig.focus.tx = focusTargetLive.x;
+        rig.focus.ty = focusTargetLive.y;
+        rig.focus.tz = focusTargetLive.z;
+      } else {
+        const fk = 1 - Math.exp(-dt * 11);
+        rig.focus.tx += (focusTargetLive.x - rig.focus.tx) * fk;
+        rig.focus.ty += (focusTargetLive.y - rig.focus.ty) * fk;
+        rig.focus.tz += (focusTargetLive.z - rig.focus.tz) * fk;
+        if (Math.hypot(focusTargetLive.x - rig.focus.tx, focusTargetLive.y - rig.focus.ty, focusTargetLive.z - rig.focus.tz) < 0.02) {
+          focusAnchorSnapped = true;
+        }
+      }
+    }
 
     deskMat.color.copy(deskColor).multiplyScalar(stage.desk);
     desk.visible = stage.desk > 0.002;
@@ -234,10 +578,20 @@ export async function startExperience({
 
     rig.apply(camera, W, H, dt);
     camera.updateMatrixWorld();
-    post.focusTarget.lerpVectors(rig.target, mb.root.localToWorld(focusTmp.copy(keyFocus)), post.fx.focusRow);
-    post.apply();
 
-    callouts.update(W, H, scroll?.glow);
+    const baseBokeh = post.fx.bokeh;
+    const baseRange = post.fx.focusRange;
+    const fm = rig.focus.mix;
+    if (fm > 0.001) {
+      post.fx.bokeh = THREE.MathUtils.lerp(baseBokeh, rig.focus.bokeh, fm);
+      post.fx.focusRange = THREE.MathUtils.lerp(baseRange, rig.focus.focusRange, fm);
+    }
+    post.focusTarget.lerpVectors(rig.target, mb.root.localToWorld(focusTmp.copy(keyFocus)), post.fx.focusRow * (1 - fm));
+    post.apply();
+    post.fx.bokeh = baseBokeh;
+    post.fx.focusRange = baseRange;
+
+    callouts.update(W, H, scroll?.glow, focusedFeature, hoveredFeature);
     mb.renderGlow(renderer, scene);
     post.composer.render(dt);
   }
@@ -269,7 +623,14 @@ export async function startExperience({
   let tick = 0;
   let lastLoop = 0;
   function loop(now: number) {
-    const resting = scroll !== null && scroll.isSettled() && now - lastInput > 1500;
+    const resting =
+      scroll !== null &&
+      scroll.isSettled() &&
+      rig.isInteractiveSettled() &&
+      demoTweenCount === 0 &&
+      !passerby.isActive() &&
+      scroll.progress() >= 0.14 &&
+      now - lastInput > 1500;
     if (resting && tick++ % 2) return;
     if (!resting && lastLoop && scroll && !FROZEN) adaptResolution((now - lastLoop) / 1000);
     lastLoop = resting ? 0 : now;
@@ -291,6 +652,7 @@ export async function startExperience({
       abort.abort();
       intro.tl.kill();
       post.composer.dispose();
+      passerby.dispose();
       mb.dispose();
       env.dispose();
       deskMat.dispose();
@@ -329,6 +691,14 @@ export async function startExperience({
       if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
       const tag = (document.activeElement as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || document.querySelector("[role='dialog']")) return;
+      if (focusedFeature !== null) {
+        const spec = FEATURE_SHOTS[focusedFeature];
+        const group = CHAPTER_FEATURES[spec.chapter];
+        const idx = group.findIndex((f) => f.id === focusedFeature);
+        const nextIdx = (idx + (e.key === "ArrowRight" ? 1 : -1) + group.length) % group.length;
+        focusFeature(group[nextIdx].id);
+        return;
+      }
       const cur = scroll ? (sectionAt(scroll.progress()) ?? "waitlist") : "overview";
       const idx = chapterOrder.indexOf(cur);
       const next = chapterOrder[Math.min(chapterOrder.length - 1, Math.max(0, idx + (e.key === "ArrowRight" ? 1 : -1)))];
@@ -341,12 +711,19 @@ export async function startExperience({
   return {
     goToSection,
     goToEnd,
+    focusFeature,
+    clearFocus,
+    triggerFeatureDemo,
+    hoverFeature,
     dispose() {
       abort.abort();
+      gsap.killTweensOf(rig.focus);
+      gsap.killTweensOf(demo);
       renderer.setAnimationLoop(null);
       intro.tl.kill();
       (scroll as ScrollStory | null)?.dispose();
       post.composer.dispose();
+      passerby.dispose();
       mb.dispose();
       env.dispose();
       deskMat.dispose();

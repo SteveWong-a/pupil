@@ -5,6 +5,12 @@
   opacity: 0;
   visibility: hidden;
   text-shadow: 0 2px 16px rgba(0, 0, 0, 0.9);
+  transition: filter 0.3s ease;
+}
+
+.panel[data-focus-dim="true"] {
+  filter: opacity(0) blur(4px);
+  pointer-events: none;
 }
 
 .panel::before {
@@ -46,6 +52,45 @@
   font-stretch: var(--stretch-body);
 }
 
+.chips {
+  display: none;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+  pointer-events: auto;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(14, 17, 24, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: var(--w-medium);
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.chip:hover,
+.chipActive {
+  background: rgba(156, 194, 255, 0.22);
+  border-color: rgba(156, 194, 255, 0.6);
+}
+
+.chipIcon {
+  font-size: 10px;
+  color: var(--accent);
+}
+
 .right {
   right: var(--gutter);
   bottom: var(--panel-bottom);
@@ -55,6 +100,12 @@
   left: var(--gutter);
   bottom: var(--panel-bottom);
   max-width: var(--panel-width-wide);
+}
+
+@media (max-width: 760px), (orientation: portrait) {
+  .chips {
+    display: flex;
+  }
 }
 
 @media (max-width: 760px) {

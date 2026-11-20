@@ -184,7 +184,38 @@ export interface CamShot {
   shake: number;
 }
 
+export interface FocusState {
+  mix: number;
+  tx: number;
+  ty: number;
+  tz: number;
+  az: number;
+  el: number;
+  dist: number;
+  fov: number;
+  shiftX: number;
+  shiftY: number;
+  bokeh: number;
+  focusRange: number;
+}
+
+export interface OrbitState {
+  az: number;
+  el: number;
+  dist: number;
+  targetAz: number;
+  targetEl: number;
+  targetDist: number;
+  dragging: boolean;
+}
+
 export type CameraRig = ReturnType<typeof createCameraRig>;
+
+function lerpAngle(a: number, b: number, t: number) {
+  let d = ((b - a + Math.PI) % (Math.PI * 2)) - Math.PI;
+  if (d < -Math.PI) d += Math.PI * 2;
+  return a + d * t;
+}
 
 export function createCameraRig(signal: AbortSignal) {
   const cam: CamShot = {
@@ -203,6 +234,29 @@ export function createCameraRig(signal: AbortSignal) {
     portraitLift: 0,
     shake: 0,
   };
+  const focus: FocusState = {
+    mix: 0,
+    tx: 0,
+    ty: 0,
+    tz: 0,
+    az: 0,
+    el: 0.25,
+    dist: 20,
+    fov: 26,
+    shiftX: 0,
+    shiftY: 0,
+    bokeh: 1.8,
+    focusRange: 10,
+  };
+  const orbit: OrbitState = {
+    az: 0,
+    el: 0,
+    dist: 0,
+    targetAz: 0,
+    targetEl: 0,
+    targetDist: 0,
+    dragging: false,
+  };
   let clock = 0;
   const wobble = (t: number, a: number) => Math.sin(t * 1.3 + a) * 0.6 + Math.sin(t * 2.9 + a * 2.1) * 0.3 + Math.sin(t * 6.1 + a * 0.7) * 0.1;
   const target = new THREE.Vector3();
@@ -220,19 +274,55 @@ export function createCameraRig(signal: AbortSignal) {
     { signal },
   );
 
+  function resetOrbit() {
+    orbit.targetAz = 0;
+    orbit.targetEl = 0;
+    orbit.targetDist = 0;
+  }
+
+  function isInteractiveSettled() {
+    if (orbit.dragging) return false;
+    if (focus.mix > 0.001 && focus.mix < 0.999) return false;
+    return (
+      Math.abs(orbit.targetAz - orbit.az) < 1e-4 &&
+      Math.abs(orbit.targetEl - orbit.el) < 1e-4 &&
+      Math.abs(orbit.targetDist - orbit.dist) < 1e-3
+    );
+  }
+
   function apply(camera: THREE.PerspectiveCamera, w: number, h: number, dt = 1 / 60) {
     clock += dt;
     const k = 1 - Math.exp(-dt * 3);
     pointer.sx += (pointer.x - pointer.sx) * k;
     pointer.sy += (pointer.y - pointer.sy) * k;
 
+    const ok = 1 - Math.exp(-dt * 11);
+    orbit.az += (orbit.targetAz - orbit.az) * ok;
+    orbit.el += (orbit.targetEl - orbit.el) * ok;
+    orbit.dist += (orbit.targetDist - orbit.dist) * ok;
+
+    const fm = THREE.MathUtils.clamp(focus.mix, 0, 1);
     const aspect = w / h;
     const narrow = Math.max(1, 1.55 / aspect) ** 0.78;
-    const dist = cam.dist * (1 + (narrow - 1) * cam.fit);
-    const az = cam.az + pointer.sx * 0.03 * cam.parallax + wobble(clock, 0.4) * 0.006 * cam.shake;
-    const el = cam.el - pointer.sy * 0.02 * cam.parallax + wobble(clock, 2.3) * 0.004 * cam.shake;
+    const effFit = THREE.MathUtils.lerp(cam.fit, 0.35, fm);
+    const baseDist = THREE.MathUtils.lerp(cam.dist, focus.dist, fm);
+    const dist = THREE.MathUtils.clamp(baseDist * (1 + (narrow - 1) * effFit) + orbit.dist, 9, 95);
 
-    target.set(cam.tx, cam.ty, cam.tz);
+    const parallaxWeight = cam.parallax * (1 - fm * 0.75) * (orbit.dragging ? 0.15 : 1);
+    const baseAz = lerpAngle(cam.az, focus.az, fm);
+    const baseEl = THREE.MathUtils.lerp(cam.el, focus.el, fm);
+    const az = baseAz + orbit.az + pointer.sx * 0.03 * parallaxWeight + wobble(clock, 0.4) * 0.006 * cam.shake * (1 - fm);
+    const el = THREE.MathUtils.clamp(
+      baseEl + orbit.el - pointer.sy * 0.02 * parallaxWeight + wobble(clock, 2.3) * 0.004 * cam.shake * (1 - fm),
+      0.04,
+      1.38,
+    );
+
+    target.set(
+      THREE.MathUtils.lerp(cam.tx, focus.tx, fm),
+      THREE.MathUtils.lerp(cam.ty, focus.ty, fm),
+      THREE.MathUtils.lerp(cam.tz, focus.tz, fm),
+    );
     orbitPos.set(
       target.x + dist * Math.cos(el) * Math.sin(az),
       target.y + dist * Math.sin(el),
@@ -245,17 +335,19 @@ export function createCameraRig(signal: AbortSignal) {
     target.lerp(flight.target, f);
     camera.up.set(0, 1, 0);
     camera.lookAt(target);
-    camera.rotateZ(THREE.MathUtils.lerp(cam.roll, flight.roll, f) + wobble(clock, 4.1) * 0.005 * cam.shake);
-    camera.fov = THREE.MathUtils.lerp(cam.fov, flight.fov, f);
+    camera.rotateZ(THREE.MathUtils.lerp(cam.roll * (1 - fm), flight.roll, f) + wobble(clock, 4.1) * 0.005 * cam.shake * (1 - fm));
+    camera.fov = THREE.MathUtils.lerp(THREE.MathUtils.lerp(cam.fov, focus.fov, fm), flight.fov, f);
     camera.near = THREE.MathUtils.lerp(NEAR, flight.near, f);
     camera.aspect = aspect;
 
-    const sx = aspect < 1 ? 0 : cam.shiftX;
-    let sy = cam.shiftY - Math.max(0, Math.min(aspect, WIDEST) - 1.6) * 0.32;
-    if (aspect < 1) sy += cam.portraitLift;
+    const effShiftX = THREE.MathUtils.lerp(cam.shiftX, focus.shiftX, fm);
+    const effShiftY = THREE.MathUtils.lerp(cam.shiftY, focus.shiftY, fm);
+    const sx = aspect < 1 ? 0 : effShiftX;
+    let sy = effShiftY - Math.max(0, Math.min(aspect, WIDEST) - 1.6) * 0.32 * (1 - fm * 0.7);
+    if (aspect < 1) sy += cam.portraitLift * (1 - fm);
     camera.setViewOffset(w, h, -sx * w * (1 - f), sy * h * (1 - f), w, h);
     camera.updateProjectionMatrix();
   }
 
-  return { cam, target, pointer, flight, apply };
+  return { cam, focus, orbit, target, pointer, flight, resetOrbit, isInteractiveSettled, apply };
 }

@@ -12,20 +12,29 @@ export function createCalloutProjector({ mb, camera, root }: { mb: MacBook; came
     out.set((out.x * 0.5 + 0.5) * w, (-out.y * 0.5 + 0.5) * h, out.z);
     return out;
   };
-  const show = (el: HTMLElement, x: number, y: number, z: number, alpha: number) => {
+  const show = (el: HTMLElement, x: number, y: number, z: number, alpha: number, interactive: boolean) => {
     el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
     el.style.opacity = alpha.toFixed(3);
-    el.style.visibility = alpha > 0.01 && z < 1 ? "visible" : "hidden";
+    const vis = alpha > 0.01 && z < 1;
+    el.style.visibility = vis ? "visible" : "hidden";
+    el.dataset.interactive = vis && interactive ? "true" : "false";
   };
   const hide = (el: HTMLElement) => {
     el.style.visibility = "hidden";
+    el.dataset.interactive = "false";
   };
 
   const none: Pick<GlowState, "ch1" | "ch2" | "ch3" | "ch4"> = { ch1: 0, ch2: 0, ch3: 0, ch4: 0 };
   const LEAD = 40;
   const MIN_GAP = 64;
 
-  function update(w: number, h: number, g: Pick<GlowState, "ch1" | "ch2" | "ch3" | "ch4"> = none) {
+  function update(
+    w: number,
+    h: number,
+    g: Pick<GlowState, "ch1" | "ch2" | "ch3" | "ch4"> = none,
+    focused: FeatureId | null = null,
+    hovered: FeatureId | null = null,
+  ) {
     const outerMargin = Math.min(390, Math.max(320, w * 0.3));
 
     for (const ch of ["ch1", "ch2", "ch3", "ch4"] as const) {
@@ -49,7 +58,7 @@ export function createCalloutProjector({ mb, camera, root }: { mb: MacBook; came
             ? Math.min(w - 160, Math.max(outerMargin, origX))
             : Math.min(w - outerMargin, Math.max(160, origX));
         const boxY = Math.min(maxY, Math.max(minY, origY));
-        return { el, origX, origY, clampedX, boxY, z: sc.z };
+        return { el, id, origX, origY, clampedX, boxY, z: sc.z };
       });
 
       pts.sort((a, b) => a.boxY - b.boxY);
@@ -77,12 +86,17 @@ export function createCalloutProjector({ mb, camera, root }: { mb: MacBook; came
           ? Math.max(outerMargin, Math.min(...pts.map((p) => p.clampedX)))
           : Math.min(w - outerMargin, Math.max(...pts.map((p) => p.clampedX)));
 
-      for (const { el, origX, origY, boxY, z } of pts) {
+      for (const { el, id, origX, origY, boxY, z } of pts) {
         const lead = LEAD + Math.max(0, side === "left" ? origX - colX : colX - origX);
         const dy = boxY - origY;
         el.style.setProperty("--lead", `${lead.toFixed(1)}px`);
         el.style.setProperty("--dy", `${dy.toFixed(1)}px`);
-        show(el, origX, origY, z, alpha);
+        const isFocused = focused === id;
+        const isHovered = hovered === id;
+        el.dataset.focused = isFocused ? "true" : "false";
+        el.dataset.hovered = isHovered ? "true" : "false";
+        const effAlpha = focused && !isFocused && !isHovered ? alpha * 0.42 : alpha;
+        show(el, origX, origY, z, effAlpha, alpha > 0.25);
       }
     }
   }

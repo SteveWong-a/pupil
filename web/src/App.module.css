@@ -5,6 +5,8 @@
   height: 100vh;
   height: 100lvh;
   display: block;
+  cursor: grab;
+  touch-action: pan-y;
 }
 
 .ui {

@@ -354,10 +354,10 @@ export function createScreenTexture(wallpaper: HTMLImageElement | null, screensh
       drawSettingsWindow(dctx, screenshots.settingsSensors, { x: 584, y: 120, w: 880, h: 980, scrollY: 1420 });
     } else if (mode === 5) {
       drawSettingsWindow(dctx, screenshots.settingsGeneral, { x: 340, y: 130, w: 860, h: 960, scrollY: 0 });
-      drawMenuBarPopover(dctx, screenshots.menubarPopover, W - 540, 62, 460);
+      drawMenuBarPopover(dctx, screenshots.menubarPopover, W - 430, 58, 360);
     } else {
       drawSettingsWindow(dctx, screenshots.settingsGeneral, { x: 380, y: 440, w: 820, h: 680, scrollY: 0 });
-      drawMenuBarPopover(dctx, screenshots.menubarPopover, W - 520, 64, 420);
+      drawMenuBarPopover(dctx, screenshots.menubarPopover, W - 410, 58, 340);
     }
 
     // Bottom macOS Glass Dock

@@ -16,6 +16,7 @@ export interface GlowState {
   ch2: number;
   ch3: number;
   ch4: number;
+  gazeShadow: number;
 }
 
 export type ScrollStory = ReturnType<typeof createScrollStory>;
@@ -41,7 +42,7 @@ export function createScrollStory({
   const heroKey = mb.keys[TOUCH_ID_KEY];
   const kbY = stage.mbPose.y;
 
-  const glow: GlowState = { backlight: BACKLIGHT, press: 0, wave: 0, key: 0, ch1: 0, ch2: 0, ch3: 0, ch4: 0 };
+  const glow: GlowState = { backlight: BACKLIGHT, press: 0, wave: 0, key: 0, ch1: 0, ch2: 0, ch3: 0, ch4: 0, gazeShadow: 0 };
   Object.assign(mb.pose, { lidAngle: 0, magsafeSlide: 0, screenMode: 0, shieldBlur: 0, countdown: 15, sirenPulse: 0, phoneMode: 0, phonePress: 0, phoneLift: 0 });
 
   const tl = gsap.timeline({ paused: true, defaults: { ease: "power2.inOut" } });
@@ -59,14 +60,14 @@ export function createScrollStory({
   );
   tl.to(fx, { bokeh: 0.6, focusRange: 26, duration: 1.4 }, 0);
 
-  tl.set(mb.pose, { screenMode: 1 }, 1.1);
-  tl.to(mb.pose, { shieldBlur: 1, duration: 0.7, ease: "power2.out" }, 1.35);
+  // Long lingering shadow sweeps in and settles over the MacBook; director.ts triggers 95ms blur + Notch pill on settle
+  tl.to(glow, { gazeShadow: 1, duration: 0.85, ease: "power2.out" }, 0.75);
   tl.to(glow, { ch1: 1, duration: 0.45, ease: "power2.out" }, 1.65);
   tl.fromTo(ui.gaze, { autoAlpha: 0, y: 28 }, { autoAlpha: 1, y: 0, duration: 0.55, ease: "power3.out" }, 1.65);
 
   // CHAPTER 2: Charger Unplug & Lid Tamper Alert (settled at t = 5.52 / ?p=0.46)
   tl.to(ui.gaze, { autoAlpha: 0, y: -20, duration: 0.45, ease: "power1.in" }, 3.4);
-  tl.to(glow, { ch1: 0, duration: 0.35 }, 3.4);
+  tl.to(glow, { ch1: 0, gazeShadow: 0, duration: 0.35 }, 3.4);
   tl.to(
     cam,
     { tx: -7.5, ty: kbY + 5.8, tz: -2.4, az: -0.78, el: 0.22, dist: 58, shiftX: 0.14, shiftY: -0.02, fit: 0.86, duration: 1.5 },

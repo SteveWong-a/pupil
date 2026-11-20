@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Experience } from "./scene/director";
+import type { FeatureId } from "./scene/macbook";
 import type { SectionName } from "./scene/uiHandles";
 import { Nav } from "./components/Nav";
 import { Loader } from "./components/Loader";
@@ -68,6 +69,7 @@ export function App() {
   const labels = useRef<HTMLDivElement>(null);
   const experience = useRef<Experience | null>(null);
   const [active, setActive] = useState<SectionName | null>("overview");
+  const [focusedFeature, setFocusedFeature] = useState<FeatureId | null>(null);
   const [modalView, setModalView] = useState<ModalView | null>(null);
   const [sceneReady, setSceneReady] = useState(false);
   const lockResolveRef = useRef<(() => void) | null>(null);
@@ -102,6 +104,7 @@ export function App() {
             labels: labels.current!,
           },
           onSection: setActive,
+          onFocusChange: setFocusedFeature,
           waitForLoaderLock: (skipWait) => {
             setSceneReady(true);
             if (skipWait || lockedEarlyRef.current) return Promise.resolve();
@@ -123,9 +126,11 @@ export function App() {
     };
   }, []);
 
+  const handleFocusFeature = (id: FeatureId) => experience.current?.focusFeature(id);
+
   return (
     <>
-      <canvas ref={canvas} className={styles.gl} aria-hidden="true" />
+      <canvas ref={canvas} className={styles.gl} aria-label="Interactive 3D MacBook Pro and iPhone showcase" />
       <div className={styles.ui}>
         <Loader ref={veil} sceneReady={sceneReady} onLocked={handleLocked} />
         <Nav
@@ -141,11 +146,16 @@ export function App() {
           onWaitlist={() => experience.current?.goToEnd()}
           onOpenModal={() => setModalView("screenshots")}
         />
-        <Panel ref={gaze} place="right" icon="eye" {...GAZE} />
-        <Panel ref={tamper} place="right" icon="bolt" {...TAMPER} />
-        <Panel ref={phone} place="left" icon="phone" {...PHONE} />
-        <Panel ref={macos} place="left" icon="touchid" {...MACOS} />
-        <Labels ref={labels} />
+        <Panel ref={gaze} place="right" chapter="ch1" icon="eye" focused={focusedFeature} onFocusFeature={handleFocusFeature} {...GAZE} />
+        <Panel ref={tamper} place="right" chapter="ch2" icon="bolt" focused={focusedFeature} onFocusFeature={handleFocusFeature} {...TAMPER} />
+        <Panel ref={phone} place="left" chapter="ch3" icon="phone" focused={focusedFeature} onFocusFeature={handleFocusFeature} {...PHONE} />
+        <Panel ref={macos} place="left" chapter="ch4" icon="touchid" focused={focusedFeature} onFocusFeature={handleFocusFeature} {...MACOS} />
+        <Labels
+          ref={labels}
+          focused={focusedFeature}
+          onFocus={handleFocusFeature}
+          onHover={(id) => experience.current?.hoverFeature(id)}
+        />
         <Final
           ref={final}
           onOpenScreenshots={() => setModalView("screenshots")}

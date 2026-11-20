@@ -654,6 +654,30 @@ export function createMacBook(assets: SceneAssets) {
   const screenMesh = new THREE.Mesh(new THREE.PlaneGeometry(SCREEN_W, SCREEN_H), mats.screen);
   screenMesh.position.set(0, LID_H / 2 + 0.1, 0.018);
 
+  const screenShadowMat = new THREE.MeshBasicMaterial({
+    transparent: true,
+    depthWrite: false,
+    opacity: 1,
+  });
+  const screenShadowMesh = new THREE.Mesh(new THREE.PlaneGeometry(SCREEN_W, SCREEN_H), screenShadowMat);
+  screenShadowMesh.position.set(0, LID_H / 2 + 0.1, 0.021);
+  screenShadowMesh.visible = false;
+  screenShadowMesh.raycast = () => {};
+
+  const deckShadowMat = new THREE.MeshBasicMaterial({
+    transparent: true,
+    depthWrite: false,
+    opacity: 1,
+    polygonOffset: true,
+    polygonOffsetFactor: -4,
+    polygonOffsetUnits: -4,
+  });
+  const deckShadowMesh = new THREE.Mesh(new THREE.PlaneGeometry(DECK_W - 0.5, DECK_D - 0.5).rotateX(-Math.PI / 2), deckShadowMat);
+  deckShadowMesh.position.set(0, LAYERS.caps.y + CAP_H / 2 + 0.02, Z_CENTER);
+  deckShadowMesh.visible = false;
+  deckShadowMesh.raycast = () => {};
+  root.add(deckShadowMesh);
+
   const notchY = LID_H / 2 + 0.1 + SCREEN_H / 2 - 0.28;
   const camLens = new THREE.Mesh(new THREE.CircleGeometry(0.11, 24), mats.sapphire);
   camLens.position.set(-0.36, notchY, 0.024);
@@ -666,7 +690,7 @@ export function createMacBook(assets: SceneAssets) {
   const screenBounce = new THREE.PointLight(0xdbe8ff, 1.35, 28, 2);
   screenBounce.position.set(0, 4.2, 6.5);
   root.add(screenBounce);
-  lid.add(lidShell, emblemDisc, lidBezel, screenMesh, camLens, camLed, hingeBarrel);
+  lid.add(lidShell, emblemDisc, lidBezel, screenMesh, screenShadowMesh, camLens, camLed, hingeBarrel);
   lid.position.set(0, LAYERS.lid.y, HINGE_Z);
   root.add(lid);
 
@@ -857,11 +881,25 @@ export function createMacBook(assets: SceneAssets) {
     }
   };
 
+  function setScreenShadowMap(tex: THREE.Texture | null) {
+    screenShadowMat.map = tex;
+    screenShadowMat.needsUpdate = true;
+    screenShadowMesh.visible = tex !== null;
+  }
+
+  function setDeckShadowMap(tex: THREE.Texture | null) {
+    deckShadowMat.map = tex;
+    deckShadowMat.needsUpdate = true;
+    deckShadowMesh.visible = tex !== null;
+  }
+
   function dispose() {
     glowRT.dispose();
     screenTex.dispose();
     iphone.dispose();
     touchRingMat.dispose();
+    screenShadowMat.dispose();
+    deckShadowMat.dispose();
     legend.texture.dispose();
     padTexture.dispose();
     surface.metalNormal.dispose();
@@ -875,6 +913,16 @@ export function createMacBook(assets: SceneAssets) {
     for (const mat of Object.values(mats)) mat.dispose();
   }
 
+  const hitTargets: Array<{ feature: FeatureId; object: THREE.Object3D }> = [
+    { feature: "tamper-magsafe", object: magsafe },
+    { feature: "macos-touchid", object: touchIdGroup },
+    { feature: "phone-disarm", object: iphone.group },
+    { feature: "gaze-cam", object: camLens },
+    { feature: "tamper-hinge", object: hingeBarrel },
+    { feature: "tamper-siren", object: grilleMesh },
+    { feature: "gaze-shield", object: screenMesh },
+  ];
+
   update();
-  return { root, keys, look, pose, update, renderGlow, featurePoint, mats, dispose };
+  return { root, keys, look, pose, update, renderGlow, featurePoint, hitTargets, setScreenShadowMap, setDeckShadowMap, mats, dispose };
 }
