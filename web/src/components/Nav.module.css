@@ -37,6 +37,7 @@
   line-height: 1;
   color: var(--ink);
   text-decoration: none;
+  white-space: nowrap;
   pointer-events: auto;
 }
 
@@ -70,6 +71,7 @@
   font-stretch: var(--stretch-nav);
   color: var(--muted);
   text-decoration: none;
+  white-space: nowrap;
   pointer-events: auto;
   transition: color var(--t-link) var(--ease-ui);
 }
@@ -79,7 +81,13 @@
   color: var(--ink);
 }
 
-@media (max-width: 760px) {
+@media (max-width: 1120px) {
+  .links {
+    gap: 18px;
+  }
+}
+
+@media (max-width: 860px) {
   .links {
     display: none;
   }

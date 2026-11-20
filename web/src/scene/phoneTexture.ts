@@ -263,10 +263,10 @@ export function createPhoneTexture(pupilIcon: HTMLImageElement | null = null) {
     ctx.font = '600 31px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
     ctx.fillText(isDisarmed ? "✓  MacBook Disarmed" : "Disarm Mac (False Alarm)", PW / 2, btnY + 58);
 
-    // 6. Footer (matches companion.html lines 666-671)
+    // 6. Footer
     ctx.fillStyle = "#999999";
     ctx.font = '400 23px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
-    ctx.fillText("End-to-End Encrypted Web Push (RFC 8291 + VAPID)", PW / 2, 1890);
+    ctx.fillText("Encrypted alert to your iPhone", PW / 2, 1890);
 
     texture.needsUpdate = true;
   }

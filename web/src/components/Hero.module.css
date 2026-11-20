@@ -26,6 +26,15 @@
   text-shadow: 0 1px 16px rgba(0, 0, 0, 0.95), 0 0 6px rgba(0, 0, 0, 0.9);
 }
 
+.privacy {
+  margin: 12px auto 0;
+  max-width: var(--measure-lede);
+  font-size: var(--size-label);
+  line-height: 1.45;
+  color: rgba(243, 242, 240, 0.72);
+  text-shadow: 0 1px 14px rgba(0, 0, 0, 0.95), 0 0 5px rgba(0, 0, 0, 0.9);
+}
+
 .cta {
   position: absolute;
   left: 0;

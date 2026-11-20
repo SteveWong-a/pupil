@@ -453,7 +453,7 @@ export function createScreenTexture(wallpaper: HTMLImageElement | null, screensh
           ctx.fillStyle = "#FFFFFF";
           ctx.font = '600 30px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
           ctx.textAlign = "center";
-          ctx.fillText(`Tamper detected — ${Math.max(1, Math.round(pose.countdown))}s`, W / 2, cy + ch * 0.4);
+          ctx.fillText(`Tamper detected · ${Math.max(1, Math.round(pose.countdown))}s`, W / 2, cy + ch * 0.4);
           ctx.fillStyle = "#FF9F0A";
           ctx.font = '600 22px -apple-system, BlinkMacSystemFont, "Instrument Sans", sans-serif';
           ctx.fillText("AC Charger Unplugged · Enter PIN or Touch ID", W / 2, cy + ch * 0.54);
