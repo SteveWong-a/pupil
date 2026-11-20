@@ -10,6 +10,7 @@ export interface UiRefs {
   macos: HTMLElement;
   final: HTMLElement;
   labels: HTMLElement;
+  scrollTrack?: HTMLElement;
 }
 
 export const SECTIONS = {

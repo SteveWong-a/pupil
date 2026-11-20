@@ -113,7 +113,10 @@ export function createScrollStory({
   tl.to(glow, { ch4: 1, duration: 0.45, ease: "power2.out" }, 9.85);
   tl.fromTo(ui.macos, { autoAlpha: 0, y: 28 }, { autoAlpha: 1, y: 0, duration: 0.55, ease: "power3.out" }, 9.85);
 
-  // FINAL WAITLIST CTA (settled at t = 12.00 / ?p=1.00)
+  // Final section lives in normal document flow below the scroll track.
+  gsap.set(ui.final, { clearProps: "opacity,visibility,transform,filter" });
+
+  // END OF 3D SCROLL STORY (settled at t = 12.00 / ?p=1.00)
   tl.to(ui.macos, { autoAlpha: 0, y: -20, duration: 0.4, ease: "power1.in" }, 10.95);
   tl.to(glow, { ch4: 0, press: 0, key: 0, duration: 0.35 }, 10.95);
   tl.set(mb.pose, { screenMode: 0, phoneMode: 0 }, 11.1);
@@ -126,16 +129,25 @@ export function createScrollStory({
   tl.to(fx, { bokeh: 0.8, focusRange: 20, duration: 1.0 }, 11.0);
   tl.to(stage, { tilt: 1, idle: 1, duration: 1.0 }, 11.0);
   tl.to(glow, { wave: 1, backlight: 1.0, duration: 0.65, ease: "none" }, 11.15);
-  tl.fromTo(ui.final, { autoAlpha: 0, y: 30, filter: "blur(10px)" }, { autoAlpha: 1, y: 0, filter: "blur(0px)", duration: 0.45, ease: "power3.out" }, 11.45);
+
+  const scrollTrack =
+    ui.scrollTrack ??
+    document.querySelector<HTMLElement>('[data-scroll-track], main[aria-label="Pupil"]');
 
   let target = 0;
   let current = 0;
-  const maxScroll = () => document.documentElement.scrollHeight - innerHeight;
+  const maxScroll = () => {
+    if (scrollTrack) {
+      return Math.max(1, scrollTrack.offsetHeight - innerHeight);
+    }
+    return Math.max(1, document.documentElement.scrollHeight - innerHeight);
+  };
   const readScroll = () => {
     const max = maxScroll();
     target = max > 0 ? Math.min(1, Math.max(0, scrollY / max)) : 0;
   };
   addEventListener("scroll", readScroll, { passive: true, signal });
+  addEventListener("resize", readScroll, { passive: true, signal });
   readScroll();
 
   const glide = { p: 0, active: false };
@@ -200,5 +212,5 @@ export function createScrollStory({
     tl.kill();
   }
 
-  return { tl, update, pin, goTo, isSettled, glow, progress: () => current, dispose };
+  return { tl, update, pin, goTo, isSettled, maxScroll, glow, progress: () => current, dispose };
 }

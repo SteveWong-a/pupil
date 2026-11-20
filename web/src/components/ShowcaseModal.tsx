@@ -24,84 +24,84 @@ const TABS: ScreenTab[] = [
     key: "general",
     label: "General",
     src: "./assets/screenshots/settings-general.png",
-    file: "GeneralSettingsPage.swift",
+    file: "General Settings",
     hotspots: [
-      { x: 78, y: 24, title: "Idle Auto-Arm (5–30m)", desc: "Arms after HID inactivity; ignores closed-lid sleep." },
-      { x: 78, y: 48, title: "OS Hardware Lockdown", desc: "Blocks Force Quit, Command-Tab, and Dock during tamper." },
-      { x: 68, y: 72, title: "Stepped Grace Timers", desc: "5s–30s window to cancel accidental cable bumps." },
+      { x: 78, y: 24, title: "Auto-Arm When Idle (5-30m)", desc: "Arms automatically after you stop using your keyboard and mouse." },
+      { x: 78, y: 48, title: "Screen Lockdown", desc: "Keeps the shield on top and blocks Force Quit during an alarm." },
+      { x: 68, y: 72, title: "Grace Countdown", desc: "Gives you 5 to 30 seconds to cancel an accidental cable bump." },
     ],
   },
   {
     key: "gaze",
-    label: "Gaze ANE",
+    label: "Gaze Blur",
     src: "./assets/screenshots/settings-gaze.png",
-    file: "GazeSettingsPage.swift",
+    file: "Gaze Settings",
     hotspots: [
-      { x: 78, y: 17, title: "Adaptive Frame Governor", desc: "Scales 10 → 5 → 2 FPS on low battery and thermal load." },
-      { x: 70, y: 28, title: "Notch Deterrent Modes", desc: "Switch between live notch wings and silent audit log." },
-      { x: 65, y: 42, title: "4-Stage Peripheral Cone", desc: "Expands camera ROI up to 90% for library side angles." },
+      { x: 78, y: 17, title: "Battery-Friendly Camera", desc: "Slows camera checks automatically when battery is low or your Mac warms up." },
+      { x: 70, y: 28, title: "Notch Alert Style", desc: "Switch between a visible notch warning or quiet screen blur." },
+      { x: 65, y: 42, title: "Wide Side Detection", desc: "Spots people glancing from the side at nearby cafe or library tables." },
     ],
   },
   {
     key: "sensors",
-    label: "Sensors & Push",
+    label: "Sensors & iPhone",
     src: "./assets/screenshots/settings-sensors.png",
-    file: "SensorsSettingsPage.swift",
+    file: "Sensors Settings",
     hotspots: [
-      { x: 56, y: 6, title: "Hardware Tripwire Matrix", desc: "Monitors MagSafe, USB-C displays, lid state, and input." },
-      { x: 45, y: 39, title: "One-Time QR Pairing", desc: "Direct RFC 8291 Web Push encryption without cloud relays." },
-      { x: 65, y: 75, title: "Proximity & Trusted Wi-Fi", desc: "Bluetooth RSSI disarm and SHA-256 Wi-Fi boundaries." },
+      { x: 56, y: 6, title: "Tamper Sensors", desc: "Watches your charger, unplugged cables, lid close, and sudden movement." },
+      { x: 45, y: 39, title: "One-Time QR Pairing", desc: "Scan once in Safari on your iPhone for encrypted alerts with no account." },
+      { x: 65, y: 75, title: "Walk-Away & Trusted Wi-Fi", desc: "Arms when your iPhone leaves Bluetooth range and pauses on home Wi-Fi." },
     ],
   },
   {
     key: "alarm",
-    label: "Siren & Vault",
+    label: "Siren & Log",
     src: "./assets/screenshots/settings-alarm.png",
-    file: "AlarmSettingsPage.swift",
+    file: "Alarm Settings",
     hotspots: [
-      { x: 78, y: 12, title: "Speaker Route Override", desc: "Bypasses headphones and unmutes built-in MacBook speakers." },
-      { x: 64, y: 18, title: "Acoustic Ceiling Presets", desc: "Caps siren at 45% (Library), 80% (Cafe), or 100%." },
-      { x: 68, y: 50, title: "Encrypted Tamper Journal", desc: "200-event AES-GCM ring buffer with Markdown export." },
+      { x: 78, y: 12, title: "Built-In Speaker Override", desc: "Plays the siren through your MacBook speakers even if headphones are plugged in." },
+      { x: 64, y: 18, title: "Volume Presets", desc: "Cap the siren at 45% for libraries, 80% for cafes, or full volume." },
+      { x: 68, y: 50, title: "Encrypted Event Log", desc: "Saves a local history of alerts you can export anytime." },
     ],
   },
   {
     key: "menubar",
     label: "Menu Bar",
     src: "./assets/screenshots/menubar-popover.png",
-    file: "MenuBarPopoverView.swift",
+    file: "Menu Bar Popover",
     hotspots: [
-      { x: 50, y: 13, title: "Live NSStatusBar Header", desc: "Real-time armed state, grace timer, and AC status." },
-      { x: 65, y: 47, title: "1-Click Quick Toggles", desc: "Flip gaze blur and auto-arm without opening Settings." },
-      { x: 50, y: 75, title: "Dockless Accessory Mode", desc: "Zero Dock clutter; blocks unauthorized Quit while armed." },
+      { x: 50, y: 13, title: "Live Menu Bar Status", desc: "See armed status, countdown timer, and charger state at a glance." },
+      { x: 65, y: 47, title: "One-Click Toggles", desc: "Turn gaze blur or auto-arm on and off without opening Settings." },
+      { x: 50, y: 75, title: "Stays Out of Your Dock", desc: "Runs quietly in the menu bar and blocks quitting while armed." },
     ],
   },
   {
     key: "shield",
     label: "Screen Shield",
     src: "./assets/screenshots/screen-shield.png",
-    file: "ScreenShieldView.swift",
+    file: "Screen Shield",
     hotspots: [
-      { x: 50, y: 42, title: "Tamper Source Telemetry", desc: "Displays exact hardware trigger and timestamp on lock screen." },
-      { x: 59, y: 61, title: "Touch ID & PIN Backoff", desc: "Instant biometric unlock with exponential brute-force lockouts." },
-      { x: 50, y: 90, title: "macOS Password Recovery", desc: "LocalAuthentication fallback resets PIN lockout cleanly." },
+      { x: 50, y: 42, title: "Clear Alert Reason", desc: "Shows exactly what triggered the alert and when it happened." },
+      { x: 59, y: 61, title: "Touch ID & PIN Unlock", desc: "Unlock in under a second with Touch ID or your backup PIN." },
+      { x: 50, y: 90, title: "Mac Password Recovery", desc: "Use your Mac login password if you ever forget your PIN." },
     ],
   },
   {
     key: "companion",
     label: "Mobile Companion",
     src: "./companion.html",
-    file: "companion.html (PWA)",
+    file: "iPhone Companion",
     isIframe: true,
     hotspots: [
-      { x: 50, y: 24, title: "Direct Apple APNs Pairing", desc: "Scan the QR code in Sensors Settings once; zero cloud accounts or relays." },
-      { x: 50, y: 54, title: "Verification Snapshot Frame", desc: "Inspect the captured 1080p FaceTime HD frame before disarming remotely." },
+      { x: 50, y: 24, title: "Direct iPhone Pairing", desc: "Scan the QR code in Settings once. No cloud accounts or logins." },
+      { x: 50, y: 54, title: "Snapshot Preview", desc: "Check a camera snapshot on your iPhone before choosing to disarm." },
       { x: 50, y: 82, title: "One-Tap Remote Disarm", desc: "Silence the alarm and clear the Screen Shield from across the library or cafe." },
     ],
   },
 ];
 
-const BUILD_CMD = `git clone https://github.com/stevewong-a/pupil.git
-cd pupil && ./scripts/package_dmg.sh
+const BUILD_CMD = `git clone https://github.com/SteveWong-a/pupil.git
+cd pupil && ./scripts/build-dmg.sh
 open dist/Pupil.app`;
 
 interface ShowcaseModalProps {
@@ -151,7 +151,7 @@ export function ShowcaseModal({ view, onClose, onSwitchView }: ShowcaseModalProp
               className={`${styles.modeBtn} ${view === "build" ? styles.modeActive : ""}`}
               onClick={() => onSwitchView("build")}
             >
-              Build from Source (30s)
+              Build from Source (Optional)
             </button>
           </div>
           <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="Close modal">
@@ -233,10 +233,11 @@ export function ShowcaseModal({ view, onClose, onSwitchView }: ShowcaseModalProp
           </div>
         ) : (
           <div className={styles.buildBody}>
-            <p className={styles.meta}>Swift 6.0 · macOS 14+ · Zero external runtime dependencies</p>
-            <h3 className={styles.spotTitle}>Compile &amp; launch Pupil.app in 30 seconds.</h3>
+            <p className={styles.meta}>Optional · macOS 14 or later · Apple Silicon &amp; Intel</p>
+            <h3 className={styles.spotTitle}>Build Pupil.app from source (optional).</h3>
             <p className={styles.spotDesc}>
-              Auditable native source using Apple Vision ANE, IOKit, CoreAudio, CryptoKit, and LocalAuthentication.
+              Most users can download the ready-to-run app from GitHub Releases. If you prefer to build from source
+              yourself, run these commands in Terminal.
             </p>
             <pre className={styles.codeBlock}>
               <code>{BUILD_CMD}</code>
@@ -257,8 +258,16 @@ export function ShowcaseModal({ view, onClose, onSwitchView }: ShowcaseModalProp
               >
                 {copied ? "Copied Commands!" : "Copy Terminal Commands"}
               </button>
+              <a
+                href="https://github.com/SteveWong-a/pupil/releases/latest"
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.companionLink}
+              >
+                Download Ready-to-Run DMG →
+              </a>
               <a href="./companion.html" className={styles.companionLink}>
-                Open iPhone Companion PWA →
+                Open iPhone Companion →
               </a>
             </div>
           </div>

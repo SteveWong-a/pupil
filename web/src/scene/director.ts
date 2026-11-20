@@ -417,8 +417,16 @@ export async function startExperience({
   function goToEnd() {
     clearFocus();
     skipIntro();
-    scroll!.goTo(1);
-    history.replaceState(null, "", "#waitlist");
+    const max = scroll!.maxScroll();
+    if (scrollY < max) {
+      scrollTo({ top: max, behavior: "instant" });
+    }
+    scroll!.pin(1);
+    const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    requestAnimationFrame(() => {
+      ui.final.scrollIntoView({ behavior: reducedMotion ? "instant" : "smooth", block: "start" });
+    });
+    history.replaceState(null, "", "#download");
   }
 
   let activeSection: SectionName | null | undefined;
@@ -643,6 +651,7 @@ export async function startExperience({
     params.has("t") ||
     params.has("p") ||
     (isSection(hash) && hash !== "overview") ||
+    hash === "download" ||
     hash === "waitlist" ||
     reduced;
 
@@ -672,19 +681,20 @@ export async function startExperience({
   } else if (isSection(hash) && hash !== "overview") {
     skipIntro();
     const p = SECTIONS[hash];
-    scrollTo({ top: p * (document.documentElement.scrollHeight - innerHeight), behavior: "instant" });
+    scrollTo({ top: p * scroll!.maxScroll(), behavior: "instant" });
     scroll!.pin(p);
-  } else if (hash === "waitlist") {
+  } else if (hash === "download" || hash === "waitlist") {
     skipIntro();
-    scrollTo({ top: document.documentElement.scrollHeight - innerHeight, behavior: "instant" });
     scroll!.pin(1);
+    const targetEl = hash === "waitlist" ? (document.getElementById("waitlist") ?? ui.final) : ui.final;
+    scrollTo({ top: targetEl.offsetTop, behavior: "instant" });
   } else if (reduced) {
     skipIntro();
   } else {
     intro.play();
   }
 
-  const chapterOrder: (SectionName | "waitlist")[] = ["overview", "gaze", "tamper", "phone", "macos", "waitlist"];
+  const chapterOrder: (SectionName | "download")[] = ["overview", "gaze", "tamper", "phone", "macos", "download"];
   addEventListener(
     "keydown",
     (e) => {
@@ -699,10 +709,10 @@ export async function startExperience({
         focusFeature(group[nextIdx].id);
         return;
       }
-      const cur = scroll ? (sectionAt(scroll.progress()) ?? "waitlist") : "overview";
+      const cur = scroll ? (sectionAt(scroll.progress()) ?? "download") : "overview";
       const idx = chapterOrder.indexOf(cur);
       const next = chapterOrder[Math.min(chapterOrder.length - 1, Math.max(0, idx + (e.key === "ArrowRight" ? 1 : -1)))];
-      if (next === "waitlist") goToEnd();
+      if (next === "download") goToEnd();
       else goToSection(next);
     },
     { signal },

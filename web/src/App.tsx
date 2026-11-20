@@ -12,47 +12,47 @@ import { ShowcaseModal, type ModalView } from "./components/ShowcaseModal";
 import styles from "./App.module.css";
 
 const GAZE = {
-  eyebrow: "01 · Gaze Detection & Privacy Shield",
+  eyebrow: "01 · Gaze Blur",
   title: (
     <>
       Someone looks. <br />
-      Screen blurs <em>in 95ms.</em>
+      <em>Screen blurs.</em>
     </>
   ),
-  body: "10 FPS Apple Vision gaze tracking on the M4 Neural Engine detects shoulder-surfers in real time, expanding the Notch pill and frosting your desktop before a single line can be read.",
+  body: "Pupil notices eyes on your screen and frosts it before a line can be read. It clears the moment they look away.",
 };
 
 const TAMPER = {
-  eyebrow: "02 · Hardware Tripwires & Lockdown",
+  eyebrow: "02 · Tamper Alert",
   title: (
     <>
-      Unplug or lid slam. <br />
-      Instant <em>lockdown.</em>
+      Unplugged or grabbed. <br />
+      <em>Alarm sounds.</em>
     </>
   ),
-  body: "IOKit power and lid-angle tripwires fire in 150ms. Unplugging MagSafe 3 or closing the display blocks clamshell sleep via IOPMAssertion and launches a 15-second countdown into a progressive 30% → 100% siren.",
+  body: "Pull the charger, lift the laptop, or close the lid and Pupil counts down, then sounds a siren until you disarm it with Touch ID or your PIN.",
 };
 
 const PHONE = {
-  eyebrow: "03 · iPhone Companion & Proximity",
+  eyebrow: "03 · iPhone Alerts",
   title: (
     <>
-      Alerted on iPhone. <br />
-      Disarmed <em>from afar.</em>
+      Alerted on your iPhone. <br />
+      <em>Disarmed from afar.</em>
     </>
   ),
-  body: "RFC 8291 encrypted Web Push delivers an instant lock-screen alert and intruder snapshot to your iPhone 16 Pro—with one-tap remote disarm and Bluetooth LE walk-away auto-arming.",
+  body: "Get a lock-screen alert with a snapshot on any iPhone, and disarm with one tap. Walk away and Pupil arms itself.",
 };
 
 const MACOS = {
-  eyebrow: "04 · Native macOS UI & Touch ID",
+  eyebrow: "04 · Menu Bar & Touch ID",
   title: (
     <>
-      Built into the Notch. <br />
-      Unlocked by <em>Touch ID.</em>
+      Built into the notch. <br />
+      <em>Unlocked by Touch ID.</em>
     </>
   ),
-  body: "Lives natively in the macOS Sequoia menu bar and display notch. Tap the circular Touch ID sensor on the Magic Keyboard to disarm in under a second.",
+  body: "Pupil lives in your menu bar and notch. Disarm in under a second with the Touch ID on your MacBook.",
 };
 
 export function App() {
@@ -156,14 +156,14 @@ export function App() {
           onFocus={handleFocusFeature}
           onHover={(id) => experience.current?.hoverFeature(id)}
         />
-        <Final
-          ref={final}
-          onOpenScreenshots={() => setModalView("screenshots")}
-          onOpenBuild={() => setModalView("build")}
-        />
       </div>
       <ShowcaseModal view={modalView} onClose={() => setModalView(null)} onSwitchView={setModalView} />
-      <main className={styles.scroll} aria-label="Pupil" />
+      <main data-scroll-track className={styles.scroll} aria-label="Pupil" />
+      <Final
+        ref={final}
+        onOpenScreenshots={() => setModalView("screenshots")}
+        onOpenBuild={() => setModalView("build")}
+      />
     </>
   );
 }

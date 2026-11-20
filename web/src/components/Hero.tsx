@@ -1,36 +1,40 @@
 import type { Ref } from "react";
 import { Button } from "./Button";
+import buttonStyles from "./Button.module.css";
 import styles from "./Hero.module.css";
 
 interface HeroProps {
   ref?: Ref<HTMLElement>;
   cueRef?: Ref<HTMLSpanElement>;
-  onWaitlist: () => void;
+  onWaitlist?: () => void;
   onOpenModal: () => void;
 }
 
-export function Hero({ ref, cueRef, onWaitlist, onOpenModal }: HeroProps) {
+export function Hero({ ref, cueRef, onOpenModal }: HeroProps) {
   return (
     <header ref={ref} className={styles.hero}>
       <h1 className={styles.title}>
-        Step away without <br />
-        <em>packing up.</em>
+        Pupil watches your Mac <br />
+        <em>when you can&apos;t.</em>
       </h1>
       <p className={styles.lede}>
-        A notch-native security sentinel for Mac, with four core tripwires: gaze blur, power unplug, lid slam and display
-        lock, built for libraries and cafes.
+        Step away for a minute in the library or a cafe. Pupil blurs your screen if someone peeks, and sounds an alarm if
+        someone grabs your laptop.
+      </p>
+      <p className={styles.privacy}>
+        Private by design. Your camera feed never leaves your Mac. Pupil works fully on-device and never saves a photo or
+        video.
       </p>
       <div className={styles.cta}>
         <div className={styles.actions}>
-          <Button
-            href="#waitlist"
-            onClick={(e) => {
-              e.preventDefault();
-              onWaitlist();
-            }}
+          <a
+            href="https://github.com/SteveWong-a/pupil/releases/latest"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={buttonStyles.button}
           >
-            Join Beta Waitlist · Free
-          </Button>
+            Download for macOS
+          </a>
           <Button
             href="#app-ui"
             ghost
@@ -39,7 +43,7 @@ export function Hero({ ref, cueRef, onWaitlist, onOpenModal }: HeroProps) {
               onOpenModal();
             }}
           >
-            Inspect App UI
+            See Screenshots
           </Button>
         </div>
         <span ref={cueRef} className={styles.cue}>

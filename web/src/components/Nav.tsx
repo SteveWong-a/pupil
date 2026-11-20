@@ -16,11 +16,11 @@ interface NavProps {
   ref?: Ref<HTMLElement>;
   active: SectionName | null;
   onGo: (name: SectionName) => void;
-  onWaitlist: () => void;
+  onWaitlist?: () => void;
   onOpenModal: () => void;
 }
 
-export function Nav({ ref, active, onGo, onWaitlist, onOpenModal }: NavProps) {
+export function Nav({ ref, active, onGo, onOpenModal }: NavProps) {
   const go = (name: SectionName) => (e: MouseEvent) => {
     e.preventDefault();
     onGo(name);
@@ -57,16 +57,17 @@ export function Nav({ ref, active, onGo, onWaitlist, onOpenModal }: NavProps) {
         >
           App UI
         </a>
+        <a
+          href="https://github.com/SteveWong-a/pupil"
+          target="_blank"
+          rel="noopener noreferrer"
+          className={styles.link}
+        >
+          GitHub
+        </a>
       </div>
-      <Button
-        href="#waitlist"
-        small
-        onClick={(e) => {
-          e.preventDefault();
-          onWaitlist();
-        }}
-      >
-        Join Waitlist
+      <Button href="https://github.com/SteveWong-a/pupil/releases/latest" small>
+        Download
       </Button>
     </nav>
   );
