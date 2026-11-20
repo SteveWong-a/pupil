@@ -22,8 +22,8 @@ export function Hero({ ref, cueRef, onOpenModal }: HeroProps) {
         someone grabs your laptop.
       </p>
       <p className={styles.privacy}>
-        Private by design. Your camera feed never leaves your Mac. Pupil works fully on-device and never saves a photo or
-        video.
+        Private by design. Gaze detection runs fully on-device and never saves a photo or video. When an alarm fires,
+        one verification photo goes to your paired iPhone.
       </p>
       <div className={styles.cta}>
         <div className={styles.actions}>
