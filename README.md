@@ -46,8 +46,10 @@ Building from source is completely optional. Most users can install the prebuilt
 | :--- | :--- | :--- |
 | **1. Armed** | You arm Pupil from the menu bar (`⌘A`), Settings, a global shortcut, or auto-arm (screen lock, idle timer, Bluetooth walk-away, or untrusted Wi-Fi). | The menu bar icon flips to armed mode and begins monitoring your charger, lid, screen lock, peripherals, and camera sensors. |
 | **2. Gaze Blur & Warning** | Someone looks toward your screen for longer than your chosen dwell time while armed. | Shows a discreet warning pill in the notch (or top of screen) and optionally covers your display in a deep frosted blur until they look away. |
-| **3. Tamper Countdown** | Someone unplugs your charger, closes the lid, locks the screen, unplugs an external display or USB device, touches the keyboard/mouse, or lifts the laptop. | Locks the display behind the Screen Shield and starts a countdown. Disarm in time with Touch ID, your PIN, a paired USB key, or your iPhone. |
+| **3. Tamper Countdown** | Someone unplugs your charger, closes the lid, locks the screen, unplugs an external display or USB device, or lifts the laptop. | Locks the display behind the Screen Shield and starts a countdown. Disarm in time with Touch ID, your PIN, a paired USB key, or your iPhone. |
 | **4. Full Siren Alarm** | The countdown expires (or lid close is set to trigger immediately). | Keeps your Mac awake and sounds a loud siren through the built-in speakers until you disarm with Touch ID or your PIN, and pushes an alert to your paired iPhone. |
+
+Keyboard or mouse use while armed locks the screen immediately and asks for your PIN or Touch ID when **Lock on keyboard or mouse** (**Lock on input** in the menu bar) is enabled. It does not start the countdown.
 
 ---
 
@@ -90,8 +92,9 @@ Building from source is completely optional. Most users can install the prebuilt
 
 ## Privacy & How Gaze Detection Works
 
-* **100% on-device processing:** Video frames are analyzed strictly in memory using Apple's built-in Vision framework. Zero photos, video clips, or face landmarks are ever saved to disk or sent over the network.
-* **Armed-only camera usage:** The camera turns on only while Pupil is armed with Gaze Detection enabled (or when you manually click **Show preview** in Gaze Settings).
+* **On-device gaze detection:** Video frames are analyzed strictly in memory using Apple's built-in Vision framework. Gaze frames are never saved to disk.
+* **Alarm snapshots:** When an alarm fires, Pupil sends one verification photo to your paired iPhone so you can see who is there. No other photos leave your Mac.
+* **Camera use:** The camera turns on while Pupil is armed and any camera-based sensor is enabled: gaze detection, lift detection, or surroundings watch. You can also preview the camera manually in Gaze Settings.
 * **No face enrollment required:** Pupil does not identify who is looking or store biometric profiles. While armed, any sustained gaze toward your screen triggers the warning and optional privacy blur, and clears automatically as soon as they look away.
 * **Adjustable dwell & sensitivity:** Tune the **Detection cone** (`Relaxed`, `Default`, `Strict`, `Ultra`) and **Dwell duration** (`0.5s` to `3.0s`) in **Settings -> Gaze** to fit a quiet corner desk or a crowded cafe table.
 

@@ -20,6 +20,10 @@
 * **Hardware Forensic Extraction**: If an adversary obtains permanent physical custody of an unencrypted device, software-layer sentinels cannot prevent offline hardware analysis. Users must maintain FileVault disk encryption.
 * **Complete Battery Exhaustion / Cold Force-Off**: Holding down the hardware power button for 10 seconds or allowing the battery to completely deplete to 0% powers off the Mac hardware at the firmware level, terminating all running operating system processes.
 
+### 3. Companion Alert & Snapshot Transport
+* **Gaze Frames vs. Alarm Snapshots**: Gaze detection frames are processed strictly in memory and are never saved to disk or transmitted. When an alarm fires and an iPhone companion is paired, Pupil captures one lightweight JPEG verification snapshot so you can inspect who is at your Mac before disarming remotely.
+* **Delivery Path**: Alert messages and small snapshots travel over the encrypted W3C Web Push channel directly to your paired iPhone. For larger verification snapshots that exceed the Web Push payload budget, Pupil falls back to posting a base64-encoded JSON alert envelope to a random 80-bit per-pairing relay channel so the companion app can fetch and display the image. No other photos or video frames leave your Mac.
+
 ---
 
 ## Vibe Coding & Agentic Safety Audit Checklist
