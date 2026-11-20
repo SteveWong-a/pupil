@@ -428,6 +428,11 @@ public final class WebPushManager {
                 onRemoteSnapshotRequested?()
                 return true
             }
+
+            if message.hasPrefix("pupilpair://"), importPairingToken(message) {
+                statusMessage = "Re-synced push subscription from paired phone."
+                return true
+            }
         }
         return false
     }
@@ -676,37 +681,38 @@ public final class WebPushManager {
         return outcome == .delivered
     }
 
-    /// Posts an alert envelope with a lightweight JPEG verification snapshot to the pairing `ntfy.sh` channel
-    /// so the mobile PWA can display it even when the frame exceeds W3C Web Push's 4 KB payload cap.
+    /// Posts an alert envelope (with optional JPEG verification snapshot) to the pairing `ntfy.sh` channel
+    /// so the mobile PWA receives live alerts and can fetch frames that exceed W3C Web Push's 4 KB payload cap.
     public func postAlertSnapshotEnvelope(
         title: String,
         body: String,
         severity: String,
         tag: String,
-        snapshotBase64: String
+        snapshotBase64: String? = nil
     ) async {
         let channel = settings.pairingChannelID
         guard !channel.isEmpty,
-              !snapshotBase64.isEmpty,
               let url = URL(string: "https://ntfy.sh/\(channel)") else {
             return
         }
 
-        let envelope: [String: Any] = [
+        var envelope: [String: Any] = [
             "type": "pupil-alert-snapshot",
             "title": title,
             "body": body,
             "severity": severity,
             "tag": tag,
-            "timestamp": Int64(Date().timeIntervalSince1970 * 1000),
-            "snapshotBase64": snapshotBase64
+            "timestamp": Int64(Date().timeIntervalSince1970 * 1000)
         ]
+        if let snapshotBase64, !snapshotBase64.isEmpty {
+            envelope["snapshotBase64"] = snapshotBase64
+        }
         guard let jsonData = try? JSONSerialization.data(withJSONObject: envelope) else { return }
         let encoded = "pupilalert://" + jsonData.base64URLEncodedString()
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 6.0
+        request.timeoutInterval = 8.0
         request.setValue("text/plain;charset=utf-8", forHTTPHeaderField: "Content-Type")
         request.httpBody = Data(encoded.utf8)
 
@@ -742,15 +748,15 @@ public final class WebPushManager {
                 if snapshot.utf8.count <= 2000 {
                     payloadDict["snapshotBase64"] = snapshot
                 }
-                Task { [weak self] in
-                    await self?.postAlertSnapshotEnvelope(
-                        title: message.title,
-                        body: message.body,
-                        severity: message.severity,
-                        tag: message.tag,
-                        snapshotBase64: snapshot
-                    )
-                }
+            }
+            Task { [weak self] in
+                await self?.postAlertSnapshotEnvelope(
+                    title: message.title,
+                    body: message.body,
+                    severity: message.severity,
+                    tag: message.tag,
+                    snapshotBase64: message.snapshotBase64
+                )
             }
             let plaintext = try JSONSerialization.data(withJSONObject: payloadDict)
             encryptedBody = try Self.encryptWebPushPayload(
