@@ -3,7 +3,7 @@
 //  Pupil
 //
 //  On-device Apple Vision iris & head-pose gaze estimator + temporal dwell aggregator.
-//  Processes frames strictly in memory on the Apple Neural Engine (ANE); zero images are saved.
+//  Processes frames strictly in memory with on-device Apple Vision processing; zero images are saved.
 //
 
 import CoreGraphics
