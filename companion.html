@@ -857,6 +857,51 @@
         } catch {}
       }
 
+      const seenAlertIds = new Set();
+      let channelEventSource = null;
+
+      async function decodeAlertEnvelope(envelope) {
+        if (!envelope || typeof envelope !== 'object') return null;
+        let raw = typeof envelope.message === 'string' ? envelope.message.trim() : '';
+        if (!raw.startsWith('pupilalert://') && envelope.attachment && envelope.attachment.url) {
+          try {
+            const attResp = await fetch(envelope.attachment.url);
+            if (attResp.ok) {
+              raw = (await attResp.text()).trim();
+            }
+          } catch {}
+        }
+        if (!raw.startsWith('pupilalert://')) return null;
+        try {
+          const jsonStr = fromBase64Url(raw.slice('pupilalert://'.length));
+          const alertPayload = JSON.parse(jsonStr);
+          if (alertPayload && typeof alertPayload === 'object') {
+            return alertPayload;
+          }
+        } catch {}
+        return null;
+      }
+
+      async function handleChannelEnvelope(envelope, renderSnapshotOnly) {
+        if (!envelope || envelope.event !== 'message') return false;
+        const alertPayload = await decodeAlertEnvelope(envelope);
+        if (!alertPayload) return false;
+
+        const dedupeKey = envelope.id || `${alertPayload.tag || 'alert'}:${alertPayload.timestamp || 0}`;
+        const isNew = !seenAlertIds.has(dedupeKey);
+        if (isNew) {
+          seenAlertIds.add(dedupeKey);
+          if (!renderSnapshotOnly) {
+            addAlertToLog(alertPayload);
+          }
+        }
+        if (alertPayload.snapshotBase64) {
+          renderVerificationSnapshot(alertPayload);
+          return true;
+        }
+        return !renderSnapshotOnly && isNew;
+      }
+
       async function fetchLatestSnapshotFromChannel() {
         const { c } = await loadConfigFromCacheIfNeeded();
         if (!c) return;
@@ -865,21 +910,44 @@
           if (!resp.ok) return;
           const text = await resp.text();
           if (!text) return;
-          const lines = text.trim().split('\n').reverse();
+          const lines = text.trim().split('\n');
+          let latestSnapshotPayload = null;
           for (const line of lines) {
             try {
               const envelope = JSON.parse(line);
-              const msg = envelope.message || '';
-              if (msg.startsWith('pupilalert://')) {
-                const jsonStr = fromBase64Url(msg.slice('pupilalert://'.length));
-                const alertPayload = JSON.parse(jsonStr);
-                if (alertPayload && alertPayload.snapshotBase64) {
-                  renderVerificationSnapshot(alertPayload);
-                  return;
-                }
+              const alertPayload = await decodeAlertEnvelope(envelope);
+              if (!alertPayload) continue;
+              const dedupeKey = envelope.id || `${alertPayload.tag || 'alert'}:${alertPayload.timestamp || 0}`;
+              if (!seenAlertIds.has(dedupeKey)) {
+                seenAlertIds.add(dedupeKey);
+                addAlertToLog(alertPayload);
+              }
+              if (alertPayload.snapshotBase64) {
+                latestSnapshotPayload = alertPayload;
               }
             } catch {}
           }
+          if (latestSnapshotPayload) {
+            renderVerificationSnapshot(latestSnapshotPayload);
+          }
+        } catch {}
+      }
+
+      async function startChannelEventStream() {
+        const { c } = await loadConfigFromCacheIfNeeded();
+        if (!c || typeof EventSource === 'undefined') return;
+        if (channelEventSource) {
+          try { channelEventSource.close(); } catch {}
+        }
+        try {
+          const es = new EventSource('https://ntfy.sh/' + encodeURIComponent(c) + '/sse?since=15m');
+          channelEventSource = es;
+          es.onmessage = (event) => {
+            try {
+              const envelope = JSON.parse(event.data);
+              handleChannelEnvelope(envelope, false);
+            } catch {}
+          };
         } catch {}
       }
 
@@ -1006,6 +1074,7 @@
           } else {
             setStatus('Pairing code copied. Click "Paste Pairing Code" in Pupil Settings on your Mac.', true);
           }
+          startChannelEventStream();
         } catch (err) {
           setStatus('Pairing error: ' + (err && err.message ? err.message : String(err)), false);
         }
@@ -1056,8 +1125,10 @@
           );
           const resp = await publishRemoteCommand(c, snapshotToken);
           if (resp.ok) {
-            setStatus('Snapshot request sent to your Mac.', true);
+            setStatus('Snapshot request sent to your Mac. Waiting for frame...', true);
             setTimeout(() => { fetchLatestSnapshotFromChannel(); }, 2500);
+            setTimeout(() => { fetchLatestSnapshotFromChannel(); }, 5000);
+            setTimeout(() => { fetchLatestSnapshotFromChannel(); }, 8000);
           } else {
             setStatus('Failed to send snapshot request (HTTP ' + resp.status + ').', true);
           }
@@ -1144,12 +1215,12 @@
       }
 
       restoreCachedSnapshot();
-      if (pairingChannel) {
-        fetchLatestSnapshotFromChannel();
-      }
+      fetchLatestSnapshotFromChannel();
+      startChannelEventStream();
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
           fetchLatestSnapshotFromChannel();
+          startChannelEventStream();
         }
       });
     })();
