@@ -340,89 +340,11 @@
   gap: 10px;
 }
 
-.personas {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 6px;
-}
-
-.personaPill {
-  height: 28px;
-  padding: 0 12px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--faint);
-  background: rgba(10, 10, 10, 0.65);
-  color: var(--muted);
-  font-family: var(--sans);
-  font-size: 12px;
-  font-weight: var(--w-medium);
-  font-stretch: var(--stretch-ui);
-  cursor: pointer;
-  transition:
-    color var(--t-link) var(--ease-ui),
-    border-color var(--t-link) var(--ease-ui),
-    background var(--t-link) var(--ease-ui);
-}
-
-.personaPill:hover {
-  color: var(--ink);
-}
-
-.personaActive {
-  color: var(--ink);
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 16%, transparent);
-}
-
-.inputRow {
-  display: flex;
-  width: 100%;
-  gap: 8px;
-}
-
-.srOnly {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-.input {
-  flex: 1;
-  min-width: 0;
-  height: var(--button-h);
-  padding: 0 18px;
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--faint);
-  background: rgba(10, 10, 10, 0.78);
-  color: var(--ink);
-  font-family: var(--sans);
-  font-size: var(--size-body);
-  font-stretch: var(--stretch-text);
-  outline: none;
-  transition: border-color var(--t-link) var(--ease-ui);
-}
-
-.input::placeholder {
-  color: var(--whisper);
-}
-
-.input:focus {
-  border-color: var(--ink);
-}
-
-.input:user-invalid,
-.input[aria-invalid="true"] {
-  border-color: var(--accent);
-}
-
 .submitBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
   height: var(--button-h);
   padding: 0 var(--button-pad);
   border-radius: var(--radius-pill);
@@ -444,19 +366,6 @@
 .submitBtn:hover {
   transform: translateY(var(--lift-hover));
   background: var(--ink-hover);
-}
-
-.feedback {
-  min-height: 18px;
-  font-size: 13px;
-}
-
-.error {
-  color: var(--accent);
-}
-
-.passBadge {
-  color: var(--ink);
 }
 
 .footer {
@@ -505,15 +414,6 @@
   .twoCol,
   .faqGrid {
     grid-template-columns: 1fr;
-  }
-
-  .inputRow {
-    flex-direction: column;
-  }
-
-  .input {
-    flex: none;
-    width: 100%;
   }
 
   .footer {
