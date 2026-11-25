@@ -7,8 +7,9 @@ if [ -n "$AUTO_SYNC_RUNNING" ]; then
 fi
 export AUTO_SYNC_RUNNING=1
 
-REPO_DIR="/Users/stevew/Documents/Pupil"
-WORKTREE_DIR="/Users/stevew/Documents/Pupil-worktrees"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="${REPO_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+WORKTREE_DIR="${WORKTREE_DIR:-$(cd "$REPO_DIR/.." && pwd)/Pupil-worktrees}"
 
 echo "🔄 Fetching latest pupil/main..."
 git -C "$REPO_DIR" fetch pupil main
