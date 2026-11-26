@@ -185,7 +185,7 @@ export function Final({ ref, onOpenScreenshots, onOpenBuild }: FinalProps) {
               How Gaze Detection Works
             </h3>
             <p className={styles.infoBody}>
-              Pupil does <strong>not</strong> use face enrollment or facial recognition. When armed, any sustained gaze looking at your screen inside the camera view triggers the blur, and it clears automatically once they look away. People walking past quickly reset the timer so they do not trigger it. You can tune dwell time (0.5s to 3.0s) and sensitivity in Settings.
+              Gaze detection runs fully on-device and never saves a photo or video. Pupil does <strong>not</strong> use face enrollment or facial recognition: when armed, any sustained gaze looking at your screen inside the camera view triggers the blur, and it clears automatically once they look away. People walking past quickly reset the timer so they do not trigger it. You can tune dwell time (0.5s to 3.0s) and sensitivity in Settings. When an alarm fires, one verification photo goes to your paired iPhone.
             </p>
           </div>
         </section>
