@@ -43,7 +43,7 @@ export function Hero({ ref, cueRef, onOpenModal }: HeroProps) {
               onOpenModal();
             }}
           >
-            See Screenshots
+            Demo
           </Button>
         </div>
         <span ref={cueRef} className={styles.cue}>
